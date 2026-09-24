@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS idempotency_keys;
+DROP TABLE IF EXISTS protection_rules;
+DROP TABLE IF EXISTS environments;
+DROP TYPE IF EXISTS environment_kind;
+DROP TABLE IF EXISTS webhook_deliveries;
+DROP TABLE IF EXISTS repositories;
+DROP TYPE IF EXISTS webhook_mode;
+DROP TYPE IF EXISTS git_provider;
+DROP TABLE IF EXISTS project_members;
+DROP TABLE IF EXISTS projects;

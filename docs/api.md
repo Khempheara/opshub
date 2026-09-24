@@ -82,19 +82,19 @@ Invitation links carry the token in the URL fragment (`/invitations/accept#token
 
 | Method | Path | Auth | Action | Description |
 |---|---|---|---|---|
-| GET / POST | `/orgs/{orgId}/projects` | JWT | `project.view` / `project.create` | |
-| GET / PATCH / DELETE | `/projects/{projectId}` | JWT | `project.view` / `project.update` / `project.delete` | **(IM)** |
-| GET | `/projects/{projectId}/members` | JWT | `project.view` | Direct + team grants + inherited |
-| PUT / DELETE | `/projects/{projectId}/members/{principal}` | JWT | `project.manage_members` | principal = `user:<id>` or `team:<id>` |
-| GET | `/projects/{projectId}/repository` | JWT | `project.view` | |
-| PUT | `/projects/{projectId}/repository` | JWT | `repo.connect` | Provider, repo, access token → creates webhook with random secret |
-| DELETE | `/projects/{projectId}/repository` | JWT | `repo.connect` | Removes webhook |
-| POST | `/projects/{projectId}/repository/test` | JWT | `repo.connect` | Validate token/permissions |
-| GET | `/projects/{projectId}/repository/deliveries` | JWT | `repo.connect` | Recent webhook deliveries |
-| POST | `/webhooks/github/{repositoryId}` | HMAC | | `X-Hub-Signature-256` |
-| POST | `/webhooks/gitlab/{repositoryId}` | HMAC | | `X-Gitlab-Token` (constant-time compare) |
-| GET / POST | `/projects/{projectId}/environments` | JWT | `project.view` / `environment.manage` | |
-| GET / PATCH / DELETE | `/environments/{envId}` | JWT | `environment.manage` | Includes protection rules **(IM)** |
+| GET / POST | `/orgs/{orgId}/projects` | JWT | org member / `project.create` | Projects I can see (`?q=`); create **(IK)**. A Developer creator gets a direct Admin grant |
+| GET / PATCH / DELETE | `/projects/{projectId}` | JWT | `project.view` / `project.update` / `project.delete` | GET includes my `role` and allowed `actions`; PATCH **(IM)**; DELETE `?confirm={slug}` removes the repository and its webhook |
+| GET | `/projects/{projectId}/members` | JWT | `project.view` | Direct grants, team grants, and org Owners/Admins (`source: organization`) |
+| PUT / DELETE | `/projects/{projectId}/members/{principal}` | JWT | `project.manage_members` | principal = `user:<id>` (org member) or `team:<id>`; role admin/developer/viewer |
+| GET | `/projects/{projectId}/repository` | JWT | `project.view` | `404 REPOSITORY_NOT_FOUND` when none is connected |
+| PUT | `/projects/{projectId}/repository` | JWT | `repo.connect` | {provider, base_url?, full_name, access_token} → validates with the Git host, creates a webhook with a random secret, or returns manual-setup URL + secret (shown once) |
+| DELETE | `/projects/{projectId}/repository` | JWT | `repo.connect` | Deletes the token; removes OpsHub's webhook (best effort) |
+| POST | `/projects/{projectId}/repository/test` | JWT | `repo.connect` | Re-checks the token; refreshes the default branch |
+| GET | `/projects/{projectId}/repository/deliveries` | JWT | `repo.connect` | Recent webhook deliveries (30 days), newest first |
+| POST | `/webhooks/github/{repositoryId}` | HMAC | | `X-Hub-Signature-256`; 202 accepted, 200 duplicate, 401 bad signature |
+| POST | `/webhooks/gitlab/{repositoryId}` | Token | | `X-Gitlab-Token` (constant-time compare) |
+| GET / POST | `/projects/{projectId}/environments` | JWT | `project.view` / `environment.manage` | Create **(IK)**; ≤ 20 per project |
+| GET / PATCH / DELETE | `/environments/{environmentId}` | JWT | `project.view` / `environment.manage` | Kind, non-secret variables, protection rule (null = unprotected) **(IM)**; name is fixed |
 
 ## 4. Pipelines, runs, jobs
 
@@ -218,6 +218,9 @@ Module-specific examples: `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED`, `EMAIL_NOT_VE
 `MFA_REQUIRED`, `MFA_INVALID_CODE`, `REFRESH_TOKEN_REUSED`, `PASSWORD_TOO_WEAK`, `PASSWORD_BREACHED`,
 `LAST_OWNER`, `ALREADY_MEMBER`, `MEMBER_NOT_FOUND`, `ROLE_NOT_ALLOWED`, `INVITATION_NOT_FOUND`,
 `INVITATION_EMAIL_MISMATCH`, `TEAM_NOT_FOUND`, `CONFIRMATION_MISMATCH`, `ORG_NOT_FOUND`, `PROJECT_NOT_FOUND`, `SLUG_TAKEN`, `WEBHOOK_SIGNATURE_INVALID`,
+`ENVIRONMENT_NOT_FOUND`, `ENVIRONMENT_NAME_TAKEN`,
+`ENVIRONMENT_LIMIT_REACHED`, `REPOSITORY_NOT_FOUND`, `GIT_REPO_NOT_FOUND`, `GIT_ACCESS_DENIED`,
+`GIT_PROVIDER_UNREACHABLE`, `IDEMPOTENCY_KEY_IN_PROGRESS`,
 `PIPELINE_INVALID`, `PIPELINE_NOT_FOUND`, `RUN_NOT_CANCELABLE`, `APPROVAL_NOT_ALLOWED`,
 `ENVIRONMENT_PROTECTED`, `DEPLOYMENT_NOT_FOUND`, `NOTHING_TO_ROLL_BACK`, `TARGET_UNREACHABLE`,
 `SECRET_NOT_FOUND`, `SECRET_NAME_TAKEN`, `RUNNER_TOKEN_INVALID`, `SSRF_BLOCKED`.

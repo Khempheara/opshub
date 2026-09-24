@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpsHub API
-  version: 0.3.0
+  version: 0.4.0
   summary: All-in-One DevOps Platform
   description: |
     REST API for OpsHub. All resource endpoints are versioned under `/api/v1`.
@@ -21,6 +21,9 @@ info:
 
     **Optimistic locking.** Editable resources return an `ETag`; updates require
     `If-Match` and fail with `409 VERSION_CONFLICT` when the resource changed.
+
+    **Idempotency.** Create endpoints marked with the `Idempotency-Key` header can be
+    retried safely: the same key and request replay the first response for 24 hours.
 
     **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
   license:
@@ -43,6 +46,17 @@ tags:
     description: Members, roles and invitations.
   - name: teams
     description: Teams group members for project access.
+  - name: projects
+    description: |
+      Projects and access grants. A caller's project role is the highest of their inherited
+      organization role (Owner/Admin/Viewer), direct grant and team grants (docs/rbac.md).
+      Projects the caller can't see answer 404 PROJECT_NOT_FOUND.
+  - name: repositories
+    description: A project's connected GitHub/GitLab repository and its webhook.
+  - name: environments
+    description: Environments with non-secret variables and protection rules.
+  - name: webhooks
+    description: Git host webhook receivers, authenticated by signature instead of a session.
 
 security:
   - bearerAuth: []
@@ -276,7 +290,7 @@ paths:
           description: Same-site path to return to after sign-in.
           schema: { type: string, examples: [/settings/profile] }
       responses:
-        "302": { description: Redirect to the identity provider (or to /login?error=CODE). }
+        "302": { description: "Redirect to the identity provider (or to /login?error=CODE)." }
 
   /api/v1/auth/sso/{provider}/callback:
     get:
@@ -903,6 +917,413 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /api/v1/orgs/{orgId}/projects:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [projects]
+      operationId: listProjects
+      summary: Projects I can see, by name
+      description: |
+        Organization Owners, Admins and Viewers see every project; Developers see the projects
+        granted to them directly or through a team.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - name: q
+          in: query
+          description: Search name or URL name.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Projects.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectPage" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [projects]
+      operationId: createProject
+      summary: Create a project (project.create — Developer+)
+      description: A Developer who creates a project gets a direct Admin grant on it.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProjectRequest" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDetail" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{projectId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectID"
+    get:
+      tags: [projects]
+      operationId: getProject
+      summary: A project with my effective role and allowed actions (project.view)
+      responses:
+        "200":
+          description: Project.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [projects]
+      operationId: updateProject
+      summary: Update settings (project.update — project Admin+)
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProjectRequest" }
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "428": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [projects]
+      operationId: deleteProject
+      summary: Delete a project (project.delete)
+      description: Removes the connected repository and OpsHub's webhook on the Git host.
+      parameters:
+        - name: confirm
+          in: query
+          required: true
+          description: Must equal the project's URL name.
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{projectId}/members:
+    parameters:
+      - $ref: "#/components/parameters/ProjectID"
+    get:
+      tags: [projects]
+      operationId: listProjectMembers
+      summary: Who has access (project.view)
+      description: |
+        Direct user grants, team grants, and the organization's Owners and Admins (who inherit
+        their role on every project). Organization Viewers can view every project and are not
+        listed individually.
+      responses:
+        "200":
+          description: Access list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ProjectMember" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{projectId}/members/{principal}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectID"
+      - $ref: "#/components/parameters/Principal"
+    put:
+      tags: [projects]
+      operationId: grantProjectAccess
+      summary: Grant a user or team a role (project.manage_members)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GrantRequest" }
+      responses:
+        "204": { description: Granted (replaces any previous grant). }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [projects]
+      operationId: revokeProjectAccess
+      summary: Remove a direct or team grant (project.manage_members)
+      responses:
+        "204": { description: Revoked. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{projectId}/repository:
+    parameters:
+      - $ref: "#/components/parameters/ProjectID"
+    get:
+      tags: [repositories]
+      operationId: getRepository
+      summary: The connected repository (project.view)
+      responses:
+        "200":
+          description: Repository.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Repository" }
+        "404":
+          description: PROJECT_NOT_FOUND, or REPOSITORY_NOT_FOUND when none is connected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    put:
+      tags: [repositories]
+      operationId: connectRepository
+      summary: Connect or replace the repository (repo.connect)
+      description: |
+        Checks the repository and token with the Git host, then creates a webhook with a new
+        random secret. If OpsHub can't create it (token without admin/Maintainer access, the
+        host rejects the URL, or it is unreachable), the repository is connected in manual
+        mode and the response carries the payload URL and secret — shown only once.
+        Self-hosted hosts (`base_url`) that resolve to internal addresses are refused
+        (`SSRF_BLOCKED`) unless the operator allows them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectRepositoryRequest" }
+      responses:
+        "200":
+          description: Connected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectRepositoryResult" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [repositories]
+      operationId: disconnectRepository
+      summary: Disconnect (repo.connect)
+      description: Deletes the stored token and removes OpsHub's webhook from the Git host (best effort).
+      responses:
+        "204": { description: Disconnected. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{projectId}/repository/test:
+    parameters:
+      - $ref: "#/components/parameters/ProjectID"
+    post:
+      tags: [repositories]
+      operationId: testRepository
+      summary: Re-check the stored token with the Git host (repo.connect)
+      responses:
+        "200":
+          description: The token still works.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RepositoryTest" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{projectId}/repository/deliveries:
+    parameters:
+      - $ref: "#/components/parameters/ProjectID"
+    get:
+      tags: [repositories]
+      operationId: listWebhookDeliveries
+      summary: Recent webhook deliveries, newest first (repo.connect)
+      description: Kept 30 days. Requests with a bad signature are listed with `signature_valid=false`.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Deliveries.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDeliveryPage" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{projectId}/environments:
+    parameters:
+      - $ref: "#/components/parameters/ProjectID"
+    get:
+      tags: [environments]
+      operationId: listEnvironments
+      summary: Environments, development → production (project.view)
+      responses:
+        "200":
+          description: Environments.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Environment" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [environments]
+      operationId: createEnvironment
+      summary: Create an environment (environment.manage)
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnvironmentRequest" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Environment" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/environments/{environmentId}:
+    parameters:
+      - $ref: "#/components/parameters/EnvironmentID"
+    get:
+      tags: [environments]
+      operationId: getEnvironment
+      summary: An environment with its protection rule (project.view)
+      responses:
+        "200":
+          description: Environment.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Environment" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [environments]
+      operationId: updateEnvironment
+      summary: Replace kind, variables and protection (environment.manage)
+      description: The name can't change (pipelines refer to it). Omit `protection` or send null to unprotect.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnvironmentRequest" }
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Environment" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "428": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [environments]
+      operationId: deleteEnvironment
+      summary: Delete an environment (environment.manage)
+      responses:
+        "204": { description: Deleted. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/webhooks/github/{repositoryId}:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryID"
+    post:
+      tags: [webhooks]
+      operationId: receiveGitHubWebhook
+      summary: GitHub webhook receiver (HMAC X-Hub-Signature-256)
+      security: []
+      parameters:
+        - { name: X-Hub-Signature-256, in: header, required: true, schema: { type: string } }
+        - { name: X-GitHub-Event, in: header, required: true, schema: { type: string } }
+        - { name: X-GitHub-Delivery, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "202":
+          description: Accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookAck" }
+        "200":
+          description: Already received (redelivery).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookAck" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+
+  /api/v1/webhooks/gitlab/{repositoryId}:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryID"
+    post:
+      tags: [webhooks]
+      operationId: receiveGitLabWebhook
+      summary: GitLab webhook receiver (X-Gitlab-Token, constant-time compare)
+      security: []
+      parameters:
+        - { name: X-Gitlab-Token, in: header, required: true, schema: { type: string } }
+        - { name: X-Gitlab-Event, in: header, required: true, schema: { type: string } }
+        - { name: X-Gitlab-Event-UUID, in: header, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "202":
+          description: Accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookAck" }
+        "200":
+          description: Already received (redelivery).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookAck" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -944,6 +1365,36 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    ProjectID:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EnvironmentID:
+      name: environmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RepositoryID:
+      name: repositoryId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Principal:
+      name: principal
+      in: path
+      required: true
+      description: '`user:<uuid>` or `team:<uuid>`.'
+      schema: { type: string, pattern: "^(user|team):[0-9a-fA-F-]{36}$" }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Client-generated unique key (e.g. a UUID). A retry with the same key and body returns
+        the original response (header `Idempotent-Replayed: true`) for 24 hours; the same key
+        with a different request is `409 IDEMPOTENCY_KEY_REUSED`.
+      schema: { type: string, maxLength: 255 }
     IfMatch:
       name: If-Match
       in: header
@@ -1401,6 +1852,233 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
         slug: { type: string, pattern: "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$", description: Defaults to one derived from the name. }
+
+    Project:
+      type: object
+      required: [id, organization_id, slug, name, description, default_branch, version, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        default_branch: { type: string }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ProjectAction:
+      type: string
+      enum: [project.view, project.update, project.delete, project.manage_members, repo.connect, environment.manage]
+
+    ProjectDetail:
+      allOf:
+        - $ref: "#/components/schemas/Project"
+        - type: object
+          required: [role, actions]
+          properties:
+            role: { $ref: "#/components/schemas/Role" }
+            actions:
+              type: array
+              items: { $ref: "#/components/schemas/ProjectAction" }
+
+    ProjectPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Project" }
+        next_cursor: { type: [string, "null"] }
+
+    CreateProjectRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        slug: { type: string, pattern: "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$", description: Defaults to one derived from the name. }
+        description: { type: string, maxLength: 500 }
+        default_branch: { type: string, maxLength: 255, description: Defaults to main. }
+
+    UpdateProjectRequest:
+      type: object
+      required: [name, default_branch]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        default_branch: { type: string, minLength: 1, maxLength: 255 }
+
+    ProjectMember:
+      type: object
+      required: [principal, type, id, name, role, source]
+      properties:
+        principal: { type: string, examples: ["user:0190d1e2-…"] }
+        type: { type: string, enum: [user, team] }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        member_count: { type: integer, description: Teams only. }
+        role: { $ref: "#/components/schemas/Role" }
+        source:
+          type: string
+          enum: [direct, team, organization]
+          description: '`organization` = inherited from the org role (read-only here).'
+        granted_at: { type: string, format: date-time }
+
+    GrantRequest:
+      type: object
+      required: [role]
+      additionalProperties: false
+      properties:
+        role:
+          type: string
+          enum: [admin, developer, viewer]
+          description: Owner can't be granted per project.
+
+    GitProvider:
+      type: string
+      enum: [github, gitlab]
+
+    Repository:
+      type: object
+      required: [id, provider, base_url, full_name, web_url, clone_url, default_branch, webhook_mode, webhook_url, last_delivery_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { $ref: "#/components/schemas/GitProvider" }
+        base_url: { type: [string, "null"], description: Self-hosted instance; null for github.com / gitlab.com. }
+        full_name: { type: string, examples: [acme/payments-api] }
+        web_url: { type: string }
+        clone_url: { type: string }
+        default_branch: { type: string }
+        webhook_mode: { type: string, enum: [automatic, manual] }
+        webhook_url: { type: string }
+        last_delivery_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    ConnectRepositoryRequest:
+      type: object
+      required: [provider, full_name, access_token]
+      additionalProperties: false
+      properties:
+        provider: { $ref: "#/components/schemas/GitProvider" }
+        base_url: { type: string, maxLength: 255, description: "https URL of a self-hosted GitHub Enterprise / GitLab; empty for the cloud service." }
+        full_name: { type: string, maxLength: 255, description: '`owner/repo` (GitHub) or `group/subgroup/project` (GitLab).' }
+        access_token:
+          type: string
+          maxLength: 512
+          writeOnly: true
+          description: Personal/project access token. Stored encrypted; never returned.
+
+    ConnectRepositoryResult:
+      type: object
+      required: [repository, webhook]
+      properties:
+        repository: { $ref: "#/components/schemas/Repository" }
+        webhook:
+          type: object
+          required: [mode, url]
+          properties:
+            mode: { type: string, enum: [automatic, manual] }
+            url: { type: string }
+            secret: { type: string, description: Manual mode only; shown once. }
+            reason:
+              type: string
+              enum: [token_cannot_manage_webhooks, provider_rejected_webhook, provider_unreachable]
+
+    RepositoryTest:
+      type: object
+      required: [default_branch, can_manage_webhooks, webhook_installed, full_name]
+      properties:
+        default_branch: { type: string }
+        can_manage_webhooks: { type: boolean }
+        webhook_installed: { type: boolean }
+        full_name: { type: string }
+
+    WebhookDelivery:
+      type: object
+      required: [id, delivery_id, event, ref, commit_sha, signature_valid, received_at]
+      properties:
+        id: { type: string, format: uuid }
+        delivery_id: { type: string }
+        event: { type: string, examples: [push, tag_push, pull_request, ping] }
+        ref: { type: string }
+        commit_sha: { type: string }
+        signature_valid: { type: boolean }
+        received_at: { type: string, format: date-time }
+
+    WebhookDeliveryPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WebhookDelivery" }
+        next_cursor: { type: [string, "null"] }
+
+    WebhookAck:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [accepted, duplicate] }
+
+    EnvironmentKind:
+      type: string
+      enum: [development, staging, production]
+
+    Protection:
+      type: object
+      required: [required_approvals, allowed_branches, allowed_roles]
+      properties:
+        required_approvals: { type: integer, minimum: 0, maximum: 10 }
+        allowed_branches:
+          type: array
+          maxItems: 20
+          items: { type: string }
+          description: Glob patterns such as `main` or `release/*`; empty = any branch.
+        allowed_roles:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [owner, admin, developer] }
+          description: Project roles that may deploy to or approve for this environment.
+
+    Environment:
+      type: object
+      required: [id, project_id, name, kind, variables, protection, version, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        name: { type: string, examples: [production] }
+        kind: { $ref: "#/components/schemas/EnvironmentKind" }
+        variables:
+          type: object
+          additionalProperties: { type: string }
+          description: Non-secret configuration. Secrets are managed separately.
+        protection:
+          oneOf:
+            - $ref: "#/components/schemas/Protection"
+            - type: "null"
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    EnvironmentRequest:
+      type: object
+      required: [kind]
+      additionalProperties: false
+      properties:
+        name: { type: string, pattern: "^[a-z0-9](?:[a-z0-9_-]{0,38}[a-z0-9])?$", description: Required on create; ignored on update. }
+        kind: { $ref: "#/components/schemas/EnvironmentKind" }
+        variables:
+          type: object
+          maxProperties: 100
+          additionalProperties: { type: string, maxLength: 4096 }
+          propertyNames: { pattern: "^[A-Za-z_][A-Za-z0-9_]{0,63}$" }
+        protection:
+          oneOf:
+            - $ref: "#/components/schemas/Protection"
+            - type: "null"
 
     ErrorCode:
       type: string

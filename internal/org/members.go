@@ -190,6 +190,9 @@ func (s *Service) RemoveMember(ctx context.Context, orgID, userID uuid.UUID) err
 		if err := q.RemoveUserFromOrgTeams(ctx, store.RemoveUserFromOrgTeamsParams{OrganizationID: orgID, UserID: userID}); err != nil {
 			return err
 		}
+		if err := q.DeleteProjectGrantsForUserInOrg(ctx, store.DeleteProjectGrantsForUserInOrgParams{OrganizationID: orgID, UserID: userID}); err != nil {
+			return err
+		}
 		if err := q.RemoveMember(ctx, store.RemoveMemberParams{OrganizationID: orgID, UserID: userID}); err != nil {
 			return err
 		}

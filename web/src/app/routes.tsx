@@ -47,6 +47,17 @@ export const routes: RouteObject[] = [
               { path: 'teams', ...page(() => import('@/features/org/TeamsPage'), 'TeamsPage') },
               { path: 'teams/:teamId', ...page(() => import('@/features/org/TeamDetailPage'), 'TeamDetailPage') },
               { path: 'settings', ...page(() => import('@/features/org/OrgSettingsPage'), 'OrgSettingsPage') },
+              { path: 'projects', ...page(() => import('@/features/project/ProjectsPage'), 'ProjectsPage') },
+              {
+                path: 'projects/:projectId',
+                ...page(() => import('@/features/project/ProjectLayout'), 'ProjectLayout'),
+                children: [
+                  { index: true, ...page(() => import('@/features/project/ProjectSettingsPage'), 'ProjectSettingsPage') },
+                  { path: 'environments', ...page(() => import('@/features/project/EnvironmentsPage'), 'EnvironmentsPage') },
+                  { path: 'repository', ...page(() => import('@/features/project/RepositoryPage'), 'RepositoryPage') },
+                  { path: 'access', ...page(() => import('@/features/project/AccessPage'), 'AccessPage') },
+                ],
+              },
             ],
           },
           { path: 'settings/profile', ...page(() => import('@/features/settings/ProfilePage'), 'ProfilePage') },

@@ -20,12 +20,14 @@ import (
 // Entry describes one audited action. Before/After/Metadata must never contain secrets.
 type Entry struct {
 	OrganizationID *uuid.UUID
-	Action         string // "<resource>.<verb>", e.g. "auth.login", "org.create"
-	ResourceType   string
-	ResourceID     string
-	Before         any
-	After          any
-	Metadata       map[string]any
+	// ProjectID is stored in metadata ("project_id") for project-scoped events.
+	ProjectID    *uuid.UUID
+	Action       string // "<resource>.<verb>", e.g. "auth.login", "org.create"
+	ResourceType string
+	ResourceID   string
+	Before       any
+	After        any
+	Metadata     map[string]any
 	// ActorUserID overrides the request principal (e.g. login, where no principal exists yet).
 	ActorUserID *uuid.UUID
 	// ActorType overrides the derived actor type ("system" for background jobs).
@@ -78,6 +80,12 @@ func Record(ctx context.Context, q *store.Queries, e Entry) error {
 	}
 	if e.ActorType != "" {
 		actorType = e.ActorType
+	}
+	if e.ProjectID != nil {
+		if e.Metadata == nil {
+			e.Metadata = map[string]any{}
+		}
+		e.Metadata["project_id"] = e.ProjectID.String()
 	}
 	before, err := marshalOptional(e.Before)
 	if err != nil {

@@ -93,18 +93,18 @@ erDiagram
 | `organization_members` | `(organization_id, user_id)`, `role member_role` | `owner\|admin\|developer\|viewer` |
 | `teams`, `team_members` | `teams.description` (≤ 500), `teams.version` | Grouping for project access grants. `version` for optimistic locking (000002) |
 | `invitations` | `organization_id`, `email citext`, `role`, `token_hash bytea UNIQUE`, `invited_by`, `expires_at` (7 days), `accepted_at`, `accepted_by`, `revoked_at` | At most one open invitation per `(organization_id, email)` (partial unique index). Only the token hash is stored |
-| `idempotency_keys` | `organization_id`, `user_id`, `key`, `request_hash bytea`, `response_status`, `response_body jsonb`, `resource_id`, `created_at`, `expires_at` (24 h) | `UNIQUE (organization_id, user_id, key)`; purged by a River periodic job |
-| `project_members` | `(project_id, user_id \| team_id)`, `role member_role` | Project-level role; see `docs/rbac.md` for resolution |
 
-### 3. Projects & repositories
+### 3. Projects & repositories **(✓ 000003)**
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `projects` | `organization_id`, `slug`, `name`, `default_branch` | |
-| `repositories` | `project_id`, `provider (github\|gitlab)`, `external_id`, `clone_url`, `access_token_enc`, `webhook_secret_enc` | Token + webhook HMAC secret encrypted |
-| `environments` | `project_id`, `name`, `kind (development\|staging\|production)`, `variables jsonb` | |
-| `protection_rules` | `environment_id`, `required_approvals int`, `allowed_branches text[]`, `allowed_roles member_role[]` | e.g. prod requires 1 approval from Admin |
-| `webhook_deliveries` | `repository_id`, `event`, `delivery_id UNIQUE`, `signature_valid`, `payload jsonb`, `received_at` | Idempotency + debugging |
+| `projects` | `organization_id`, `slug` (unique per org among live projects), `name`, `description`, `default_branch`, `version`, `created_by`, `deleted_at` | Soft delete |
+| `project_members` | `project_id`, `user_id` **or** `team_id` (exactly one), `role` (never `owner`) | Direct and team grants; removed when the user leaves the org or the team is deleted. See docs/rbac.md for resolution |
+| `repositories` | `id` (app-generated, used as AES-GCM AAD), `project_id UNIQUE`, `provider (github\|gitlab)`, `base_url` (self-hosted, https only), `full_name`, `external_id`, `web_url`, `clone_url`, `default_branch`, `access_token_enc`, `webhook_secret_enc`, `webhook_mode (automatic\|manual)`, `webhook_id`, `last_delivery_at` | Token + webhook secret encrypted; `webhook_id` set iff OpsHub created the hook |
+| `webhook_deliveries` | `repository_id`, `delivery_id`, `event`, `ref`, `commit_sha`, `signature_valid`, `payload jsonb` (valid and ≤ 1 MB only), `received_at` | Unique `(repository_id, delivery_id)` among **valid** deliveries, so forged requests can't block a real one. Purged after 30 days |
+| `environments` | `project_id`, `name` (slug-like, unique per project among live ones), `kind (development\|staging\|production)`, `variables jsonb` (object, non-secret), `version`, `deleted_at` | ≤ 20 per project, ≤ 100 variables |
+| `protection_rules` | `environment_id` PK, `required_approvals 0–10`, `allowed_branches text[]` (globs; empty = any), `allowed_roles member_role[]` | 1:1 with a protected environment |
+| `idempotency_keys` | `user_id`, `key`, `request_hash`, `response_status`, `response_body`, `expires_at` (24 h) | Unique `(user_id, key)`; purged hourly |
 
 ### 4–5. Pipelines & runners
 

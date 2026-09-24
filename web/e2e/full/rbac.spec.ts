@@ -1,22 +1,8 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { expectKhmerLayoutOK } from '../khmer';
-import { SEED_PASSWORD, emailLink, registerAndVerify, signIn, uniqueEmail } from './helpers';
+import { SEED_PASSWORD, emailLink, newOwnerWithOrg, registerAndVerify, signIn, uniqueEmail } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
-
-/** Registers a new user who creates (and so owns) a fresh organization; returns its slug. */
-async function newOwnerWithOrg(page: Page, name: string): Promise<string> {
-  const email = uniqueEmail('owner');
-  await registerAndVerify(page, email, 'Org Owner');
-  await signIn(page, email);
-  await expect(page).toHaveURL(/\/onboarding$/);
-  const slug = `e2e-${Date.now().toString(36)}`;
-  await page.getByLabel('Organization name').fill(name);
-  await page.getByLabel('URL name').fill(slug);
-  await page.getByRole('button', { name: 'Create organization' }).click();
-  await expect(page).toHaveURL(new RegExp(`/o/${slug}$`));
-  return slug;
-}
 
 test('invite by email → register → accept → member appears with the invited role', async ({ page, browser }) => {
   test.setTimeout(90_000);

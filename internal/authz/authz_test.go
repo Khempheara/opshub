@@ -79,3 +79,59 @@ func TestRoleOrdering(t *testing.T) {
 	assert.True(t, ValidRole(Viewer))
 	assert.False(t, ValidRole("root"))
 }
+
+// The project-scope matrix from docs/rbac.md (Module 3 actions).
+func TestProjectPermissionMatrix(t *testing.T) {
+	type row struct{ owner, admin, developer, viewer bool }
+	matrix := map[Action]row{
+		ProjectView:          {true, true, true, true},
+		ProjectUpdate:        {true, true, false, false},
+		ProjectDelete:        {true, true, false, false},
+		ProjectManageMembers: {true, true, false, false},
+		RepoConnect:          {true, true, false, false},
+		EnvironmentManage:    {true, true, false, false},
+	}
+	assert.ElementsMatch(t, ProjectActions(), func() []Action {
+		var out []Action
+		for a := range matrix {
+			out = append(out, a)
+		}
+		return out
+	}(), "every project action must be pinned here")
+	for a, r := range matrix {
+		assert.Equal(t, r.owner, CanProject(Owner, a), "owner %s", a)
+		assert.Equal(t, r.admin, CanProject(Admin, a), "admin %s", a)
+		assert.Equal(t, r.developer, CanProject(Developer, a), "developer %s", a)
+		assert.Equal(t, r.viewer, CanProject(Viewer, a), "viewer %s", a)
+	}
+	assert.False(t, CanProject(Owner, OrgView), "org actions aren't project actions")
+	assert.Equal(t, []Action{ProjectView}, AllowedProject(Viewer))
+}
+
+// Effective project role = max(inherited org role, direct grant, team grant); docs/rbac.md.
+func TestEffectiveProjectRole(t *testing.T) {
+	cases := []struct {
+		org, direct, team Role
+		want              Role
+		ok                bool
+	}{
+		{Owner, "", "", Owner, true},
+		{Admin, "", "", Admin, true},
+		{Viewer, "", "", Viewer, true},
+		{Developer, "", "", "", false}, // developers need a grant
+		{Developer, Developer, "", Developer, true},
+		{Developer, "", Admin, Admin, true},     // via team
+		{Developer, Viewer, Admin, Admin, true}, // highest wins
+		{Viewer, Developer, "", Developer, true},
+		{Admin, Viewer, Viewer, Admin, true}, // grants never lower the inherited role
+		{"", Admin, Admin, "", false},        // not an org member: grants don't count
+	}
+	for _, c := range cases {
+		got, ok := EffectiveProjectRole(c.org, c.direct, c.team)
+		assert.Equal(t, c.ok, ok, "%v", c)
+		assert.Equal(t, c.want, got, "%v", c)
+	}
+	assert.False(t, GrantableProjectRole(Owner))
+	assert.True(t, GrantableProjectRole(Admin))
+	assert.False(t, GrantableProjectRole("root"))
+}

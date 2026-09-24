@@ -1,5 +1,63 @@
 # Changelog
 
+## Module 3 — Projects, repositories, environments
+
+### Built
+
+**Backend**
+- Projects: create (Developers and up; a Developer creator becomes project Admin), list what I
+  can see (search), rename/describe/default branch with If-Match, delete with slug confirmation.
+- Project access: effective role = highest of the inherited org role, a direct grant and team
+  grants (`authz.EffectiveProjectRole`, pinned by tests). Grants for users or teams (Admin,
+  Developer, Viewer); cleaned up when someone leaves the org or a team is deleted. Hidden
+  projects answer 404.
+- Repositories: connect GitHub or GitLab — cloud, GitHub Enterprise or self-managed GitLab — with
+  an access token (encrypted at rest, never returned). OpsHub creates the webhook with a random
+  secret; if it can't, the repository connects in manual mode and the secret is shown once.
+  Test connection, replace, disconnect (removes OpsHub's webhook).
+- Webhook receivers for GitHub (HMAC-SHA256) and GitLab (token, constant-time compare):
+  redeliveries are recognized by delivery ID; bad signatures are recorded without payload and
+  can't block the real delivery. Deliveries are listed for 30 days. (Pipelines start from them in
+  Module 4.)
+- Environments: development/staging/production, non-secret variables, protection rules
+  (required approvals, allowed branches, allowed roles).
+- `internal/safehttp`: SSRF-safe HTTP client (checks the resolved IP at dial time, no redirects,
+  no proxies); `OPSHUB_OUTBOUND_ALLOWED_CIDRS` allows specific internal hosts.
+- `internal/idempotency`: `Idempotency-Key` middleware (24 h replay per user, conflict on reuse
+  with a different request or while in flight; 5xx not stored). Used on project and
+  environment creation.
+- Hourly housekeeping job purges expired idempotency keys and old webhook deliveries.
+- Migration `000003_projects`; 12 new error codes (EN + KM); OpenAPI 0.4.0.
+- A test now fails when a route is missing from `api/openapi.yaml` or vice versa (it found a
+  YAML quoting issue from Module 1, fixed).
+- Fixed: a team (or project) named only in Khmer failed validation; it now gets a generated URL
+  name.
+- Seed: project "Payments API · API ទូទាត់ប្រាក់" with development, staging and protected
+  production; the Platform team gets Developer access. `make seed` adds it to existing databases.
+
+**Frontend**
+- Projects page (search, create with an Idempotency-Key per dialog) and a project area with
+  Settings, Environments (variables editor, protection editor), Repository (connect form, manual
+  webhook setup, deliveries with signature status) and Access (grant people or teams, change
+  roles, inherited org roles read-only) tabs. Controls follow the project's `actions`.
+- New `project` translation namespace (EN + KM).
+
+### Quality
+
+- Go: project service tests (visibility, roles, grants, environments, repository modes, SSRF,
+  webhooks, audit without secrets); tenant isolation over all 18 project routes with a coverage
+  guard; idempotency and webhooks over HTTP; fake GitHub/GitLab APIs. Coverage gate now includes
+  the new packages: 77.7 %.
+- Web: 55 Vitest tests; 29 Playwright tests (+4 full-stack: create project and protected
+  environment, SSRF refusal, Viewer read-only, Khmer layout of project pages on mobile and desktop).
+- golangci-lint, gosec, govulncheck, ESLint, i18n check clean; Trivy 0 HIGH/CRITICAL; migrations
+  up/down/up tested; sqlc and orval output deterministic.
+
+### Next — Module 4: CI/CD pipelines
+
+`.opshub.yml` parser and DAG engine, pipeline runs started from webhooks and by hand, live logs
+over SSE, manual approval gates that enforce environment protection rules.
+
 ## Module 2 — RBAC: members, invitations, teams
 
 ### Built

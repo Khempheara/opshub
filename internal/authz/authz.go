@@ -40,7 +40,7 @@ func ValidRole(r Role) bool { _, ok := rank[r]; return ok }
 // Action is "<resource>.<verb>"; the same string is used as the audit-log action.
 type Action string
 
-// Organization-scope actions. Project-scope actions are added with Module 3.
+// Organization-scope actions.
 const (
 	OrgView          Action = "org.view"
 	OrgUpdate        Action = "org.update"
@@ -126,6 +126,85 @@ func Allowed(role Role) []Action {
 	}
 	return out
 }
+
+// Project-scope actions (Module 3). Later modules add runs, deployments and secrets.
+const (
+	ProjectView          Action = "project.view"
+	ProjectUpdate        Action = "project.update"
+	ProjectDelete        Action = "project.delete"
+	ProjectManageMembers Action = "project.manage_members"
+	RepoConnect          Action = "repo.connect"
+	EnvironmentManage    Action = "environment.manage"
+)
+
+// projectMatrix is the minimum effective project role for each project-scope action.
+var projectMatrix = map[Action]Role{
+	ProjectView:          Viewer,
+	ProjectUpdate:        Admin,
+	ProjectDelete:        Admin,
+	ProjectManageMembers: Admin,
+	RepoConnect:          Admin,
+	EnvironmentManage:    Admin,
+}
+
+// ProjectActions lists every project-scope action (stable order).
+func ProjectActions() []Action {
+	out := make([]Action, 0, len(projectMatrix))
+	for a := range projectMatrix {
+		out = append(out, a)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// CanProject reports whether an effective project role may perform a project-scope action.
+func CanProject(role Role, a Action) bool {
+	min, ok := projectMatrix[a]
+	return ok && AtLeast(role, min)
+}
+
+// AllowedProject returns every project-scope action the role may perform.
+func AllowedProject(role Role) []Action {
+	var out []Action
+	for _, a := range ProjectActions() {
+		if CanProject(role, a) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// InheritedProjectRole is the project role an organization role grants on every project:
+// Owners, Admins and Viewers keep their role; Developers need an explicit grant.
+func InheritedProjectRole(orgRole Role) (Role, bool) {
+	switch orgRole {
+	case Owner, Admin, Viewer:
+		return orgRole, true
+	}
+	return "", false
+}
+
+// EffectiveProjectRole is the highest of the inherited role and the direct and team grants
+// (docs/rbac.md). Empty strings mean "none". ok is false when the user has no access.
+func EffectiveProjectRole(orgRole, direct, team Role) (Role, bool) {
+	if !ValidRole(orgRole) {
+		return "", false // not a member of the organization: grants don't apply
+	}
+	var best Role
+	if r, ok := InheritedProjectRole(orgRole); ok {
+		best = r
+	}
+	for _, r := range []Role{direct, team} {
+		if ValidRole(r) && (best == "" || AtLeast(r, best)) {
+			best = r
+		}
+	}
+	return best, best != ""
+}
+
+// GrantableProjectRole reports whether a role may be granted on a project. Owner is never
+// granted per project: project Owners are the organization's Owners.
+func GrantableProjectRole(r Role) bool { return ValidRole(r) && r != Owner }
 
 // Membership is the verified caller of an organization-scoped operation.
 type Membership struct {

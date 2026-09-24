@@ -53,7 +53,19 @@
     "INVITATION_NOT_FOUND": "That invitation no longer exists.",
     "INVITATION_EMAIL_MISMATCH": "This invitation was sent to a different email address.",
     "TEAM_NOT_FOUND": "Team not found.",
-    "CONFIRMATION_MISMATCH": "The confirmation text doesn't match."
+    "CONFIRMATION_MISMATCH": "The confirmation text doesn't match.",
+    "PROJECT_NOT_FOUND": "This project doesn't exist or you don't have access to it.",
+    "ENVIRONMENT_NOT_FOUND": "This environment doesn't exist or you don't have access to it.",
+    "ENVIRONMENT_NAME_TAKEN": "An environment with this name already exists.",
+    "ENVIRONMENT_LIMIT_REACHED": "This project already has the maximum number of environments.",
+    "REPOSITORY_NOT_FOUND": "No repository is connected to this project.",
+    "GIT_REPO_NOT_FOUND": "Repository not found, or the access token can't see it.",
+    "GIT_ACCESS_DENIED": "The Git host rejected the access token. Check that it's valid and has the required permissions.",
+    "GIT_PROVIDER_UNREACHABLE": "The Git host couldn't be reached. Try again in a moment.",
+    "SSRF_BLOCKED": "This address points to an internal network and isn't allowed. An operator can allow it in the server settings.",
+    "WEBHOOK_SIGNATURE_INVALID": "The webhook signature is invalid.",
+    "IDEMPOTENCY_KEY_REUSED": "This request was already sent with different content.",
+    "IDEMPOTENCY_KEY_IN_PROGRESS": "This request is still being processed. Try again in a moment."
   },
   "rules": {
     "required": "This field is required.",
@@ -67,6 +79,10 @@
     "slug": "Use lowercase letters, numbers and dashes.",
     "range": "Must be between {{param}}.",
     "required_without": "This field is required.",
-    "cursor": "Invalid page link."
+    "cursor": "Invalid page link.",
+    "branch": "Use letters, numbers, dots, dashes, underscores and slashes.",
+    "variable_name": "Use letters, numbers and underscores; don't start with a number.",
+    "repository": "Enter the repository as owner/name.",
+    "https_url": "Enter an https:// address."
   }
 }

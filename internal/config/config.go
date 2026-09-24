@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+
+	"github.com/opshub/opshub/internal/safehttp"
 )
 
 const (
@@ -70,6 +72,10 @@ type Config struct {
 	// Stricter per-IP limits on sign-in and on endpoints that send email / consume tokens.
 	AuthLoginPerMinute int `env:"OPSHUB_AUTH_LOGIN_PER_MINUTE" envDefault:"10"`
 	AuthEmailPerMinute int `env:"OPSHUB_AUTH_EMAIL_PER_MINUTE" envDefault:"5"`
+
+	// Outbound requests to user-supplied hosts (self-hosted Git) may not reach internal
+	// addresses (SSRF protection) except these CIDRs or single addresses.
+	OutboundAllowedCIDRs []string `env:"OPSHUB_OUTBOUND_ALLOWED_CIDRS" envSeparator:","`
 
 	SMTP SMTPConfig
 	SSO  SSOConfig
@@ -149,6 +155,9 @@ func (c Config) Validate() error {
 		if _, err := netip.ParsePrefix(p); err != nil {
 			errs = append(errs, fmt.Errorf("OPSHUB_TRUSTED_PROXIES: %q is not a CIDR prefix", p))
 		}
+	}
+	if _, err := safehttp.ParseCIDRs(c.OutboundAllowedCIDRs); err != nil {
+		errs = append(errs, fmt.Errorf("OPSHUB_OUTBOUND_ALLOWED_CIDRS: %w", err))
 	}
 	if c.DBMaxConns < 1 {
 		errs = append(errs, errors.New("OPSHUB_DB_MAX_CONNS must be >= 1"))

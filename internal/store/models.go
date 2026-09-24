@@ -55,6 +55,91 @@ func (ns NullEmailTokenPurpose) Value() (driver.Value, error) {
 	return string(ns.EmailTokenPurpose), nil
 }
 
+type EnvironmentKind string
+
+const (
+	EnvironmentKindDevelopment EnvironmentKind = "development"
+	EnvironmentKindStaging     EnvironmentKind = "staging"
+	EnvironmentKindProduction  EnvironmentKind = "production"
+)
+
+func (e *EnvironmentKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = EnvironmentKind(s)
+	case string:
+		*e = EnvironmentKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for EnvironmentKind: %T", src)
+	}
+	return nil
+}
+
+type NullEnvironmentKind struct {
+	EnvironmentKind EnvironmentKind `json:"environment_kind"`
+	Valid           bool            `json:"valid"` // Valid is true if EnvironmentKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullEnvironmentKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.EnvironmentKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.EnvironmentKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullEnvironmentKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.EnvironmentKind), nil
+}
+
+type GitProvider string
+
+const (
+	GitProviderGithub GitProvider = "github"
+	GitProviderGitlab GitProvider = "gitlab"
+)
+
+func (e *GitProvider) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = GitProvider(s)
+	case string:
+		*e = GitProvider(s)
+	default:
+		return fmt.Errorf("unsupported scan type for GitProvider: %T", src)
+	}
+	return nil
+}
+
+type NullGitProvider struct {
+	GitProvider GitProvider `json:"git_provider"`
+	Valid       bool        `json:"valid"` // Valid is true if GitProvider is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullGitProvider) Scan(value interface{}) error {
+	if value == nil {
+		ns.GitProvider, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.GitProvider.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullGitProvider) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.GitProvider), nil
+}
+
 type MemberRole string
 
 const (
@@ -99,6 +184,48 @@ func (ns NullMemberRole) Value() (driver.Value, error) {
 	return string(ns.MemberRole), nil
 }
 
+type WebhookMode string
+
+const (
+	WebhookModeAutomatic WebhookMode = "automatic"
+	WebhookModeManual    WebhookMode = "manual"
+)
+
+func (e *WebhookMode) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = WebhookMode(s)
+	case string:
+		*e = WebhookMode(s)
+	default:
+		return fmt.Errorf("unsupported scan type for WebhookMode: %T", src)
+	}
+	return nil
+}
+
+type NullWebhookMode struct {
+	WebhookMode WebhookMode `json:"webhook_mode"`
+	Valid       bool        `json:"valid"` // Valid is true if WebhookMode is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullWebhookMode) Scan(value interface{}) error {
+	if value == nil {
+		ns.WebhookMode, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.WebhookMode.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullWebhookMode) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.WebhookMode), nil
+}
+
 type ApiToken struct {
 	ID          uuid.UUID  `json:"id"`
 	UserID      uuid.UUID  `json:"user_id"`
@@ -137,6 +264,29 @@ type EmailToken struct {
 	ExpiresAt time.Time         `json:"expires_at"`
 	UsedAt    *time.Time        `json:"used_at"`
 	CreatedAt time.Time         `json:"created_at"`
+}
+
+type Environment struct {
+	ID        uuid.UUID       `json:"id"`
+	ProjectID uuid.UUID       `json:"project_id"`
+	Name      string          `json:"name"`
+	Kind      EnvironmentKind `json:"kind"`
+	Variables []byte          `json:"variables"`
+	Version   int32           `json:"version"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
+	DeletedAt *time.Time      `json:"deleted_at"`
+}
+
+type IdempotencyKey struct {
+	ID             uuid.UUID `json:"id"`
+	UserID         uuid.UUID `json:"user_id"`
+	Key            string    `json:"key"`
+	RequestHash    []byte    `json:"request_hash"`
+	ResponseStatus *int32    `json:"response_status"`
+	ResponseBody   []byte    `json:"response_body"`
+	CreatedAt      time.Time `json:"created_at"`
+	ExpiresAt      time.Time `json:"expires_at"`
 }
 
 type Invitation struct {
@@ -183,6 +333,39 @@ type OrganizationMember struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
+type Project struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Slug           string     `json:"slug"`
+	Name           string     `json:"name"`
+	Description    string     `json:"description"`
+	DefaultBranch  string     `json:"default_branch"`
+	Version        int32      `json:"version"`
+	CreatedBy      *uuid.UUID `json:"created_by"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	DeletedAt      *time.Time `json:"deleted_at"`
+}
+
+type ProjectMember struct {
+	ID        uuid.UUID  `json:"id"`
+	ProjectID uuid.UUID  `json:"project_id"`
+	UserID    *uuid.UUID `json:"user_id"`
+	TeamID    *uuid.UUID `json:"team_id"`
+	Role      MemberRole `json:"role"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+type ProtectionRule struct {
+	EnvironmentID     uuid.UUID    `json:"environment_id"`
+	RequiredApprovals int32        `json:"required_approvals"`
+	AllowedBranches   []string     `json:"allowed_branches"`
+	AllowedRoles      []MemberRole `json:"allowed_roles"`
+	CreatedAt         time.Time    `json:"created_at"`
+	UpdatedAt         time.Time    `json:"updated_at"`
+}
+
 type RefreshToken struct {
 	ID        uuid.UUID  `json:"id"`
 	SessionID uuid.UUID  `json:"session_id"`
@@ -191,6 +374,26 @@ type RefreshToken struct {
 	ExpiresAt time.Time  `json:"expires_at"`
 	UsedAt    *time.Time `json:"used_at"`
 	CreatedAt time.Time  `json:"created_at"`
+}
+
+type Repository struct {
+	ID               uuid.UUID   `json:"id"`
+	ProjectID        uuid.UUID   `json:"project_id"`
+	Provider         GitProvider `json:"provider"`
+	BaseUrl          *string     `json:"base_url"`
+	FullName         string      `json:"full_name"`
+	ExternalID       string      `json:"external_id"`
+	WebUrl           string      `json:"web_url"`
+	CloneUrl         string      `json:"clone_url"`
+	DefaultBranch    string      `json:"default_branch"`
+	AccessTokenEnc   []byte      `json:"access_token_enc"`
+	WebhookSecretEnc []byte      `json:"webhook_secret_enc"`
+	WebhookMode      WebhookMode `json:"webhook_mode"`
+	WebhookID        *string     `json:"webhook_id"`
+	ConnectedBy      *uuid.UUID  `json:"connected_by"`
+	LastDeliveryAt   *time.Time  `json:"last_delivery_at"`
+	CreatedAt        time.Time   `json:"created_at"`
+	UpdatedAt        time.Time   `json:"updated_at"`
 }
 
 type Session struct {
@@ -266,4 +469,16 @@ type UserRecoveryCode struct {
 	CodeHash  []byte     `json:"code_hash"`
 	UsedAt    *time.Time `json:"used_at"`
 	CreatedAt time.Time  `json:"created_at"`
+}
+
+type WebhookDelivery struct {
+	ID             uuid.UUID `json:"id"`
+	RepositoryID   uuid.UUID `json:"repository_id"`
+	DeliveryID     string    `json:"delivery_id"`
+	Event          string    `json:"event"`
+	Ref            string    `json:"ref"`
+	CommitSha      string    `json:"commit_sha"`
+	SignatureValid bool      `json:"signature_valid"`
+	Payload        []byte    `json:"payload"`
+	ReceivedAt     time.Time `json:"received_at"`
 }

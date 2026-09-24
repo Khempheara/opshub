@@ -18,6 +18,7 @@ import (
 	"github.com/opshub/opshub/internal/audit"
 	"github.com/opshub/opshub/internal/authn"
 	"github.com/opshub/opshub/internal/authz"
+	"github.com/opshub/opshub/internal/crypto"
 	"github.com/opshub/opshub/internal/database"
 	"github.com/opshub/opshub/internal/jobs"
 	"github.com/opshub/opshub/internal/pagination"
@@ -227,6 +228,19 @@ func (s *Service) Permissions(ctx context.Context, id uuid.UUID) (Permissions, e
 
 // Slugify derives a URL name: lowercase ASCII letters/digits, other runs become "-".
 func Slugify(name string) string {
+	return slugify(name)
+}
+
+// SlugOrFallback derives a slug from name, or "<prefix>-<random>" when the name has no
+// Latin letters or digits (e.g. a name written only in Khmer).
+func SlugOrFallback(name, prefix string) string {
+	if s := slugify(name); s != "" {
+		return s
+	}
+	return prefix + "-" + strings.ToLower(crypto.RandomBase32(6))
+}
+
+func slugify(name string) string {
 	var b strings.Builder
 	dash := false
 	for _, r := range strings.ToLower(name) {

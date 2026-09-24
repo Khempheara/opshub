@@ -420,3 +420,14 @@ func TestSlugify(t *testing.T) {
 }
 
 var pageAll = pagination.Params{Limit: 200}
+
+// A name written only in Khmer has no Latin letters to derive a URL name from.
+func TestKhmerOnlyTeamNameGetsGeneratedSlug(t *testing.T) {
+	svc, _ := newService(t)
+	owner := newUser(t)
+	o := orgWith(t, svc, owner, nil)
+	team, err := svc.CreateTeam(owner.ctx, o.ID, TeamInput{Name: "ក្រុមវេទិកា"})
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(team.Slug, "team-"), team.Slug)
+	assert.Equal(t, "ក្រុមវេទិកា", team.Name)
+}

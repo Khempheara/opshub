@@ -11,6 +11,7 @@ export const OrgAction = {
   memberRemove: 'member.remove',
   memberUpdateRole: 'member.update_role',
   teamManage: 'team.manage',
+  projectCreate: 'project.create',
 } as const;
 
 /**
