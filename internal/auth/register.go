@@ -23,6 +23,24 @@ type RegisterInput struct {
 	DisplayName string `json:"display_name" validate:"required,min=1,max=100"`
 	Locale      string `json:"locale" validate:"omitempty,oneof=en km"`
 	Timezone    string `json:"timezone" validate:"omitempty,timezone"`
+	// InvitationToken lets an invitee sign up when self-service sign-up is disabled.
+	InvitationToken string `json:"invitation_token" validate:"omitempty,max=128"`
+}
+
+// invitedEmail reports whether token belongs to an open invitation sent to email. The
+// invitee still has to verify the address before signing in, which proves they received it.
+func (s *Service) invitedEmail(ctx context.Context, email, token string) (bool, error) {
+	if token == "" {
+		return false, nil
+	}
+	invited, err := store.New(s.pool).GetOpenInvitationEmailByToken(ctx, crypto.HashToken(token))
+	if database.IsNoRows(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return normalizeEmail(invited) == email, nil
 }
 
 // Register creates an account and emails a verification link. To avoid revealing which
@@ -32,7 +50,13 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) error {
 	email := normalizeEmail(in.Email)
 	isBootstrap := s.cfg.BootstrapAdminEmail != "" && email == normalizeEmail(s.cfg.BootstrapAdminEmail)
 	if !s.cfg.AllowSignup && !isBootstrap {
-		return apperr.New(apperr.CodeSignupDisabled, http.StatusForbidden, "self-service sign-up is disabled")
+		invited, err := s.invitedEmail(ctx, email, in.InvitationToken)
+		if err != nil {
+			return err
+		}
+		if !invited {
+			return apperr.New(apperr.CodeSignupDisabled, http.StatusForbidden, "self-service sign-up is disabled")
+		}
 	}
 	if perr := authn.CheckPasswordPolicy(in.Password, email); perr != nil {
 		return perr

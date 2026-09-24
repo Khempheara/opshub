@@ -22,7 +22,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import type { Locale } from './locale';
 
@@ -42,4 +42,9 @@ export interface RegisterRequest {
   display_name: string;
   locale?: Locale;
   timezone?: string;
+  /**
+     * Token from an invitation link. When self-service sign-up is disabled, an open invitation sent to the same email still allows registration.
+     * @maxLength 128
+     */
+  invitation_token?: string;
 }

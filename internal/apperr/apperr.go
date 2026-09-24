@@ -67,6 +67,18 @@ const (
 	CodeSlugTaken           Code = "SLUG_TAKEN"
 )
 
+// Module 2: RBAC, members, invitations, teams.
+const (
+	CodeLastOwner               Code = "LAST_OWNER"
+	CodeAlreadyMember           Code = "ALREADY_MEMBER"
+	CodeMemberNotFound          Code = "MEMBER_NOT_FOUND"
+	CodeRoleNotAllowed          Code = "ROLE_NOT_ALLOWED"
+	CodeInvitationNotFound      Code = "INVITATION_NOT_FOUND"
+	CodeInvitationEmailMismatch Code = "INVITATION_EMAIL_MISMATCH"
+	CodeTeamNotFound            Code = "TEAM_NOT_FOUND"
+	CodeConfirmationMismatch    Code = "CONFIRMATION_MISMATCH"
+)
+
 // AllCodes lists every code; append new codes here as modules add them.
 var AllCodes = []Code{
 	CodeInternal, CodeBadRequest, CodeValidation, CodeUnauthenticated, CodeForbidden,
@@ -81,6 +93,9 @@ var AllCodes = []Code{
 	CodeRefreshInvalid, CodeRefreshReused, CodeSSOUnknownProvider, CodeSSOFailed,
 	CodeSSOEmailUnverified, CodeLastLoginMethod, CodeSessionNotFound, CodeTokenNotFound,
 	CodeIdentityNotFound, CodeOrgNotFound, CodeSlugTaken,
+
+	CodeLastOwner, CodeAlreadyMember, CodeMemberNotFound, CodeRoleNotAllowed, CodeInvitationNotFound,
+	CodeInvitationEmailMismatch, CodeTeamNotFound, CodeConfirmationMismatch,
 }
 
 // Error is an application error carrying its HTTP status and client-facing code.

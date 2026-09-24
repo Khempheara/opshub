@@ -61,12 +61,16 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 	}
 	return database.InTx(ctx, pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
-		org, err := q.CreateOrganization(ctx, store.CreateOrganizationParams{Slug: DemoOrgSlug, Name: DemoOrgName})
-		orgCreated := err == nil
-		if database.IsUniqueViolation(err, "organizations_slug_key") {
+		// Check first: a failed INSERT would abort the transaction, so "skip" couldn't commit.
+		var exists bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM organizations WHERE slug = $1)", DemoOrgSlug).Scan(&exists); err != nil {
+			return err
+		}
+		if exists {
 			_, _ = fmt.Fprintf(opts.Out, "seed: organization %q already exists; skipping\n", DemoOrgSlug)
 			return nil
 		}
+		org, err := q.CreateOrganization(ctx, store.CreateOrganizationParams{Slug: DemoOrgSlug, Name: DemoOrgName})
 		if err != nil {
 			return err
 		}
@@ -82,13 +86,30 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 			if err != nil {
 				return fmt.Errorf("seed user %s: %w", du.Email, err)
 			}
-			if orgCreated {
-				if err := q.AddOrganizationMember(ctx, store.AddOrganizationMemberParams{OrganizationID: org.ID, UserID: u.ID, Role: du.Role}); err != nil {
-					return err
-				}
+			if err := q.AddOrganizationMember(ctx, store.AddOrganizationMemberParams{OrganizationID: org.ID, UserID: u.ID, Role: du.Role}); err != nil {
+				return err
 			}
 		}
-		_, _ = fmt.Fprintf(opts.Out, "seed: created %s with %d users\n", DemoOrgName, len(DemoUsers))
+		team, err := q.CreateTeam(ctx, store.CreateTeamParams{
+			OrganizationID: org.ID, Slug: "platform", Name: "Platform Team · ក្រុមវេទិកា",
+			Description: "Runs CI/CD and infrastructure · គ្រប់គ្រង CI/CD និងហេដ្ឋារចនាសម្ព័ន្ធ",
+		})
+		if err != nil {
+			return err
+		}
+		for _, du := range DemoUsers {
+			if du.Role != store.MemberRoleAdmin && du.Role != store.MemberRoleDeveloper {
+				continue
+			}
+			u, err := q.GetUserByEmail(ctx, du.Email)
+			if err != nil {
+				return err
+			}
+			if err := q.AddTeamMember(ctx, store.AddTeamMemberParams{TeamID: team.ID, UserID: u.ID}); err != nil {
+				return err
+			}
+		}
+		_, _ = fmt.Fprintf(opts.Out, "seed: created %s with %d users and a team\n", DemoOrgName, len(DemoUsers))
 		for _, du := range DemoUsers {
 			_, _ = fmt.Fprintf(opts.Out, "  %-28s %s\n", du.Email, du.Role)
 		}

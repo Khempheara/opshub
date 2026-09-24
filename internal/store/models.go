@@ -139,6 +139,20 @@ type EmailToken struct {
 	CreatedAt time.Time         `json:"created_at"`
 }
 
+type Invitation struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Email          string     `json:"email"`
+	Role           MemberRole `json:"role"`
+	TokenHash      []byte     `json:"token_hash"`
+	InvitedBy      *uuid.UUID `json:"invited_by"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	AcceptedAt     *time.Time `json:"accepted_at"`
+	AcceptedBy     *uuid.UUID `json:"accepted_by"`
+	RevokedAt      *time.Time `json:"revoked_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
 type MfaChallenge struct {
 	ID         uuid.UUID  `json:"id"`
 	UserID     uuid.UUID  `json:"user_id"`
@@ -200,6 +214,8 @@ type Team struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	DeletedAt      *time.Time `json:"deleted_at"`
+	Description    string     `json:"description"`
+	Version        int32      `json:"version"`
 }
 
 type TeamMember struct {

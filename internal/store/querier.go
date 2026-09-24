@@ -12,19 +12,23 @@ import (
 
 type Querier interface {
 	AddOrganizationMember(ctx context.Context, arg AddOrganizationMemberParams) error
+	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) error
 	// Accepts a TOTP time step only once (replay protection); returns no row if already used.
 	AdvanceTOTPStep(ctx context.Context, arg AdvanceTOTPStepParams) (uuid.UUID, error)
 	ConsumeEmailToken(ctx context.Context, arg ConsumeEmailTokenParams) (uuid.UUID, error)
 	ConsumeRecoveryCode(ctx context.Context, arg ConsumeRecoveryCodeParams) (uuid.UUID, error)
 	CountIdentities(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountOwners(ctx context.Context, organizationID uuid.UUID) (int64, error)
 	CountUnusedRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateEmailToken(ctx context.Context, arg CreateEmailTokenParams) error
 	CreateIdentity(ctx context.Context, arg CreateIdentityParams) (UserIdentity, error)
+	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreateMFAChallenge(ctx context.Context, arg CreateMFAChallengeParams) error
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// Periodic cleanup. Sessions are kept 30 days after expiry/revocation for the security page history.
 	DeleteExpiredAuthRecords(ctx context.Context) error
@@ -33,10 +37,19 @@ type Querier interface {
 	DisableTOTP(ctx context.Context, id uuid.UUID) error
 	EnableTOTP(ctx context.Context, arg EnableTOTPParams) error
 	GetActiveAPITokenByHash(ctx context.Context, tokenHash []byte) (GetActiveAPITokenByHashRow, error)
+	GetInvitation(ctx context.Context, id uuid.UUID) (Invitation, error)
+	GetInvitationByTokenForUpdate(ctx context.Context, tokenHash []byte) (GetInvitationByTokenForUpdateRow, error)
 	GetMFAChallengeForUpdate(ctx context.Context, tokenHash []byte) (MfaChallenge, error)
+	GetMember(ctx context.Context, arg GetMemberParams) (GetMemberRow, error)
+	// The caller's role in a live organization (tenant check for every org-scoped request).
+	GetMembership(ctx context.Context, arg GetMembershipParams) (MemberRole, error)
+	// Used by sign-up when self-service registration is disabled: an open invitation for the
+	// same address lets the invitee create an account.
+	GetOpenInvitationEmailByToken(ctx context.Context, tokenHash []byte) (string, error)
 	// Tenant-scoped read: returns no row unless the user is a member.
 	GetOrganizationForMember(ctx context.Context, arg GetOrganizationForMemberParams) (GetOrganizationForMemberRow, error)
 	GetRefreshTokenForUpdate(ctx context.Context, tokenHash []byte) (GetRefreshTokenForUpdateRow, error)
+	GetTeam(ctx context.Context, id uuid.UUID) (Team, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByIDForUpdate(ctx context.Context, id uuid.UUID) (User, error)
@@ -51,20 +64,37 @@ type Querier interface {
 	// Keyset pagination on (created_at, id) newest first.
 	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
 	ListIdentities(ctx context.Context, userID uuid.UUID) ([]UserIdentity, error)
+	ListMembers(ctx context.Context, arg ListMembersParams) ([]ListMembersRow, error)
+	ListOpenInvitations(ctx context.Context, arg ListOpenInvitationsParams) ([]ListOpenInvitationsRow, error)
+	ListTeamMembers(ctx context.Context, teamID uuid.UUID) ([]ListTeamMembersRow, error)
+	ListTeams(ctx context.Context, arg ListTeamsParams) ([]ListTeamsRow, error)
 	ListUserOrganizations(ctx context.Context, arg ListUserOrganizationsParams) ([]ListUserOrganizationsRow, error)
+	// Serializes membership changes (last-owner checks) within one organization.
+	LockOrganization(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) error
 	MarkRefreshTokenUsed(ctx context.Context, id uuid.UUID) error
 	RecordLoginFailure(ctx context.Context, arg RecordLoginFailureParams) error
 	RecordLoginSuccess(ctx context.Context, id uuid.UUID) error
+	RemoveMember(ctx context.Context, arg RemoveMemberParams) error
+	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error)
+	RemoveUserFromOrgTeams(ctx context.Context, arg RemoveUserFromOrgTeamsParams) error
 	RevokeAPIToken(ctx context.Context, arg RevokeAPITokenParams) (uuid.UUID, error)
+	RevokeInvitation(ctx context.Context, id uuid.UUID) error
+	RevokeOpenInvitationForEmail(ctx context.Context, arg RevokeOpenInvitationForEmailParams) error
 	RevokeSession(ctx context.Context, arg RevokeSessionParams) (uuid.UUID, error)
 	// Revokes every session of a user, optionally keeping one (the caller's).
 	RevokeUserSessions(ctx context.Context, arg RevokeUserSessionsParams) error
 	SetTOTPPending(ctx context.Context, arg SetTOTPPendingParams) error
 	SetUserEmailVerified(ctx context.Context, id uuid.UUID) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error
+	SoftDeleteOrganization(ctx context.Context, id uuid.UUID) error
+	SoftDeleteTeam(ctx context.Context, id uuid.UUID) error
 	// Throttled to one write per minute per token.
 	TouchAPIToken(ctx context.Context, id uuid.UUID) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error
+	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error)
+	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
 	UpdateUserPreferences(ctx context.Context, arg UpdateUserPreferencesParams) (User, error)
 	// Optimistic locking: no row is returned when the version does not match.
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)

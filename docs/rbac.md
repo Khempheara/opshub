@@ -25,13 +25,19 @@ upload logs/artifacts for jobs assigned to them.
 
 ## Enforcement
 
-- Checked in the **service layer** (`authz.Require(ctx, action, resource)`) before any read or write,
-  so REST handlers, webhooks, River jobs, and future gRPC/CLI paths are all covered. The UI only hides
-  controls as a convenience.
+- Checked in the **service layer** (`authz.Require(ctx, q, orgID, action)` in `internal/authz`) before
+  any read or write, so REST handlers, webhooks, River jobs, and future gRPC/CLI paths are all covered.
+  The matrix below is pinned by `internal/authz/authz_test.go`. The UI only hides controls as a
+  convenience: it reads `GET /orgs/{orgId}/permissions` (`usePermissions`, `<RequirePermission>`).
 - Denials return `403 FORBIDDEN`. For resources the caller cannot even **view**, the API returns
   `404 <RESOURCE>_NOT_FOUND` so it doesn't reveal that they exist.
 - Every allowed mutating action writes an `audit_log` row.
-- The last Owner of an organization cannot be removed or demoted.
+- The last Owner of an organization cannot be removed, demoted or leave (`409 LAST_OWNER`). The check
+  runs after locking the organization row (`SELECT … FOR UPDATE`), so two concurrent demotions can't
+  both succeed.
+- Any member may leave an organization (remove themselves); their team memberships go with it.
+- Tenant isolation is tested route by route: `internal/org/http_test.go` calls every tenant-scoped
+  route with another organization's IDs and expects a 404, and fails if a new route isn't covered.
 
 ## Permission matrix
 
@@ -57,7 +63,8 @@ upload logs/artifacts for jobs assigned to them.
 | View / export audit log | ✅ | ✅ | — | — |
 | Configure SSO (OIDC) | ✅ | — | — | — |
 
-¹ Admins cannot grant or modify the Owner role, or change another Admin.
+¹ Admins can grant at most Developer (invitations and role changes), and cannot change or remove
+Owners or other Admins. They may change their own role or leave. Owners manage everyone.
 
 ### Project scope (effective project role)
 
@@ -115,6 +122,11 @@ Actions are named `<resource>.<verb>`. They are used by `authz.Require`, listed 
 | Deployments | `deployment.view`, `deployment.create`, `deployment.rollback` |
 | Secrets | `secret.list`, `secret.create`, `secret.update`, `secret.rotate`, `secret.delete`; runner fetch audited as `secret.read` |
 | Logs | `logs.view` |
+
+Organization changes are audited as `org.create`, `org.update`, `org.delete`, `org.transfer`,
+`member.invite`, `member.invite_revoke`, `member.join`, `member.update_role`, `member.remove`,
+`member.leave`, `team.create`, `team.update`, `team.delete`, `team.add_member`, `team.remove_member`
+(role changes and renames record before/after values).
 
 Authentication events are audited too: `auth.login`, `auth.login_failed`, `auth.locked`,
 `auth.refresh_reuse`, `auth.2fa_enabled`, `auth.password_changed`, `token.create`, `token.revoke`.

@@ -27,6 +27,7 @@ export const routes: RouteObject[] = [
       { path: 'verify-email', ...page(() => import('@/features/auth/VerifyEmailPage'), 'VerifyEmailPage') },
       { path: 'reset-password', ...page(() => import('@/features/auth/ResetPasswordPage'), 'ResetPasswordPage') },
       { path: 'auth/sso-complete', ...page(() => import('@/features/auth/SSOCompletePage'), 'SSOCompletePage') },
+      { path: 'invitations/accept', ...page(() => import('@/features/org/AcceptInvitationPage'), 'AcceptInvitationPage') },
     ],
   },
   {
@@ -40,7 +41,13 @@ export const routes: RouteObject[] = [
           {
             path: 'o/:orgSlug',
             element: <OrgRoute />,
-            children: [{ index: true, ...page(() => import('@/features/org/OrgHomePage'), 'OrgHomePage') }],
+            children: [
+              { index: true, ...page(() => import('@/features/org/OrgHomePage'), 'OrgHomePage') },
+              { path: 'members', ...page(() => import('@/features/org/MembersPage'), 'MembersPage') },
+              { path: 'teams', ...page(() => import('@/features/org/TeamsPage'), 'TeamsPage') },
+              { path: 'teams/:teamId', ...page(() => import('@/features/org/TeamDetailPage'), 'TeamDetailPage') },
+              { path: 'settings', ...page(() => import('@/features/org/OrgSettingsPage'), 'OrgSettingsPage') },
+            ],
           },
           { path: 'settings/profile', ...page(() => import('@/features/settings/ProfilePage'), 'ProfilePage') },
           { path: 'settings/security', ...page(() => import('@/features/settings/SecurityPage'), 'SecurityPage') },

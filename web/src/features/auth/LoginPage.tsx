@@ -9,6 +9,7 @@ import { broadcastLogin, setSession } from '@/auth/session';
 import { PasswordField, TextField } from '@/components/common/Field';
 import { FormError } from '@/components/common/States';
 import { Button } from '@/components/ui/button';
+import { getPendingInvitation } from '@/features/org/pendingInvitation';
 import { hasCode } from '@/lib/api/errors';
 import { login, resendVerification } from '@/lib/api/generated/auth/auth';
 import { useGetMeta } from '@/lib/api/generated/system/system';
@@ -123,10 +124,10 @@ export function LoginPage() {
         <Link to="/forgot-password" className="text-primary underline-offset-4 hover:underline">
           {t('login.forgot')}
         </Link>
-        {meta.data?.signup_enabled !== false && (
+        {(meta.data?.signup_enabled !== false || getPendingInvitation() !== null) && (
           <span>
             {t('login.noAccount')}{' '}
-            <Link to="/register" className="text-primary font-medium underline-offset-4 hover:underline">
+            <Link to={next === '/' ? '/register' : `/register?next=${encodeURIComponent(next)}`} className="text-primary font-medium underline-offset-4 hover:underline">
               {t('login.register')}
             </Link>
           </span>

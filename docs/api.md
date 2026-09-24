@@ -59,19 +59,24 @@ per-job token · `Agent` per-asset agent token · `HMAC` webhook signature.
 | GET | `/orgs` | JWT | | Orgs I belong to (org switcher) |
 | POST | `/orgs` | JWT | | Create org (creator becomes Owner) |
 | GET | `/orgs/{orgId}` | JWT | `org.view` | |
-| PATCH | `/orgs/{orgId}` | JWT | `org.update` | Name, settings (log retention, SSRF allowances) **(IM)** |
-| DELETE | `/orgs/{orgId}` | JWT | `org.delete` | Soft delete, confirmation by slug |
-| POST | `/orgs/{orgId}/transfer-ownership` | JWT | `org.transfer` | |
-| GET | `/orgs/{orgId}/permissions` | JWT | | My effective permissions (UI route guards) |
-| GET | `/orgs/{orgId}/members` | JWT | `member.view` | Filter by role, search by name/email |
-| PATCH | `/orgs/{orgId}/members/{userId}` | JWT | `member.update_role` | Change role (last-owner guard) |
-| DELETE | `/orgs/{orgId}/members/{userId}` | JWT | `member.remove` | |
-| GET / POST | `/orgs/{orgId}/invitations` | JWT | `member.invite` | Invite by email + role (email in invitee's browser locale → EN fallback) |
-| DELETE | `/invitations/{id}` | JWT | `member.invite` | Revoke |
-| POST | `/invitations/accept` | JWT | | Accept with token |
+| PATCH | `/orgs/{orgId}` | JWT | `org.update` | Rename **(IM)** (settings such as log retention arrive with later modules) |
+| DELETE | `/orgs/{orgId}?confirm={slug}` | JWT | `org.delete` | Soft delete; `confirm` must equal the slug (`CONFIRMATION_MISMATCH`) |
+| POST | `/orgs/{orgId}/transfer-ownership` | JWT | `org.transfer` | Target becomes Owner, caller becomes Admin |
+| GET | `/orgs/{orgId}/permissions` | JWT | | My role and allowed actions (UI route guards) |
+| GET | `/orgs/{orgId}/members` | JWT | `member.view` | `?role=`, `?q=` (name/email), cursor pagination |
+| PATCH | `/orgs/{orgId}/members/{userId}` | JWT | `member.update_role` | Change role (Admin limits, last-owner guard) |
+| DELETE | `/orgs/{orgId}/members/{userId}` | JWT | `member.remove` | Remove; any member may remove themselves (leave) |
+| GET / POST | `/orgs/{orgId}/invitations` | JWT | `member.invite` | Open invitations / invite by email + role. Email in the invitee's profile language if they have an account, else the inviter's request language. Re-inviting replaces the open invitation |
+| DELETE | `/invitations/{invitationId}` | JWT | `member.invite` | Revoke |
+| POST | `/invitations/preview` | JWT | | Org name, role, inviter and invited email for a token |
+| POST | `/invitations/accept` | JWT | | Accept with token; the signed-in user's verified email must match (`INVITATION_EMAIL_MISMATCH`) |
 | GET / POST | `/orgs/{orgId}/teams` | JWT | `team.view` / `team.manage` | |
-| GET / PATCH / DELETE | `/teams/{teamId}` | JWT | `team.manage` | **(IM)** on PATCH |
-| PUT / DELETE | `/teams/{teamId}/members/{userId}` | JWT | `team.manage` | |
+| GET / PATCH / DELETE | `/teams/{teamId}` | JWT | `team.view` / `team.manage` | GET includes members; **(IM)** on PATCH |
+| PUT / DELETE | `/teams/{teamId}/members/{userId}` | JWT | `team.manage` | The user must be an organization member |
+
+Invitation links carry the token in the URL fragment (`/invitations/accept#token=…`). When
+`OPSHUB_ALLOW_SIGNUP=false`, `POST /auth/register` still accepts an invitee who passes that token as
+`invitation_token` for the same email address.
 
 ## 3. Projects, repositories, environments
 
@@ -211,7 +216,8 @@ Generic: `INTERNAL`, `BAD_REQUEST`, `VALIDATION_FAILED`, `UNAUTHENTICATED`, `FOR
 
 Module-specific examples: `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED`, `EMAIL_NOT_VERIFIED`,
 `MFA_REQUIRED`, `MFA_INVALID_CODE`, `REFRESH_TOKEN_REUSED`, `PASSWORD_TOO_WEAK`, `PASSWORD_BREACHED`,
-`LAST_OWNER`, `ORG_NOT_FOUND`, `PROJECT_NOT_FOUND`, `SLUG_TAKEN`, `WEBHOOK_SIGNATURE_INVALID`,
+`LAST_OWNER`, `ALREADY_MEMBER`, `MEMBER_NOT_FOUND`, `ROLE_NOT_ALLOWED`, `INVITATION_NOT_FOUND`,
+`INVITATION_EMAIL_MISMATCH`, `TEAM_NOT_FOUND`, `CONFIRMATION_MISMATCH`, `ORG_NOT_FOUND`, `PROJECT_NOT_FOUND`, `SLUG_TAKEN`, `WEBHOOK_SIGNATURE_INVALID`,
 `PIPELINE_INVALID`, `PIPELINE_NOT_FOUND`, `RUN_NOT_CANCELABLE`, `APPROVAL_NOT_ALLOWED`,
 `ENVIRONMENT_PROTECTED`, `DEPLOYMENT_NOT_FOUND`, `NOTHING_TO_ROLL_BACK`, `TARGET_UNREACHABLE`,
 `SECRET_NOT_FOUND`, `SECRET_NAME_TAKEN`, `RUNNER_TOKEN_INVALID`, `SSRF_BLOCKED`.

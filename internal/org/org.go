@@ -1,6 +1,5 @@
-// Package org manages organizations, the tenant boundary. Module 1 covers creating an
-// organization and listing/reading the caller's memberships; members, invitations and
-// teams arrive with RBAC (Module 2).
+// Package org manages organizations (the tenant boundary), their members, invitations and
+// teams. Every operation authorizes through package authz; non-members always get 404.
 package org
 
 import (
@@ -11,7 +10,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,8 +17,9 @@ import (
 	"github.com/opshub/opshub/internal/apperr"
 	"github.com/opshub/opshub/internal/audit"
 	"github.com/opshub/opshub/internal/authn"
+	"github.com/opshub/opshub/internal/authz"
 	"github.com/opshub/opshub/internal/database"
-	"github.com/opshub/opshub/internal/httpx"
+	"github.com/opshub/opshub/internal/jobs"
 	"github.com/opshub/opshub/internal/pagination"
 	"github.com/opshub/opshub/internal/store"
 )
@@ -31,17 +30,32 @@ type Organization struct {
 	Slug      string    `json:"slug"`
 	Name      string    `json:"name"`
 	Role      string    `json:"role"`
+	Version   int32     `json:"version"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 var slugPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$`)
 
+// Config holds settings the service needs for outgoing links.
+type Config struct {
+	PublicURL string
+}
+
 // Service implements organization use cases.
 type Service struct {
 	pool *pgxpool.Pool
+	jobs jobs.Inserter
+	cfg  Config
+	now  func() time.Time
 }
 
-func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
+func NewService(pool *pgxpool.Pool, inserter jobs.Inserter, cfg Config) *Service {
+	return &Service{pool: pool, jobs: inserter, cfg: cfg, now: time.Now}
+}
+
+func (s *Service) inTx(ctx context.Context, fn func(q *store.Queries, tx pgx.Tx) error) error {
+	return database.InTx(ctx, s.pool, func(tx pgx.Tx) error { return fn(store.New(tx), tx) })
+}
 
 // CreateInput is POST /orgs. Slug defaults to one derived from the name (Latin letters
 // and digits only; Khmer names need an explicit slug).
@@ -65,28 +79,31 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (Organization, err
 		return Organization{}, apperr.Validation([]apperr.FieldError{{Field: "slug", Rule: "slug"}})
 	}
 	var out Organization
-	err := database.InTx(ctx, s.pool, func(tx pgx.Tx) error {
-		q := store.New(tx)
+	err := s.inTx(ctx, func(q *store.Queries, _ pgx.Tx) error {
 		o, err := q.CreateOrganization(ctx, store.CreateOrganizationParams{Slug: slug, Name: name})
 		if database.IsUniqueViolation(err, "organizations_slug_key") {
-			return apperr.New(apperr.CodeSlugTaken, http.StatusConflict, "this URL name is already taken").
-				WithDetails(map[string]any{"slug": slug})
+			return errSlugTaken(slug)
 		}
 		if err != nil {
 			return err
 		}
 		if err := q.AddOrganizationMember(ctx, store.AddOrganizationMemberParams{
-			OrganizationID: o.ID, UserID: p.UserID, Role: store.MemberRoleOwner,
+			OrganizationID: o.ID, UserID: p.UserID, Role: authz.Owner,
 		}); err != nil {
 			return err
 		}
-		out = Organization{ID: o.ID, Slug: o.Slug, Name: o.Name, Role: string(store.MemberRoleOwner), CreatedAt: o.CreatedAt}
+		out = Organization{ID: o.ID, Slug: o.Slug, Name: o.Name, Role: string(authz.Owner), Version: o.Version, CreatedAt: o.CreatedAt}
 		return audit.Record(ctx, q, audit.Entry{
 			OrganizationID: &o.ID, Action: "org.create", ResourceType: "organization", ResourceID: o.ID.String(),
 			After: map[string]any{"name": o.Name, "slug": o.Slug},
 		})
 	})
 	return out, err
+}
+
+func errSlugTaken(slug string) *apperr.Error {
+	return apperr.New(apperr.CodeSlugTaken, http.StatusConflict, "this URL name is already taken").
+		WithDetails(map[string]any{"slug": slug})
 }
 
 type nameIDCursor struct {
@@ -116,25 +133,96 @@ func (s *Service) ListMine(ctx context.Context, page pagination.Params) (paginat
 	}, func(r store.ListUserOrganizationsRow) any { return nameIDCursor{Name: r.Name, ID: r.ID} }), nil
 }
 
-// Get returns an organization the caller belongs to. Non-members get ORG_NOT_FOUND (not
-// FORBIDDEN) so the existence of other tenants is not revealed.
+// Get returns an organization the caller belongs to (ORG_NOT_FOUND otherwise).
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (Organization, error) {
-	p, ok := authn.PrincipalFrom(ctx)
-	if !ok {
-		return Organization{}, apperr.Unauthenticated()
-	}
-	o, err := store.New(s.pool).GetOrganizationForMember(ctx, store.GetOrganizationForMemberParams{ID: id, UserID: p.UserID})
-	if database.IsNoRows(err) {
-		return Organization{}, errNotFound()
-	}
+	q := store.New(s.pool)
+	m, err := authz.Require(ctx, q, id, authz.OrgView)
 	if err != nil {
 		return Organization{}, err
 	}
-	return Organization{ID: o.ID, Slug: o.Slug, Name: o.Name, Role: string(o.Role), CreatedAt: o.CreatedAt}, nil
+	p, _ := authn.PrincipalFrom(ctx)
+	o, err := q.GetOrganizationForMember(ctx, store.GetOrganizationForMemberParams{ID: id, UserID: p.UserID})
+	if err != nil {
+		return Organization{}, err
+	}
+	return Organization{ID: o.ID, Slug: o.Slug, Name: o.Name, Role: string(m.Role), Version: o.Version, CreatedAt: o.CreatedAt}, nil
 }
 
-func errNotFound() *apperr.Error {
-	return apperr.New(apperr.CodeOrgNotFound, http.StatusNotFound, "organization not found")
+// UpdateInput is PATCH /orgs/{id}.
+type UpdateInput struct {
+	Name string `json:"name" validate:"required,min=1,max=100"`
+}
+
+// Update renames an organization (Admin+) with optimistic locking.
+func (s *Service) Update(ctx context.Context, id uuid.UUID, version int32, in UpdateInput) (Organization, error) {
+	var out Organization
+	err := s.inTx(ctx, func(q *store.Queries, _ pgx.Tx) error {
+		m, err := authz.Require(ctx, q, id, authz.OrgUpdate)
+		if err != nil {
+			return err
+		}
+		p, _ := authn.PrincipalFrom(ctx)
+		before, err := q.GetOrganizationForMember(ctx, store.GetOrganizationForMemberParams{ID: id, UserID: p.UserID})
+		if err != nil {
+			return err
+		}
+		o, err := q.UpdateOrganization(ctx, store.UpdateOrganizationParams{ID: id, Version: version, Name: strings.TrimSpace(in.Name)})
+		if database.IsNoRows(err) {
+			return apperr.VersionConflict()
+		}
+		if err != nil {
+			return err
+		}
+		out = Organization{ID: o.ID, Slug: o.Slug, Name: o.Name, Role: string(m.Role), Version: o.Version, CreatedAt: o.CreatedAt}
+		return audit.Record(ctx, q, audit.Entry{
+			OrganizationID: &id, Action: string(authz.OrgUpdate), ResourceType: "organization", ResourceID: id.String(),
+			Before: map[string]any{"name": before.Name}, After: map[string]any{"name": o.Name},
+		})
+	})
+	return out, err
+}
+
+// Delete soft-deletes an organization (Owner only). The caller must retype the slug.
+func (s *Service) Delete(ctx context.Context, id uuid.UUID, confirmSlug string) error {
+	return s.inTx(ctx, func(q *store.Queries, _ pgx.Tx) error {
+		if _, err := authz.Require(ctx, q, id, authz.OrgDelete); err != nil {
+			return err
+		}
+		p, _ := authn.PrincipalFrom(ctx)
+		o, err := q.GetOrganizationForMember(ctx, store.GetOrganizationForMemberParams{ID: id, UserID: p.UserID})
+		if err != nil {
+			return err
+		}
+		if confirmSlug != o.Slug {
+			return apperr.New(apperr.CodeConfirmationMismatch, http.StatusUnprocessableEntity, "type the organization's URL name to confirm")
+		}
+		if err := q.SoftDeleteOrganization(ctx, id); err != nil {
+			return err
+		}
+		return audit.Record(ctx, q, audit.Entry{
+			OrganizationID: &id, Action: string(authz.OrgDelete), ResourceType: "organization", ResourceID: id.String(),
+			Before: map[string]any{"name": o.Name, "slug": o.Slug},
+		})
+	})
+}
+
+// Permissions is the caller's role and allowed actions in an organization (for the UI).
+type Permissions struct {
+	Role    string   `json:"role"`
+	Actions []string `json:"actions"`
+}
+
+func (s *Service) Permissions(ctx context.Context, id uuid.UUID) (Permissions, error) {
+	m, err := authz.Resolve(ctx, store.New(s.pool), id)
+	if err != nil {
+		return Permissions{}, err
+	}
+	allowed := authz.Allowed(m.Role)
+	actions := make([]string, len(allowed))
+	for i, a := range allowed {
+		actions[i] = string(a)
+	}
+	return Permissions{Role: string(m.Role), Actions: actions}, nil
 }
 
 // Slugify derives a URL name: lowercase ASCII letters/digits, other runs become "-".
@@ -156,61 +244,4 @@ func Slugify(name string) string {
 		s = strings.Trim(s[:40], "-")
 	}
 	return s
-}
-
-// Handler exposes organizations over HTTP.
-type Handler struct{ svc *Service }
-
-func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
-
-// Mount registers /orgs routes (callers must be authenticated).
-func (h *Handler) Mount(r chi.Router) {
-	r.Route("/orgs", func(r chi.Router) {
-		r.Use(authn.RequireAuth)
-		r.Get("/", h.list)
-		r.Post("/", h.create)
-		r.Get("/{orgId}", h.get)
-	})
-}
-
-func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
-	page, err := pagination.Parse(r)
-	if err != nil {
-		httpx.Error(w, r, err)
-		return
-	}
-	res, err := h.svc.ListMine(r.Context(), page)
-	if err != nil {
-		httpx.Error(w, r, err)
-		return
-	}
-	httpx.JSON(w, http.StatusOK, res)
-}
-
-func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
-	var in CreateInput
-	if err := httpx.Decode(w, r, &in); err != nil {
-		httpx.Error(w, r, err)
-		return
-	}
-	o, err := h.svc.Create(r.Context(), in)
-	if err != nil {
-		httpx.Error(w, r, err)
-		return
-	}
-	httpx.JSON(w, http.StatusCreated, o)
-}
-
-func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "orgId"))
-	if err != nil {
-		httpx.Error(w, r, errNotFound())
-		return
-	}
-	o, err := h.svc.Get(r.Context(), id)
-	if err != nil {
-		httpx.Error(w, r, err)
-		return
-	}
-	httpx.JSON(w, http.StatusOK, o)
 }

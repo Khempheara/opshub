@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -113,4 +114,23 @@ func Decode(w http.ResponseWriter, r *http.Request, dst any) error {
 		return apperr.BadRequest("request body must contain a single JSON object")
 	}
 	return Validate(dst)
+}
+
+// ETag formats a resource version as an entity tag ("v3").
+func ETag(version int32) string { return `"v` + strconv.Itoa(int(version)) + `"` }
+
+// ParseIfMatch reads the expected version from If-Match (`"v3"`, `W/"v3"` or `3`).
+// A missing header is PRECONDITION_REQUIRED (428): updates need optimistic locking.
+func ParseIfMatch(r *http.Request) (int32, error) {
+	v := strings.TrimSpace(r.Header.Get("If-Match"))
+	if v == "" {
+		return 0, apperr.PreconditionRequired()
+	}
+	v = strings.TrimPrefix(v, "W/")
+	v = strings.TrimPrefix(strings.Trim(v, `"`), "v")
+	n, err := strconv.ParseInt(v, 10, 32)
+	if err != nil {
+		return 0, apperr.BadRequest("malformed If-Match header")
+	}
+	return int32(n), nil
 }
