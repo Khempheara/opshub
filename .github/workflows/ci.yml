@@ -62,7 +62,7 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           npx playwright test --project=mocked
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with: { name: playwright-mocked, path: web/playwright-report, retention-days: 7 }
 
@@ -99,7 +99,7 @@ jobs:
       - name: Stack logs on failure
         if: failure()
         run: docker compose logs --no-color > compose.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: e2e-results
