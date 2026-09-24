@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod }
       - name: golangci-lint (incl. gosec)
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with: { version: latest }
       - name: sqlc generated code is up to date
         run: docker run --rm -v "$PWD":/src -w /src sqlc/sqlc:1.31.1 diff
