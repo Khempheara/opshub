@@ -77,9 +77,10 @@ erDiagram
 |---|---|---|
 | `users` | `email citext`, `password_hash`, `email_verified_at`, `locale ('en'\|'km')`, `timezone`, `khmer_numerals`, `totp_secret_enc`, `totp_enabled_at`, `is_platform_admin`, `disabled_at`, `version` | `password_hash` NULL for SSO-only users. Locale/timezone drive UI and notification language |
 | `user_identities` | `provider`, `subject`, `user_id` | OIDC links; `UNIQUE (provider, subject)` |
-| `refresh_tokens` | `family_id`, `parent_id`, `token_hash bytea UNIQUE`, `used_at`, `revoked_at`, `revoke_reason`, `ip inet`, `user_agent`, `expires_at` (14 days, sliding; family absolute max 30 days) | Rotation: each refresh marks the token used and issues a child in the same family. Presenting a used token = **reuse** → the whole family is revoked. A family = one "session" in the UI. **Replaces the `sessions` table in 000001** (not yet released, so 000001 is amended rather than adding a migration) |
+| `sessions` | `user_id`, `auth_method (password\|oidc)`, `ip`, `user_agent`, `expires_at` (absolute, 30 days), `last_used_at`, `revoked_at`, `revoke_reason` | One signed-in device; the access JWT carries its id (`sid`). Revoking it ends the whole refresh-token family |
+| `refresh_tokens` | `session_id`, `parent_id`, `token_hash bytea UNIQUE`, `expires_at` (14 days, sliding, capped by the session), `used_at` | Rotation: each refresh marks the token used and issues a child. Presenting a used token = **reuse** → the session is revoked |
 | `mfa_challenges` | `user_id`, `token_hash`, `expires_at` (5 min), `used_at`, `attempts` | Bridges password step → TOTP step |
-| lockout columns on `users` | `failed_login_count`, `locked_until` | 5 failures → 15 min lock, doubling per repeat; reset on success |
+| lockout columns on `users` | `failed_login_count`, `lockout_level`, `locked_until` | 5 failures → 15 min lock, doubling per repeat (max 24 h); reset on success |
 | `api_tokens` | `token_prefix`, `token_hash`, `scopes text[]`, `expires_at`, `last_used_at`, `revoked_at` | Format `ohp_<prefix>_<secret>` |
 | `email_tokens` | `purpose (verify_email\|reset_password)`, `token_hash`, `expires_at`, `used_at` | Single use |
 | `user_recovery_codes` | `code_hash`, `used_at` | TOTP backup codes |

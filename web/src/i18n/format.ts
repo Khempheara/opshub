@@ -40,6 +40,24 @@ function digits(s: string, prefs: FormatPrefs): string {
   return prefs.locale === 'km' && prefs.khmerNumerals ? toKhmerDigits(s) : s;
 }
 
+/*
+ * Khmer locale data (from CLDR) used only when the JS engine has no Khmer ICU data. Mainstream
+ * browsers format Khmer natively; embedded/headless Chromium builds and some webviews don't.
+ * These tables are locale data, not UI copy (UI strings live in src/locales).
+ */
+const KM_MONTHS = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
+const KM_WEEKDAYS = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+const KM_UNITS: Record<Intl.RelativeTimeFormatUnit, string> = {
+  year: 'ឆ្នាំ', years: 'ឆ្នាំ', quarter: 'ត្រីមាស', quarters: 'ត្រីមាស', month: 'ខែ', months: 'ខែ',
+  week: 'សប្តាហ៍', weeks: 'សប្តាហ៍', day: 'ថ្ងៃ', days: 'ថ្ងៃ', hour: 'ម៉ោង', hours: 'ម៉ោង',
+  minute: 'នាទី', minutes: 'នាទី', second: 'វិនាទី', seconds: 'វិនាទី',
+};
+
+/** Whether Khmer must be produced by the fallback tables for these prefs. */
+function needsKhmerFallback(prefs: FormatPrefs, nativeKhmer = HAS_NATIVE_KHMER): boolean {
+  return prefs.locale === 'km' && !nativeKhmer;
+}
+
 export function isValidTimeZone(tz: string): boolean {
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: tz });
@@ -67,12 +85,31 @@ export function formatDateTime(
   value: Date | string | number,
   prefs: FormatPrefs,
   options: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' },
+  nativeKhmer = HAS_NATIVE_KHMER,
 ): string {
-  const tag = intlLocale(prefs);
+  const date = new Date(value);
+  const tag = intlLocale(prefs, nativeKhmer);
   const f = cached(`dt|${tag}|${prefs.timeZone}|${JSON.stringify(options)}`, () =>
     new Intl.DateTimeFormat(tag, { ...options, timeZone: prefs.timeZone }),
   );
-  return digits(f.format(new Date(value)), prefs);
+  if (!needsKhmerFallback(prefs, nativeKhmer)) return digits(f.format(date), prefs);
+
+  // Fallback: English layout with Khmer month, weekday and day-period names.
+  const numeric = cached(`dtn|${prefs.timeZone}`, () =>
+    new Intl.DateTimeFormat('en-US', { month: 'numeric', weekday: 'short', timeZone: prefs.timeZone }),
+  ).formatToParts(date);
+  const monthIndex = Number(numeric.find((p) => p.type === 'month')?.value ?? '1') - 1;
+  const weekdayIndex = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(numeric.find((p) => p.type === 'weekday')?.value ?? '');
+  const out = f
+    .formatToParts(date)
+    .map((p) => {
+      if (p.type === 'month' && !/^\d+$/.test(p.value)) return KM_MONTHS[monthIndex] ?? p.value;
+      if (p.type === 'weekday') return KM_WEEKDAYS[weekdayIndex] ?? p.value;
+      if (p.type === 'dayPeriod') return p.value.toUpperCase().startsWith('A') ? 'ព្រឹក' : 'ល្ងាច';
+      return p.value;
+    })
+    .join('');
+  return digits(out, prefs);
 }
 
 export function formatNumber(value: number, prefs: FormatPrefs, options: Intl.NumberFormatOptions = {}): string {
@@ -92,13 +129,22 @@ const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 ];
 
 /** "3 minutes ago" / "៣ នាទីមុន". */
-export function formatRelative(value: Date | string | number, prefs: FormatPrefs, now: Date = new Date()): string {
-  const tag = intlLocale(prefs);
+export function formatRelative(
+  value: Date | string | number,
+  prefs: FormatPrefs,
+  now: Date = new Date(),
+  nativeKhmer = HAS_NATIVE_KHMER,
+): string {
+  const tag = intlLocale(prefs, nativeKhmer);
   const f = cached(`rel|${tag}`, () => new Intl.RelativeTimeFormat(tag, { numeric: 'auto' }));
   const diffSec = Math.round((new Date(value).getTime() - now.getTime()) / 1000);
   for (const [unit, secs] of RELATIVE_UNITS) {
     if (Math.abs(diffSec) >= secs || unit === 'second') {
-      return digits(f.format(Math.round(diffSec / secs), unit), prefs);
+      const n = Math.round(diffSec / secs);
+      if (!needsKhmerFallback(prefs, nativeKhmer)) return digits(f.format(n, unit), prefs);
+      if (unit === 'second' && Math.abs(n) < 10) return 'ឥឡូវនេះ';
+      const amount = digits(String(Math.abs(n)), prefs);
+      return n < 0 ? `${amount} ${KM_UNITS[unit]}មុន` : `ក្នុងរយៈពេល ${amount} ${KM_UNITS[unit]}`;
     }
   }
   return '';
@@ -108,7 +154,7 @@ export function formatRelative(value: Date | string | number, prefs: FormatPrefs
  * Compact duration for build/deploy timings: the two most significant units,
  * with CLDR-localized unit labels ("1h 5m", "1 ម៉ោង 5 នាទី").
  */
-export function formatDuration(ms: number, prefs: FormatPrefs): string {
+export function formatDuration(ms: number, prefs: FormatPrefs, nativeKhmer = HAS_NATIVE_KHMER): string {
   const totalSec = Math.max(0, Math.round(ms / 1000));
   const parts: [number, 'hour' | 'minute' | 'second'][] = [
     [Math.floor(totalSec / 3600), 'hour'],
@@ -117,6 +163,9 @@ export function formatDuration(ms: number, prefs: FormatPrefs): string {
   ];
   const first = parts.findIndex(([v]) => v > 0);
   const shown = first === -1 ? parts.slice(2) : parts.slice(first, first + 2);
+  if (needsKhmerFallback(prefs, nativeKhmer)) {
+    return shown.map(([v, unit]) => `${digits(String(v), prefs)} ${KM_UNITS[unit]}`).join(' ');
+  }
   return shown
     .map(([v, unit]) => formatNumber(v, prefs, { style: 'unit', unit, unitDisplay: 'narrow' }))
     .join(' ');

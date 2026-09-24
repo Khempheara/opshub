@@ -1,0 +1,10 @@
+{{.Heading}}
+
+{{if .Greeting}}{{.Greeting}}
+
+{{end}}{{.Body}}
+{{if .URL}}
+{{.Button}}: {{.URL}}
+{{end}}
+--
+{{.Footer}}

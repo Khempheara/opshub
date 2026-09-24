@@ -6,11 +6,41 @@
     "en": "អង់គ្លេស",
     "km": "ខ្មែរ"
   },
+  "theme": {
+    "label": "រូបរាង",
+    "light": "ភ្លឺ",
+    "dark": "ងងឹត",
+    "system": "តាមប្រព័ន្ធ"
+  },
   "nav": {
-    "home": "ទំព័រដើម",
-    "preferences": "ចំណូលចិត្ត",
+    "main": "ម៉ឺនុយចម្បង",
+    "overview": "ទិដ្ឋភាពទូទៅ",
+    "settings": "ការកំណត់",
+    "profile": "ប្រវត្តិរូប",
+    "security": "សុវត្ថិភាព",
+    "tokens": "API Token",
+    "organizations": "អង្គភាព",
     "apiDocs": "ឯកសារ API",
-    "skipToContent": "រំលងទៅមាតិកាចម្បង"
+    "skipToContent": "រំលងទៅមាតិកាចម្បង",
+    "toggleSidebar": "បើក/បិទរបារចំហៀង",
+    "openMenu": "បើកម៉ឺនុយ"
+  },
+  "org": {
+    "switcher": "ប្តូរអង្គភាព",
+    "current": "អង្គភាពបច្ចុប្បន្ន",
+    "create": "បង្កើតអង្គភាព",
+    "none": "គ្មានអង្គភាព"
+  },
+  "roles": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "developer": "Developer",
+    "viewer": "Viewer"
+  },
+  "userMenu": {
+    "label": "ម៉ឺនុយគណនី",
+    "signedInAs": "បានចូលជា {{email}}",
+    "signOut": "ចាកចេញ"
   },
   "status": {
     "loading": "កំពុងផ្ទុក…",
@@ -20,26 +50,37 @@
   },
   "actions": {
     "save": "រក្សាទុក",
+    "saving": "កំពុងរក្សាទុក…",
     "cancel": "បោះបង់",
     "retry": "ព្យាយាមម្តងទៀត",
-    "backHome": "ត្រឡប់ទៅទំព័រដើម"
+    "backHome": "ត្រឡប់ទៅទំព័រដើម",
+    "copy": "ចម្លង",
+    "copied": "បានចម្លង",
+    "delete": "លុប",
+    "revoke": "ដកហូត",
+    "confirm": "បញ្ជាក់",
+    "continue": "បន្ត",
+    "close": "បិទ",
+    "create": "បង្កើត",
+    "download": "ទាញយក",
+    "done": "រួចរាល់",
+    "showPassword": "បង្ហាញពាក្យសម្ងាត់",
+    "hidePassword": "លាក់ពាក្យសម្ងាត់"
+  },
+  "states": {
+    "loading": "កំពុងផ្ទុក…",
+    "errorTitle": "មានបញ្ហាមួយបានកើតឡើង",
+    "emptyTitle": "មិនទាន់មានអ្វីនៅទីនេះទេ"
   },
   "notFound": {
     "title": "រកមិនឃើញទំព័រ",
     "body": "ទំព័រដែលអ្នកស្នើសុំមិនមាន ឬត្រូវបានផ្លាស់ទីហើយ។"
   },
-  "modules": {
-    "auth": "ការផ្ទៀងផ្ទាត់ និងអ្នកប្រើប្រាស់",
-    "rbac": "តួនាទី និងសិទ្ធិ",
-    "projects": "គម្រោង និង Repository",
-    "pipelines": "CI/CD Pipeline",
-    "runners": "Runner Agent",
-    "deployments": "ការ Deploy",
-    "infrastructure": "ហេដ្ឋារចនាសម្ព័ន្ធ",
-    "secrets": "Secret",
-    "monitoring": "ការត្រួតពិនិត្យ និងការជូនដំណឹង",
-    "logs": "កំណត់ហេតុ (Logs)",
-    "audit": "កំណត់ហេតុសវនកម្ម",
-    "dashboard": "ផ្ទាំងគ្រប់គ្រង និង DORA Metrics"
+  "forbidden": {
+    "title": "មិនមានសិទ្ធិចូលប្រើ",
+    "body": "តួនាទីរបស់អ្នកក្នុងអង្គភាពនេះមិនអនុញ្ញាតឱ្យចូលទំព័រនេះទេ។"
+  },
+  "time": {
+    "never": "មិនដែល"
   }
 }

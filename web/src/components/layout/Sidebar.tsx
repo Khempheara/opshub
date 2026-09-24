@@ -1,0 +1,80 @@
+import { Building2, KeyRound, LayoutDashboard, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { NavLink } from 'react-router';
+import { lastOrg } from '@/app/org';
+import { useRouteOrg } from '@/app/useRouteOrg';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+
+interface Item {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  end?: boolean;
+}
+
+/** Navigation groups; feature modules add their entries here as they ship. */
+function useNavGroups(): { label?: string; items: Item[] }[] {
+  const { t } = useTranslation();
+  const routeOrg = useRouteOrg();
+  const remembered = lastOrg();
+  const org = routeOrg ?? (remembered ? { slug: remembered } : null);
+  const groups: { label?: string; items: Item[] }[] = [];
+  if (org) {
+    groups.push({ items: [{ to: `/o/${org.slug}`, label: t('nav.overview'), icon: LayoutDashboard, end: true }] });
+  }
+  groups.push({
+    label: t('nav.settings'),
+    items: [
+      { to: '/settings/profile', label: t('nav.profile'), icon: UserRound },
+      { to: '/settings/security', label: t('nav.security'), icon: ShieldCheck },
+      { to: '/settings/tokens', label: t('nav.tokens'), icon: KeyRound },
+      { to: '/settings/organizations', label: t('nav.organizations'), icon: Building2 },
+    ],
+  });
+  return groups;
+}
+
+/** Sidebar navigation. `collapsed` shows icons only (labels become tooltips). */
+export function SidebarNav({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
+  const { t } = useTranslation();
+  const groups = useNavGroups();
+  return (
+    <nav aria-label={t('nav.main')} className="flex flex-col gap-4 p-2">
+      {groups.map((g, gi) => (
+        <div key={g.label ?? gi} className="flex flex-col gap-1">
+          {g.label && !collapsed && <p className="text-muted-foreground px-3 pt-2 text-xs font-medium">{g.label}</p>}
+          {g.items.map((item) => {
+            const link = (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                onClick={onNavigate}
+                aria-label={collapsed ? item.label : undefined}
+                className={({ isActive }) =>
+                  cn(
+                    'flex min-h-9 items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors',
+                    isActive ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                    collapsed && 'justify-center px-0',
+                  )
+                }
+              >
+                <item.icon aria-hidden className="size-4 shrink-0" />
+                {!collapsed && <span className="min-w-0">{item.label}</span>}
+              </NavLink>
+            );
+            return collapsed ? (
+              <Tooltip key={item.to}>
+                <TooltipTrigger asChild>{link}</TooltipTrigger>
+                <TooltipContent side="right">{item.label}</TooltipContent>
+              </Tooltip>
+            ) : (
+              link
+            );
+          })}
+        </div>
+      ))}
+    </nav>
+  );
+}

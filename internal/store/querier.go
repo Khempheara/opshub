@@ -11,13 +11,64 @@ import (
 )
 
 type Querier interface {
+	AddOrganizationMember(ctx context.Context, arg AddOrganizationMemberParams) error
+	// Accepts a TOTP time step only once (replay protection); returns no row if already used.
+	AdvanceTOTPStep(ctx context.Context, arg AdvanceTOTPStepParams) (uuid.UUID, error)
+	ConsumeEmailToken(ctx context.Context, arg ConsumeEmailTokenParams) (uuid.UUID, error)
+	ConsumeRecoveryCode(ctx context.Context, arg ConsumeRecoveryCodeParams) (uuid.UUID, error)
+	CountIdentities(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountUnusedRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
+	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
+	CreateEmailToken(ctx context.Context, arg CreateEmailTokenParams) error
+	CreateIdentity(ctx context.Context, arg CreateIdentityParams) (UserIdentity, error)
+	CreateMFAChallenge(ctx context.Context, arg CreateMFAChallengeParams) error
+	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
+	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// Periodic cleanup. Sessions are kept 30 days after expiry/revocation for the security page history.
+	DeleteExpiredAuthRecords(ctx context.Context) error
+	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (UserIdentity, error)
+	DeleteRecoveryCodes(ctx context.Context, userID uuid.UUID) error
+	DisableTOTP(ctx context.Context, id uuid.UUID) error
+	EnableTOTP(ctx context.Context, arg EnableTOTPParams) error
+	GetActiveAPITokenByHash(ctx context.Context, tokenHash []byte) (GetActiveAPITokenByHashRow, error)
+	GetMFAChallengeForUpdate(ctx context.Context, tokenHash []byte) (MfaChallenge, error)
+	// Tenant-scoped read: returns no row unless the user is a member.
+	GetOrganizationForMember(ctx context.Context, arg GetOrganizationForMemberParams) (GetOrganizationForMemberRow, error)
+	GetRefreshTokenForUpdate(ctx context.Context, tokenHash []byte) (GetRefreshTokenForUpdateRow, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
+	GetUserByIDForUpdate(ctx context.Context, id uuid.UUID) (User, error)
+	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (User, error)
+	IncrementMFAAttempts(ctx context.Context, id uuid.UUID) error
 	InsertAuditLog(ctx context.Context, arg InsertAuditLogParams) (AuditLog, error)
+	InsertRecoveryCodes(ctx context.Context, arg []InsertRecoveryCodesParams) (int64, error)
+	InvalidateEmailTokens(ctx context.Context, arg InvalidateEmailTokensParams) error
+	ListAPITokens(ctx context.Context, arg ListAPITokensParams) ([]ApiToken, error)
+	// Keyset pagination (newest first).
+	ListActiveSessions(ctx context.Context, arg ListActiveSessionsParams) ([]Session, error)
 	// Keyset pagination on (created_at, id) newest first.
 	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
+	ListIdentities(ctx context.Context, userID uuid.UUID) ([]UserIdentity, error)
+	ListUserOrganizations(ctx context.Context, arg ListUserOrganizationsParams) ([]ListUserOrganizationsRow, error)
+	MarkRefreshTokenUsed(ctx context.Context, id uuid.UUID) error
+	RecordLoginFailure(ctx context.Context, arg RecordLoginFailureParams) error
+	RecordLoginSuccess(ctx context.Context, id uuid.UUID) error
+	RevokeAPIToken(ctx context.Context, arg RevokeAPITokenParams) (uuid.UUID, error)
+	RevokeSession(ctx context.Context, arg RevokeSessionParams) (uuid.UUID, error)
+	// Revokes every session of a user, optionally keeping one (the caller's).
+	RevokeUserSessions(ctx context.Context, arg RevokeUserSessionsParams) error
+	SetTOTPPending(ctx context.Context, arg SetTOTPPendingParams) error
+	SetUserEmailVerified(ctx context.Context, id uuid.UUID) error
+	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error
+	// Throttled to one write per minute per token.
+	TouchAPIToken(ctx context.Context, id uuid.UUID) error
+	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	UpdateUserPreferences(ctx context.Context, arg UpdateUserPreferencesParams) (User, error)
+	// Optimistic locking: no row is returned when the version does not match.
+	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
+	UseMFAChallenge(ctx context.Context, id uuid.UUID) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -9,6 +9,8 @@ DROP TABLE IF EXISTS user_recovery_codes;
 DROP TABLE IF EXISTS email_tokens;
 DROP TYPE IF EXISTS email_token_purpose;
 DROP TABLE IF EXISTS api_tokens;
+DROP TABLE IF EXISTS mfa_challenges;
+DROP TABLE IF EXISTS refresh_tokens;
 DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS user_identities;
 DROP TABLE IF EXISTS users;

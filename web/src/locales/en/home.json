@@ -1,15 +1,21 @@
 {
-  "title": "Welcome to OpsHub",
-  "intro": "One place to build, test, deploy, and monitor your software — from a push to production.",
-  "systemStatus": "System status",
-  "api": "API server",
-  "localeDemo": {
-    "title": "Your display settings",
-    "now": "Current time",
-    "timezone": "Time zone",
-    "number": "Sample number",
-    "duration": "Sample build duration"
+  "welcome": "Welcome to {{org}}",
+  "yourRole": "Your role: {{role}}",
+  "gettingStarted": "Getting started",
+  "steps": {
+    "orgCreated": "Organization created",
+    "secureAccount": "Protect your account with two-factor authentication",
+    "secureAccountDone": "Two-factor authentication is on",
+    "profile": "Choose your language and time zone"
   },
-  "modulesTitle": "Platform modules",
-  "comingSoon": "Coming soon"
+  "setUp": "Set up",
+  "review": "Review",
+  "onboarding": {
+    "title": "Create your organization",
+    "subtitle": "Organizations hold your projects, pipelines and team. You can create more later.",
+    "name": "Organization name",
+    "slug": "URL name",
+    "slugHint": "Lowercase letters, numbers and dashes. Used in links.",
+    "submit": "Create organization"
+  }
 }

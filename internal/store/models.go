@@ -139,11 +139,23 @@ type EmailToken struct {
 	CreatedAt time.Time         `json:"created_at"`
 }
 
+type MfaChallenge struct {
+	ID         uuid.UUID  `json:"id"`
+	UserID     uuid.UUID  `json:"user_id"`
+	TokenHash  []byte     `json:"token_hash"`
+	AuthMethod string     `json:"auth_method"`
+	Attempts   int32      `json:"attempts"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	UsedAt     *time.Time `json:"used_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
 type Organization struct {
 	ID        uuid.UUID  `json:"id"`
 	Slug      string     `json:"slug"`
 	Name      string     `json:"name"`
 	Settings  []byte     `json:"settings"`
+	Version   int32      `json:"version"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	DeletedAt *time.Time `json:"deleted_at"`
@@ -157,17 +169,27 @@ type OrganizationMember struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
+type RefreshToken struct {
+	ID        uuid.UUID  `json:"id"`
+	SessionID uuid.UUID  `json:"session_id"`
+	ParentID  *uuid.UUID `json:"parent_id"`
+	TokenHash []byte     `json:"token_hash"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	UsedAt    *time.Time `json:"used_at"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
 type Session struct {
-	ID          uuid.UUID   `json:"id"`
-	UserID      uuid.UUID   `json:"user_id"`
-	TokenHash   []byte      `json:"token_hash"`
-	MfaVerified bool        `json:"mfa_verified"`
-	Ip          *netip.Addr `json:"ip"`
-	UserAgent   *string     `json:"user_agent"`
-	ExpiresAt   time.Time   `json:"expires_at"`
-	LastSeenAt  time.Time   `json:"last_seen_at"`
-	RevokedAt   *time.Time  `json:"revoked_at"`
-	CreatedAt   time.Time   `json:"created_at"`
+	ID           uuid.UUID   `json:"id"`
+	UserID       uuid.UUID   `json:"user_id"`
+	AuthMethod   string      `json:"auth_method"`
+	Ip           *netip.Addr `json:"ip"`
+	UserAgent    *string     `json:"user_agent"`
+	ExpiresAt    time.Time   `json:"expires_at"`
+	LastUsedAt   time.Time   `json:"last_used_at"`
+	RevokedAt    *time.Time  `json:"revoked_at"`
+	RevokeReason *string     `json:"revoke_reason"`
+	CreatedAt    time.Time   `json:"created_at"`
 }
 
 type Team struct {
@@ -187,22 +209,29 @@ type TeamMember struct {
 }
 
 type User struct {
-	ID              uuid.UUID  `json:"id"`
-	Email           string     `json:"email"`
-	DisplayName     string     `json:"display_name"`
-	PasswordHash    *string    `json:"password_hash"`
-	EmailVerifiedAt *time.Time `json:"email_verified_at"`
-	Locale          string     `json:"locale"`
-	Timezone        string     `json:"timezone"`
-	KhmerNumerals   bool       `json:"khmer_numerals"`
-	TotpSecretEnc   []byte     `json:"totp_secret_enc"`
-	TotpEnabledAt   *time.Time `json:"totp_enabled_at"`
-	IsPlatformAdmin bool       `json:"is_platform_admin"`
-	DisabledAt      *time.Time `json:"disabled_at"`
-	LastLoginAt     *time.Time `json:"last_login_at"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-	DeletedAt       *time.Time `json:"deleted_at"`
+	ID                uuid.UUID  `json:"id"`
+	Email             string     `json:"email"`
+	DisplayName       string     `json:"display_name"`
+	PasswordHash      *string    `json:"password_hash"`
+	EmailVerifiedAt   *time.Time `json:"email_verified_at"`
+	Locale            string     `json:"locale"`
+	Timezone          string     `json:"timezone"`
+	KhmerNumerals     bool       `json:"khmer_numerals"`
+	TotpSecretEnc     []byte     `json:"totp_secret_enc"`
+	TotpPendingEnc    []byte     `json:"totp_pending_enc"`
+	TotpEnabledAt     *time.Time `json:"totp_enabled_at"`
+	TotpLastStep      *int64     `json:"totp_last_step"`
+	FailedLoginCount  int32      `json:"failed_login_count"`
+	LockoutLevel      int32      `json:"lockout_level"`
+	LockedUntil       *time.Time `json:"locked_until"`
+	PasswordChangedAt *time.Time `json:"password_changed_at"`
+	IsPlatformAdmin   bool       `json:"is_platform_admin"`
+	DisabledAt        *time.Time `json:"disabled_at"`
+	LastLoginAt       *time.Time `json:"last_login_at"`
+	Version           int32      `json:"version"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+	DeletedAt         *time.Time `json:"deleted_at"`
 }
 
 type UserIdentity struct {

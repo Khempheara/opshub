@@ -22,5 +22,7 @@ export default defineConfig({
   },
   build: {
     sourcemap: true,
+    // Never inline fonts as data: URIs; the production CSP only allows font-src 'self'.
+    assetsInlineLimit: (file) => (/\.(woff2?|ttf|otf)$/.test(file) ? false : undefined),
   },
 });

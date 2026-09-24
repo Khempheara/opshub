@@ -24,7 +24,7 @@ func (f fakeDB) Ping(context.Context) error { return f.err }
 
 func newHandler(db server.Pinger) http.Handler {
 	return server.New(server.Deps{
-		Config:  config.Config{DefaultLocale: "en", DefaultTimezone: "Asia/Phnom_Penh"},
+		Config:  config.Config{DefaultLocale: "en", DefaultTimezone: "Asia/Phnom_Penh", AllowSignup: true, RateLimitRPS: 100, RateLimitBurst: 100},
 		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
 		DB:      db,
 		Metrics: telemetry.NewMetrics(),
@@ -87,6 +87,7 @@ func TestMeta(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &meta))
 	assert.Equal(t, server.MetaResponse{
 		Version: "test", Locales: []string{"en", "km"}, DefaultLocale: "en", DefaultTimezone: "Asia/Phnom_Penh",
+		SignupEnabled: true, SSOProviders: []string{},
 	}, meta)
 }
 

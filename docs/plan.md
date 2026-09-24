@@ -1,7 +1,6 @@
 # Phase 0 plan: delivery plan & decisions
 
-**Status:** awaiting approval. No further code will be written until this plan and the decisions below
-are confirmed.
+**Status:** approved (defaults D1–D9 accepted). Module 1 complete — see [CHANGELOG.md](../CHANGELOG.md).
 
 | Deliverable | Where |
 |---|---|
