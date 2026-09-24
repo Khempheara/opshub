@@ -8,9 +8,21 @@
  * envelope; clients translate `error.code` (see `web/src/locales/*\/errors.json`).
  * `message` is an English fallback only.
  *
+ * **Authentication.** Browsers sign in with `POST /auth/login` and receive a 15-minute
+ * access token (send it as `Authorization: Bearer …`; keep it in memory only) plus a
+ * rotating refresh token in an httpOnly `SameSite=Strict` cookie. `POST /auth/refresh`
+ * and `POST /auth/logout` are cookie-authenticated and require the `X-CSRF-Token` header
+ * to equal the `opshub_csrf` cookie. Scripts use personal API tokens (`ohp_…`) as bearer
+ * tokens; `api:read` tokens are limited to safe methods.
+ *
+ * **Lists** are cursor-paginated: `?limit=1..200&cursor=…` → `{ items, next_cursor }`.
+ *
+ * **Optimistic locking.** Editable resources return an `ETag`; updates require
+ * `If-Match` and fail with `409 VERSION_CONFLICT` when the resource changed.
+ *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 
 export interface FieldError {

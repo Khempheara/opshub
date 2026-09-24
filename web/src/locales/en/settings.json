@@ -1,12 +1,107 @@
 {
-  "preferences": {
-    "title": "Preferences",
-    "description": "Choose how OpsHub displays language, dates, and numbers. Saved in this browser until you sign in.",
+  "title": "Settings",
+  "profile": {
+    "title": "Profile",
+    "description": "Your name and how OpsHub shows language, dates and numbers.",
+    "displayName": "Full name",
+    "email": "Email",
     "language": "Language",
     "timezone": "Time zone",
-    "timezoneHint": "IANA name, e.g. Asia/Phnom_Penh or UTC.",
+    "timezoneHint": "Dates and times are shown in this time zone.",
     "khmerNumerals": "Show Khmer numerals (០១២៣) when the language is Khmer",
-    "saved": "Preferences saved.",
-    "invalidTimezone": "Unknown time zone."
+    "preview": "Preview: {{value}}",
+    "saved": "Profile saved.",
+    "conflict": "Your profile was changed in another tab. We reloaded the latest version."
+  },
+  "security": {
+    "title": "Security",
+    "password": {
+      "title": "Password",
+      "description": "Changing your password signs out your other devices.",
+      "current": "Current password",
+      "submit": "Change password",
+      "changed": "Password changed. Other devices were signed out.",
+      "ssoOnly": "Your account signs in with SSO. Set a password to also sign in with email."
+    },
+    "twoFactor": {
+      "title": "Two-factor authentication",
+      "enabled": "Enabled",
+      "disabled": "Not enabled",
+      "description": "Require a code from an authenticator app when you sign in.",
+      "enable": "Set up two-factor authentication",
+      "disable": "Turn off",
+      "regenerate": "New recovery codes",
+      "remaining": "Recovery codes left: {{remaining}}",
+      "setupTitle": "Set up your authenticator app",
+      "setupStep1": "Confirm your password to begin.",
+      "setupStep2": "Scan this QR code with an authenticator app (for example Google Authenticator, Microsoft Authenticator or 1Password).",
+      "manualEntry": "Can't scan? Enter this key manually:",
+      "setupStep3": "Enter the 6-digit code the app shows.",
+      "qrAlt": "QR code for your authenticator app",
+      "codesTitle": "Save your recovery codes",
+      "codesBody": "Each code can be used once if you lose your phone. They won't be shown again.",
+      "codesSaved": "I've saved these codes",
+      "enabledToast": "Two-factor authentication is on.",
+      "disableTitle": "Turn off two-factor authentication?",
+      "disableBody": "Your account will be protected by your password only.",
+      "disabledToast": "Two-factor authentication is off."
+    },
+    "sessions": {
+      "title": "Signed-in devices",
+      "description": "Sign out any device you don't recognize.",
+      "current": "This device",
+      "method": {
+        "password": "Password",
+        "oidc": "SSO"
+      },
+      "lastActive": "Last active {{time}}",
+      "unknownDevice": "Unknown device",
+      "revoke": "Sign out",
+      "revokeTitle": "Sign out this device?",
+      "revokeBody": "The device will need to sign in again.",
+      "revoked": "Device signed out."
+    },
+    "identities": {
+      "title": "Linked accounts",
+      "description": "Sign in with these accounts instead of a password.",
+      "empty": "No linked accounts.",
+      "unlink": "Unlink",
+      "unlinkTitle": "Unlink {{provider}}?",
+      "unlinkBody": "You won't be able to sign in with this account anymore.",
+      "unlinked": "Account unlinked."
+    }
+  },
+  "tokens": {
+    "title": "API tokens",
+    "description": "Personal tokens for scripts and the CLI. They act as you — keep them secret.",
+    "create": "New token",
+    "createTitle": "Create an API token",
+    "name": "Name",
+    "namePlaceholder": "e.g. CI deploy script",
+    "scopes": "Permissions",
+    "scopeRead": "Read — view resources",
+    "scopeWrite": "Write — create and change resources",
+    "expiry": "Expires",
+    "expiryDays": "In {{count}} days",
+    "expiryNever": "Never",
+    "createdTitle": "Copy your new token",
+    "createdBody": "This is the only time the token is shown. Store it somewhere safe.",
+    "empty": "You don't have any API tokens.",
+    "columns": {
+      "name": "Name",
+      "prefix": "Token",
+      "scopes": "Permissions",
+      "lastUsed": "Last used",
+      "expires": "Expires"
+    },
+    "revokeTitle": "Revoke {{name}}?",
+    "revokeBody": "Scripts using this token will stop working immediately.",
+    "revoked": "Token revoked."
+  },
+  "organizations": {
+    "title": "Organizations",
+    "description": "Organizations you belong to and your role in each.",
+    "empty": "You're not in any organization yet.",
+    "open": "Open"
   }
 }

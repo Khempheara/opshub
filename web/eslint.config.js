@@ -22,6 +22,8 @@ export default tseslint.config(
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
     },
   },
+  // shadcn/ui primitives export their variant helpers alongside components.
+  { files: ['src/components/ui/**'], rules: { 'react-refresh/only-export-components': 'off' } },
   // No hard-coded UI strings: every user-visible JSX string must go through t().
   {
     files: ['src/**/*.tsx'],
@@ -33,7 +35,7 @@ export default tseslint.config(
         {
           mode: 'jsx-only',
           'jsx-attributes': { include: ['title', 'alt', 'aria-label', 'placeholder', 'label'] },
-          words: { exclude: ['OpsHub', 'EN', 'ខ្មែរ', '[0-9!-/:-@[-`{-~]+', '[A-Z_-]+'] },
+          words: { exclude: ['OpsHub', 'EN', 'ខ្មែរ', '[0-9!-/:-@[-`{-~]+', '[A-Z_-]+', '[·…—–•\\s]+'] },
         },
       ],
     },

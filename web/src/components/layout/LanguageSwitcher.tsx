@@ -1,14 +1,30 @@
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+import { saveProfile } from '@/auth/profile';
+import { getSession } from '@/auth/session';
 import { LOCALES, type Locale } from '@/i18n';
+import { errorMessage } from '@/lib/api/errors';
 import { cn } from '@/lib/utils';
 
 // Each language is labelled in its own script so it is recognizable regardless of the
 // active UI language.
 const SHORT_LABEL: Record<Locale, string> = { en: 'EN', km: 'ខ្មែរ' };
 
+/** EN | ខ្មែរ toggle. Signed-in users' choice is saved to their profile. */
 export function LanguageSwitcher() {
   const { t, i18n } = useTranslation();
   const active = i18n.resolvedLanguage;
+
+  const choose = async (lng: Locale) => {
+    await i18n.changeLanguage(lng);
+    if (getSession().status === 'authenticated' && getSession().user?.locale !== lng) {
+      try {
+        await saveProfile({ locale: lng });
+      } catch (err) {
+        toast.error(errorMessage(err));
+      }
+    }
+  };
 
   return (
     <div role="group" aria-label={t('language.label')} className="bg-muted inline-flex rounded-md p-0.5">
@@ -19,7 +35,7 @@ export function LanguageSwitcher() {
           lang={lng}
           aria-pressed={active === lng}
           title={t(`language.${lng}`)}
-          onClick={() => void i18n.changeLanguage(lng)}
+          onClick={() => void choose(lng)}
           className={cn(
             'min-h-8 rounded px-2.5 text-sm font-medium transition-colors',
             active === lng ? 'bg-background shadow-xs' : 'text-muted-foreground hover:text-foreground',

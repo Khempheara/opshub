@@ -65,6 +65,17 @@ func (b *Bundle) T(locale, id string, data map[string]any) string {
 	return msg
 }
 
+// Lookup translates id into locale (English fallback) and reports whether the message
+// exists in any bundle.
+func (b *Bundle) Lookup(locale, id string, data map[string]any) (string, bool) {
+	loc := goi18n.NewLocalizer(b.b, locale, Fallback)
+	msg, err := loc.Localize(&goi18n.LocalizeConfig{MessageID: id, TemplateData: data})
+	if err != nil {
+		return "", false
+	}
+	return msg, true
+}
+
 // Normalize maps any BCP-47 tag (e.g. "km-KH") to a supported locale, or "" if none.
 func Normalize(tag string) string {
 	t, err := language.Parse(strings.TrimSpace(tag))

@@ -7,22 +7,113 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
+const advanceTOTPStep = `-- name: AdvanceTOTPStep :one
+UPDATE users SET totp_last_step = $1
+WHERE id = $2 AND (totp_last_step IS NULL OR totp_last_step < $1)
+RETURNING id
+`
+
+type AdvanceTOTPStepParams struct {
+	Step *int64    `json:"step"`
+	ID   uuid.UUID `json:"id"`
+}
+
+// Accepts a TOTP time step only once (replay protection); returns no row if already used.
+func (q *Queries) AdvanceTOTPStep(ctx context.Context, arg AdvanceTOTPStepParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, advanceTOTPStep, arg.Step, arg.ID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const consumeEmailToken = `-- name: ConsumeEmailToken :one
+UPDATE email_tokens SET used_at = now()
+WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > now()
+RETURNING user_id
+`
+
+type ConsumeEmailTokenParams struct {
+	TokenHash []byte            `json:"token_hash"`
+	Purpose   EmailTokenPurpose `json:"purpose"`
+}
+
+func (q *Queries) ConsumeEmailToken(ctx context.Context, arg ConsumeEmailTokenParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, consumeEmailToken, arg.TokenHash, arg.Purpose)
+	var user_id uuid.UUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
+const consumeRecoveryCode = `-- name: ConsumeRecoveryCode :one
+UPDATE user_recovery_codes SET used_at = now()
+WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+RETURNING id
+`
+
+type ConsumeRecoveryCodeParams struct {
+	UserID   uuid.UUID `json:"user_id"`
+	CodeHash []byte    `json:"code_hash"`
+}
+
+func (q *Queries) ConsumeRecoveryCode(ctx context.Context, arg ConsumeRecoveryCodeParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, consumeRecoveryCode, arg.UserID, arg.CodeHash)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const countUnusedRecoveryCodes = `-- name: CountUnusedRecoveryCodes :one
+SELECT count(*) FROM user_recovery_codes WHERE user_id = $1 AND used_at IS NULL
+`
+
+func (q *Queries) CountUnusedRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countUnusedRecoveryCodes, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const createEmailToken = `-- name: CreateEmailToken :exec
+INSERT INTO email_tokens (user_id, purpose, token_hash, expires_at)
+VALUES ($1, $2, $3, $4)
+`
+
+type CreateEmailTokenParams struct {
+	UserID    uuid.UUID         `json:"user_id"`
+	Purpose   EmailTokenPurpose `json:"purpose"`
+	TokenHash []byte            `json:"token_hash"`
+	ExpiresAt time.Time         `json:"expires_at"`
+}
+
+func (q *Queries) CreateEmailToken(ctx context.Context, arg CreateEmailTokenParams) error {
+	_, err := q.db.Exec(ctx, createEmailToken,
+		arg.UserID,
+		arg.Purpose,
+		arg.TokenHash,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (email, display_name, password_hash, locale, timezone)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, email, display_name, password_hash, email_verified_at, locale, timezone, khmer_numerals, totp_secret_enc, totp_enabled_at, is_platform_admin, disabled_at, last_login_at, created_at, updated_at, deleted_at
+INSERT INTO users (email, display_name, password_hash, locale, timezone, is_platform_admin, email_verified_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, email, display_name, password_hash, email_verified_at, locale, timezone, khmer_numerals, totp_secret_enc, totp_pending_enc, totp_enabled_at, totp_last_step, failed_login_count, lockout_level, locked_until, password_changed_at, is_platform_admin, disabled_at, last_login_at, version, created_at, updated_at, deleted_at
 `
 
 type CreateUserParams struct {
-	Email        string  `json:"email"`
-	DisplayName  string  `json:"display_name"`
-	PasswordHash *string `json:"password_hash"`
-	Locale       string  `json:"locale"`
-	Timezone     string  `json:"timezone"`
+	Email           string     `json:"email"`
+	DisplayName     string     `json:"display_name"`
+	PasswordHash    *string    `json:"password_hash"`
+	Locale          string     `json:"locale"`
+	Timezone        string     `json:"timezone"`
+	IsPlatformAdmin bool       `json:"is_platform_admin"`
+	EmailVerifiedAt *time.Time `json:"email_verified_at"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -32,6 +123,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.PasswordHash,
 		arg.Locale,
 		arg.Timezone,
+		arg.IsPlatformAdmin,
+		arg.EmailVerifiedAt,
 	)
 	var i User
 	err := row.Scan(
@@ -44,10 +137,17 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Timezone,
 		&i.KhmerNumerals,
 		&i.TotpSecretEnc,
+		&i.TotpPendingEnc,
 		&i.TotpEnabledAt,
+		&i.TotpLastStep,
+		&i.FailedLoginCount,
+		&i.LockoutLevel,
+		&i.LockedUntil,
+		&i.PasswordChangedAt,
 		&i.IsPlatformAdmin,
 		&i.DisabledAt,
 		&i.LastLoginAt,
+		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -55,8 +155,46 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteRecoveryCodes = `-- name: DeleteRecoveryCodes :exec
+DELETE FROM user_recovery_codes WHERE user_id = $1
+`
+
+func (q *Queries) DeleteRecoveryCodes(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteRecoveryCodes, userID)
+	return err
+}
+
+const disableTOTP = `-- name: DisableTOTP :exec
+UPDATE users
+SET totp_secret_enc = NULL, totp_pending_enc = NULL, totp_enabled_at = NULL, totp_last_step = NULL,
+    version = version + 1
+WHERE id = $1
+`
+
+func (q *Queries) DisableTOTP(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, disableTOTP, id)
+	return err
+}
+
+const enableTOTP = `-- name: EnableTOTP :exec
+UPDATE users
+SET totp_secret_enc = totp_pending_enc, totp_pending_enc = NULL, totp_enabled_at = now(),
+    totp_last_step = $1, version = version + 1
+WHERE id = $2 AND totp_pending_enc IS NOT NULL
+`
+
+type EnableTOTPParams struct {
+	TotpLastStep *int64    `json:"totp_last_step"`
+	ID           uuid.UUID `json:"id"`
+}
+
+func (q *Queries) EnableTOTP(ctx context.Context, arg EnableTOTPParams) error {
+	_, err := q.db.Exec(ctx, enableTOTP, arg.TotpLastStep, arg.ID)
+	return err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, display_name, password_hash, email_verified_at, locale, timezone, khmer_numerals, totp_secret_enc, totp_enabled_at, is_platform_admin, disabled_at, last_login_at, created_at, updated_at, deleted_at FROM users WHERE email = $1 AND deleted_at IS NULL
+SELECT id, email, display_name, password_hash, email_verified_at, locale, timezone, khmer_numerals, totp_secret_enc, totp_pending_enc, totp_enabled_at, totp_last_step, failed_login_count, lockout_level, locked_until, password_changed_at, is_platform_admin, disabled_at, last_login_at, version, created_at, updated_at, deleted_at FROM users WHERE email = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -72,10 +210,17 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Timezone,
 		&i.KhmerNumerals,
 		&i.TotpSecretEnc,
+		&i.TotpPendingEnc,
 		&i.TotpEnabledAt,
+		&i.TotpLastStep,
+		&i.FailedLoginCount,
+		&i.LockoutLevel,
+		&i.LockedUntil,
+		&i.PasswordChangedAt,
 		&i.IsPlatformAdmin,
 		&i.DisabledAt,
 		&i.LastLoginAt,
+		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -84,7 +229,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, display_name, password_hash, email_verified_at, locale, timezone, khmer_numerals, totp_secret_enc, totp_enabled_at, is_platform_admin, disabled_at, last_login_at, created_at, updated_at, deleted_at FROM users WHERE id = $1 AND deleted_at IS NULL
+SELECT id, email, display_name, password_hash, email_verified_at, locale, timezone, khmer_numerals, totp_secret_enc, totp_pending_enc, totp_enabled_at, totp_last_step, failed_login_count, lockout_level, locked_until, password_changed_at, is_platform_admin, disabled_at, last_login_at, version, created_at, updated_at, deleted_at FROM users WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -100,10 +245,17 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Timezone,
 		&i.KhmerNumerals,
 		&i.TotpSecretEnc,
+		&i.TotpPendingEnc,
 		&i.TotpEnabledAt,
+		&i.TotpLastStep,
+		&i.FailedLoginCount,
+		&i.LockoutLevel,
+		&i.LockedUntil,
+		&i.PasswordChangedAt,
 		&i.IsPlatformAdmin,
 		&i.DisabledAt,
 		&i.LastLoginAt,
+		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -111,11 +263,140 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
+const getUserByIDForUpdate = `-- name: GetUserByIDForUpdate :one
+SELECT id, email, display_name, password_hash, email_verified_at, locale, timezone, khmer_numerals, totp_secret_enc, totp_pending_enc, totp_enabled_at, totp_last_step, failed_login_count, lockout_level, locked_until, password_changed_at, is_platform_admin, disabled_at, last_login_at, version, created_at, updated_at, deleted_at FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE
+`
+
+func (q *Queries) GetUserByIDForUpdate(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByIDForUpdate, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.DisplayName,
+		&i.PasswordHash,
+		&i.EmailVerifiedAt,
+		&i.Locale,
+		&i.Timezone,
+		&i.KhmerNumerals,
+		&i.TotpSecretEnc,
+		&i.TotpPendingEnc,
+		&i.TotpEnabledAt,
+		&i.TotpLastStep,
+		&i.FailedLoginCount,
+		&i.LockoutLevel,
+		&i.LockedUntil,
+		&i.PasswordChangedAt,
+		&i.IsPlatformAdmin,
+		&i.DisabledAt,
+		&i.LastLoginAt,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+type InsertRecoveryCodesParams struct {
+	UserID   uuid.UUID `json:"user_id"`
+	CodeHash []byte    `json:"code_hash"`
+}
+
+const invalidateEmailTokens = `-- name: InvalidateEmailTokens :exec
+UPDATE email_tokens SET used_at = now()
+WHERE user_id = $1 AND purpose = $2 AND used_at IS NULL
+`
+
+type InvalidateEmailTokensParams struct {
+	UserID  uuid.UUID         `json:"user_id"`
+	Purpose EmailTokenPurpose `json:"purpose"`
+}
+
+func (q *Queries) InvalidateEmailTokens(ctx context.Context, arg InvalidateEmailTokensParams) error {
+	_, err := q.db.Exec(ctx, invalidateEmailTokens, arg.UserID, arg.Purpose)
+	return err
+}
+
+const recordLoginFailure = `-- name: RecordLoginFailure :exec
+UPDATE users
+SET failed_login_count = $1, lockout_level = $2, locked_until = $3
+WHERE id = $4
+`
+
+type RecordLoginFailureParams struct {
+	FailedLoginCount int32      `json:"failed_login_count"`
+	LockoutLevel     int32      `json:"lockout_level"`
+	LockedUntil      *time.Time `json:"locked_until"`
+	ID               uuid.UUID  `json:"id"`
+}
+
+func (q *Queries) RecordLoginFailure(ctx context.Context, arg RecordLoginFailureParams) error {
+	_, err := q.db.Exec(ctx, recordLoginFailure,
+		arg.FailedLoginCount,
+		arg.LockoutLevel,
+		arg.LockedUntil,
+		arg.ID,
+	)
+	return err
+}
+
+const recordLoginSuccess = `-- name: RecordLoginSuccess :exec
+UPDATE users
+SET failed_login_count = 0, lockout_level = 0, locked_until = NULL, last_login_at = now()
+WHERE id = $1
+`
+
+func (q *Queries) RecordLoginSuccess(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, recordLoginSuccess, id)
+	return err
+}
+
+const setTOTPPending = `-- name: SetTOTPPending :exec
+UPDATE users SET totp_pending_enc = $1 WHERE id = $2
+`
+
+type SetTOTPPendingParams struct {
+	TotpPendingEnc []byte    `json:"totp_pending_enc"`
+	ID             uuid.UUID `json:"id"`
+}
+
+func (q *Queries) SetTOTPPending(ctx context.Context, arg SetTOTPPendingParams) error {
+	_, err := q.db.Exec(ctx, setTOTPPending, arg.TotpPendingEnc, arg.ID)
+	return err
+}
+
+const setUserEmailVerified = `-- name: SetUserEmailVerified :exec
+UPDATE users SET email_verified_at = coalesce(email_verified_at, now()) WHERE id = $1
+`
+
+func (q *Queries) SetUserEmailVerified(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, setUserEmailVerified, id)
+	return err
+}
+
+const setUserPassword = `-- name: SetUserPassword :exec
+UPDATE users
+SET password_hash = $1, password_changed_at = now(), version = version + 1,
+    failed_login_count = 0, lockout_level = 0, locked_until = NULL
+WHERE id = $2
+`
+
+type SetUserPasswordParams struct {
+	PasswordHash *string   `json:"password_hash"`
+	ID           uuid.UUID `json:"id"`
+}
+
+func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, setUserPassword, arg.PasswordHash, arg.ID)
+	return err
+}
+
 const updateUserPreferences = `-- name: UpdateUserPreferences :one
 UPDATE users
-SET locale = $1, timezone = $2, khmer_numerals = $3
+SET locale = $1, timezone = $2, khmer_numerals = $3, version = version + 1
 WHERE id = $4 AND deleted_at IS NULL
-RETURNING id, email, display_name, password_hash, email_verified_at, locale, timezone, khmer_numerals, totp_secret_enc, totp_enabled_at, is_platform_admin, disabled_at, last_login_at, created_at, updated_at, deleted_at
+RETURNING id, email, display_name, password_hash, email_verified_at, locale, timezone, khmer_numerals, totp_secret_enc, totp_pending_enc, totp_enabled_at, totp_last_step, failed_login_count, lockout_level, locked_until, password_changed_at, is_platform_admin, disabled_at, last_login_at, version, created_at, updated_at, deleted_at
 `
 
 type UpdateUserPreferencesParams struct {
@@ -143,10 +424,73 @@ func (q *Queries) UpdateUserPreferences(ctx context.Context, arg UpdateUserPrefe
 		&i.Timezone,
 		&i.KhmerNumerals,
 		&i.TotpSecretEnc,
+		&i.TotpPendingEnc,
 		&i.TotpEnabledAt,
+		&i.TotpLastStep,
+		&i.FailedLoginCount,
+		&i.LockoutLevel,
+		&i.LockedUntil,
+		&i.PasswordChangedAt,
 		&i.IsPlatformAdmin,
 		&i.DisabledAt,
 		&i.LastLoginAt,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const updateUserProfile = `-- name: UpdateUserProfile :one
+UPDATE users
+SET display_name = $1, locale = $2, timezone = $3,
+    khmer_numerals = $4, version = version + 1
+WHERE id = $5 AND version = $6 AND deleted_at IS NULL
+RETURNING id, email, display_name, password_hash, email_verified_at, locale, timezone, khmer_numerals, totp_secret_enc, totp_pending_enc, totp_enabled_at, totp_last_step, failed_login_count, lockout_level, locked_until, password_changed_at, is_platform_admin, disabled_at, last_login_at, version, created_at, updated_at, deleted_at
+`
+
+type UpdateUserProfileParams struct {
+	DisplayName   string    `json:"display_name"`
+	Locale        string    `json:"locale"`
+	Timezone      string    `json:"timezone"`
+	KhmerNumerals bool      `json:"khmer_numerals"`
+	ID            uuid.UUID `json:"id"`
+	Version       int32     `json:"version"`
+}
+
+// Optimistic locking: no row is returned when the version does not match.
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserProfile,
+		arg.DisplayName,
+		arg.Locale,
+		arg.Timezone,
+		arg.KhmerNumerals,
+		arg.ID,
+		arg.Version,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.DisplayName,
+		&i.PasswordHash,
+		&i.EmailVerifiedAt,
+		&i.Locale,
+		&i.Timezone,
+		&i.KhmerNumerals,
+		&i.TotpSecretEnc,
+		&i.TotpPendingEnc,
+		&i.TotpEnabledAt,
+		&i.TotpLastStep,
+		&i.FailedLoginCount,
+		&i.LockoutLevel,
+		&i.LockedUntil,
+		&i.PasswordChangedAt,
+		&i.IsPlatformAdmin,
+		&i.DisabledAt,
+		&i.LastLoginAt,
+		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,

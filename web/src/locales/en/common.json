@@ -6,11 +6,41 @@
     "en": "English",
     "km": "Khmer"
   },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
   "nav": {
-    "home": "Home",
-    "preferences": "Preferences",
+    "main": "Main navigation",
+    "overview": "Overview",
+    "settings": "Settings",
+    "profile": "Profile",
+    "security": "Security",
+    "tokens": "API tokens",
+    "organizations": "Organizations",
     "apiDocs": "API docs",
-    "skipToContent": "Skip to main content"
+    "skipToContent": "Skip to main content",
+    "toggleSidebar": "Toggle sidebar",
+    "openMenu": "Open menu"
+  },
+  "org": {
+    "switcher": "Switch organization",
+    "current": "Current organization",
+    "create": "Create organization",
+    "none": "No organization"
+  },
+  "roles": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "developer": "Developer",
+    "viewer": "Viewer"
+  },
+  "userMenu": {
+    "label": "Account menu",
+    "signedInAs": "Signed in as {{email}}",
+    "signOut": "Sign out"
   },
   "status": {
     "loading": "Loading…",
@@ -20,26 +50,37 @@
   },
   "actions": {
     "save": "Save",
+    "saving": "Saving…",
     "cancel": "Cancel",
     "retry": "Retry",
-    "backHome": "Back to home"
+    "backHome": "Back to home",
+    "copy": "Copy",
+    "copied": "Copied",
+    "delete": "Delete",
+    "revoke": "Revoke",
+    "confirm": "Confirm",
+    "continue": "Continue",
+    "close": "Close",
+    "create": "Create",
+    "download": "Download",
+    "done": "Done",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
+  },
+  "states": {
+    "loading": "Loading…",
+    "errorTitle": "Something went wrong",
+    "emptyTitle": "Nothing here yet"
   },
   "notFound": {
     "title": "Page not found",
     "body": "The page you requested doesn't exist or was moved."
   },
-  "modules": {
-    "auth": "Auth & Users",
-    "rbac": "Roles & Permissions",
-    "projects": "Projects & Repositories",
-    "pipelines": "CI/CD Pipelines",
-    "runners": "Runner Agents",
-    "deployments": "Deployments",
-    "infrastructure": "Infrastructure",
-    "secrets": "Secrets",
-    "monitoring": "Monitoring & Alerts",
-    "logs": "Logs",
-    "audit": "Audit Log",
-    "dashboard": "Dashboard & DORA Metrics"
+  "forbidden": {
+    "title": "Access denied",
+    "body": "Your role in this organization doesn't allow this page."
+  },
+  "time": {
+    "never": "Never"
   }
 }

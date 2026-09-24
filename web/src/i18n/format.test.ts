@@ -92,3 +92,29 @@ describe('isValidTimeZone', () => {
     expect(isValidTimeZone('Mars/Olympus')).toBe(false);
   });
 });
+
+describe('Khmer fallback for engines without Khmer locale data', () => {
+  const instant = '2026-09-24T03:05:00Z'; // Thursday 10:05 in Phnom Penh
+
+  it('uses Khmer month, weekday and day-period names', () => {
+    const out = formatDateTime(instant, km, { dateStyle: 'full', timeStyle: 'short' }, false);
+    expect(out).toContain('ព្រហស្បតិ៍');
+    expect(out).toContain('កញ្ញា');
+    expect(out).toContain('ព្រឹក');
+    expect(out).not.toMatch(/Thursday|September|AM/);
+    expect(formatDateTime(instant, kmDigits, { dateStyle: 'medium' }, false)).toMatch(/^កញ្ញា ២៤, ២០២៦$/);
+  });
+
+  it('formats relative times and durations in Khmer', () => {
+    const now = new Date('2026-01-01T12:00:00Z');
+    expect(formatRelative('2026-01-01T11:57:00Z', km, now, false)).toBe('3 នាទីមុន');
+    expect(formatRelative('2026-01-01T11:57:00Z', kmDigits, now, false)).toBe('៣ នាទីមុន');
+    expect(formatRelative('2026-01-03T12:00:00Z', km, now, false)).toBe('ក្នុងរយៈពេល 2 ថ្ងៃ');
+    expect(formatRelative('2026-01-01T11:59:58Z', km, now, false)).toBe('ឥឡូវនេះ');
+    expect(formatDuration(83_000, kmDigits, false)).toBe('១ នាទី ២៣ វិនាទី');
+  });
+
+  it('leaves English untouched', () => {
+    expect(formatRelative('2026-01-01T11:57:00Z', en, new Date('2026-01-01T12:00:00Z'), false)).toBe('3 minutes ago');
+  });
+});

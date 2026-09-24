@@ -35,8 +35,8 @@ per-job token · `Agent` per-asset agent token · `HMAC` webhook signature.
 | POST | `/auth/logout` | Cookie+CSRF | | Revoke refresh family, clear cookies |
 | POST | `/auth/password/forgot` | — | | Send reset email (no account enumeration) |
 | POST | `/auth/password/reset` | — | | Set new password with token; revokes all sessions |
-| GET | `/auth/oidc/{provider}/start` | — | | Redirect to IdP (state + PKCE) |
-| GET | `/auth/oidc/{provider}/callback` | — | | Link/login; sets refresh cookie, redirects to SPA |
+| GET | `/auth/sso/{provider}/start` | — | | Redirect to the provider (github, google, keycloak; state + PKCE + nonce) |
+| GET | `/auth/sso/{provider}/callback` | — | | Link/login; sets cookies, redirects to the SPA |
 | GET | `/me` | JWT | | Profile, locale, timezone, khmer_numerals, orgs + roles |
 | PATCH | `/me` | JWT | | Update display name, locale, timezone, khmer_numerals **(IM)** |
 | POST | `/me/password` | JWT | | Change password (requires current) |
@@ -49,6 +49,7 @@ per-job token · `Agent` per-asset agent token · `HMAC` webhook signature.
 | GET | `/me/tokens` | JWT | | Personal API tokens (prefix, scopes, last used) |
 | POST | `/me/tokens` | JWT | | Create token; secret shown once |
 | DELETE | `/me/tokens/{id}` | JWT | | Revoke |
+| GET | `/me/2fa` | JWT | | 2FA status + remaining recovery codes |
 | GET | `/me/identities` · DELETE `/me/identities/{id}` | JWT | | Linked SSO identities |
 
 ## 2. Organizations, members, teams, RBAC

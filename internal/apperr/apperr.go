@@ -29,13 +29,58 @@ const (
 	CodePayloadTooLarge  Code = "PAYLOAD_TOO_LARGE"
 	CodeRateLimited      Code = "RATE_LIMITED"
 	CodeUnavailable      Code = "SERVICE_UNAVAILABLE"
+	CodeVersionConflict  Code = "VERSION_CONFLICT"
+	CodePrecondition     Code = "PRECONDITION_REQUIRED"
+	CodeCSRF             Code = "CSRF_FAILED"
+	CodeSessionRequired  Code = "SESSION_REQUIRED"
+	CodeScope            Code = "INSUFFICIENT_SCOPE"
+)
+
+// Module 1: auth & users.
+const (
+	CodeInvalidCredentials  Code = "INVALID_CREDENTIALS" // #nosec G101 -- an error code, not a credential
+	CodeAccountLocked       Code = "ACCOUNT_LOCKED"
+	CodeAccountDisabled     Code = "ACCOUNT_DISABLED"
+	CodeEmailNotVerified    Code = "EMAIL_NOT_VERIFIED"
+	CodeSignupDisabled      Code = "SIGNUP_DISABLED"
+	CodeInvalidToken        Code = "INVALID_OR_EXPIRED_TOKEN" // #nosec G101 -- an error code, not a credential
+	CodePasswordTooShort    Code = "PASSWORD_TOO_SHORT"
+	CodePasswordTooLong     Code = "PASSWORD_TOO_LONG"
+	CodePasswordBreached    Code = "PASSWORD_BREACHED"
+	CodePasswordWeak        Code = "PASSWORD_TOO_WEAK"
+	CodePasswordIncorrect   Code = "PASSWORD_INCORRECT"
+	CodeMFAInvalidCode      Code = "MFA_INVALID_CODE"
+	CodeMFAChallengeExpired Code = "MFA_CHALLENGE_EXPIRED"
+	CodeMFAAlreadyEnabled   Code = "MFA_ALREADY_ENABLED"
+	CodeMFANotEnabled       Code = "MFA_NOT_ENABLED"
+	CodeMFASetupRequired    Code = "MFA_SETUP_REQUIRED"
+	CodeRefreshInvalid      Code = "REFRESH_TOKEN_INVALID"
+	CodeRefreshReused       Code = "REFRESH_TOKEN_REUSED"
+	CodeSSOUnknownProvider  Code = "SSO_PROVIDER_UNKNOWN"
+	CodeSSOFailed           Code = "SSO_FAILED"
+	CodeSSOEmailUnverified  Code = "SSO_EMAIL_UNVERIFIED"
+	CodeLastLoginMethod     Code = "LAST_LOGIN_METHOD"
+	CodeSessionNotFound     Code = "SESSION_NOT_FOUND"
+	CodeTokenNotFound       Code = "TOKEN_NOT_FOUND"
+	CodeIdentityNotFound    Code = "IDENTITY_NOT_FOUND"
+	CodeOrgNotFound         Code = "ORG_NOT_FOUND"
+	CodeSlugTaken           Code = "SLUG_TAKEN"
 )
 
 // AllCodes lists every code; append new codes here as modules add them.
 var AllCodes = []Code{
 	CodeInternal, CodeBadRequest, CodeValidation, CodeUnauthenticated, CodeForbidden,
 	CodeNotFound, CodeRouteNotFound, CodeMethodNotAllowed, CodeConflict,
-	CodePayloadTooLarge, CodeRateLimited, CodeUnavailable,
+	CodePayloadTooLarge, CodeRateLimited, CodeUnavailable, CodeVersionConflict,
+	CodePrecondition, CodeCSRF, CodeSessionRequired, CodeScope,
+
+	CodeInvalidCredentials, CodeAccountLocked, CodeAccountDisabled, CodeEmailNotVerified,
+	CodeSignupDisabled, CodeInvalidToken, CodePasswordTooShort, CodePasswordTooLong,
+	CodePasswordBreached, CodePasswordWeak, CodePasswordIncorrect, CodeMFAInvalidCode,
+	CodeMFAChallengeExpired, CodeMFAAlreadyEnabled, CodeMFANotEnabled, CodeMFASetupRequired,
+	CodeRefreshInvalid, CodeRefreshReused, CodeSSOUnknownProvider, CodeSSOFailed,
+	CodeSSOEmailUnverified, CodeLastLoginMethod, CodeSessionNotFound, CodeTokenNotFound,
+	CodeIdentityNotFound, CodeOrgNotFound, CodeSlugTaken,
 }
 
 // Error is an application error carrying its HTTP status and client-facing code.
@@ -125,6 +170,16 @@ type FieldError struct {
 	Field string `json:"field"`
 	Rule  string `json:"rule"`
 	Param string `json:"param,omitempty"`
+}
+
+// Code-specific constructors shared across modules.
+
+func VersionConflict() *Error {
+	return New(CodeVersionConflict, http.StatusConflict, "the resource was modified by someone else; reload and retry")
+}
+
+func PreconditionRequired() *Error {
+	return New(CodePrecondition, http.StatusPreconditionRequired, "If-Match header with the resource version is required")
 }
 
 func Validation(fields []FieldError) *Error {

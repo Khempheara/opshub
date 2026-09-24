@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpsHub API
-  version: 0.1.0
+  version: 0.2.0
   summary: All-in-One DevOps Platform
   description: |
     REST API for OpsHub. All resource endpoints are versioned under `/api/v1`.
@@ -9,6 +9,18 @@ info:
     **Errors** never contain localized text. Every error response uses the `Error`
     envelope; clients translate `error.code` (see `web/src/locales/*/errors.json`).
     `message` is an English fallback only.
+
+    **Authentication.** Browsers sign in with `POST /auth/login` and receive a 15-minute
+    access token (send it as `Authorization: Bearer …`; keep it in memory only) plus a
+    rotating refresh token in an httpOnly `SameSite=Strict` cookie. `POST /auth/refresh`
+    and `POST /auth/logout` are cookie-authenticated and require the `X-CSRF-Token` header
+    to equal the `opshub_csrf` cookie. Scripts use personal API tokens (`ohp_…`) as bearer
+    tokens; `api:read` tokens are limited to safe methods.
+
+    **Lists** are cursor-paginated: `?limit=1..200&cursor=…` → `{ items, next_cursor }`.
+
+    **Optimistic locking.** Editable resources return an `ETag`; updates require
+    `If-Match` and fail with `409 VERSION_CONFLICT` when the resource changed.
 
     **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
   license:
@@ -18,6 +30,15 @@ servers:
 tags:
   - name: system
     description: Health, readiness and platform metadata.
+  - name: auth
+    description: Registration, sign-in, sessions, password reset and SSO.
+  - name: account
+    description: The signed-in user's profile, security settings and API tokens.
+  - name: organizations
+    description: Organizations (tenants) the user belongs to.
+
+security:
+  - bearerAuth: []
 
 paths:
   /healthz:
@@ -25,6 +46,7 @@ paths:
       tags: [system]
       operationId: getHealth
       summary: Liveness probe
+      security: []
       responses:
         "200":
           description: Process is alive.
@@ -37,30 +59,572 @@ paths:
       tags: [system]
       operationId: getReadiness
       summary: Readiness probe (checks database connectivity)
+      security: []
       responses:
         "200":
           description: Ready to serve traffic.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Status" }
-        "503":
-          $ref: "#/components/responses/Error"
+        "503": { $ref: "#/components/responses/Error" }
 
   /api/v1/meta:
     get:
       tags: [system]
       operationId: getMeta
       summary: Public platform metadata used to bootstrap the UI
+      security: []
       responses:
         "200":
           description: Platform metadata.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Meta" }
-        default:
-          $ref: "#/components/responses/Error"
+        default: { $ref: "#/components/responses/Error" }
+
+  # ─────────────────────────────── auth ───────────────────────────────
+
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      operationId: register
+      summary: Create an account
+      description: |
+        Always returns 202 for a valid request, whether or not the email is already
+        registered (an existing owner receives an "account exists" email instead).
+        Rate limited per IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
+      responses:
+        "202":
+          description: Verification email sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: verification_sent }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /api/v1/auth/verify-email:
+    post:
+      tags: [auth]
+      operationId: verifyEmail
+      summary: Confirm an email address with the token from the verification email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TokenRequest" }
+      responses:
+        "204": { description: Email verified. }
+        "400": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /api/v1/auth/verify-email/resend:
+    post:
+      tags: [auth]
+      operationId: resendVerification
+      summary: Re-send the verification email (always 202)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmailRequest" }
+      responses:
+        "202": { description: Accepted. }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Sign in with email and password
+      description: |
+        Returns `status: authenticated` with tokens (and sets the refresh/CSRF cookies),
+        or `status: mfa_required` with a 5-minute challenge for `POST /auth/login/2fa`.
+        Five failed attempts lock the account (423 ACCOUNT_LOCKED).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Signed in, or a second factor is required.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "423": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /api/v1/auth/login/2fa:
+    post:
+      tags: [auth]
+      operationId: loginTwoFactor
+      summary: Complete sign-in with a TOTP code or a recovery code
+      description: For SSO sign-ins the challenge is carried by an httpOnly cookie and `mfa_token` may be omitted.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginTwoFactorRequest" }
+      responses:
+        "200":
+          description: Signed in.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshSession
+      summary: Rotate the refresh cookie and get a new access token
+      description: Presenting an already-used refresh token revokes the whole session (401 REFRESH_TOKEN_REUSED).
+      security:
+        - refreshCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: New access token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Sign out this device (revokes the session and clears cookies)
+      security:
+        - refreshCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204": { description: Signed out. }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/v1/auth/password/forgot:
+    post:
+      tags: [auth]
+      operationId: forgotPassword
+      summary: Email a single-use password reset link (always 202)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmailRequest" }
+      responses:
+        "202": { description: Accepted. }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /api/v1/auth/password/reset:
+    post:
+      tags: [auth]
+      operationId: resetPassword
+      summary: Set a new password with a reset token (signs out all sessions)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResetPasswordRequest" }
+      responses:
+        "204": { description: Password changed. }
+        "400": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /api/v1/auth/sso/{provider}/start:
+    get:
+      tags: [auth]
+      operationId: ssoStart
+      summary: Begin SSO sign-in (browser navigation)
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/SSOProvider"
+        - name: next
+          in: query
+          description: Same-site path to return to after sign-in.
+          schema: { type: string, examples: [/settings/profile] }
+      responses:
+        "302": { description: Redirect to the identity provider (or to /login?error=CODE). }
+
+  /api/v1/auth/sso/{provider}/callback:
+    get:
+      tags: [auth]
+      operationId: ssoCallback
+      summary: SSO redirect target (browser navigation)
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/SSOProvider"
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        "302":
+          description: |
+            To `/auth/sso-complete?next=…` (session cookies set), `/login/2fa?sso=1&next=…`
+            (second factor required), or `/login?error=CODE`.
+
+  # ─────────────────────────────── account ───────────────────────────────
+
+  /api/v1/me:
+    get:
+      tags: [account]
+      operationId: getMe
+      summary: The signed-in user
+      responses:
+        "200":
+          description: Profile.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [account]
+      operationId: updateMe
+      summary: Update profile and display preferences
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProfileRequest" }
+      responses:
+        "200":
+          description: Updated profile.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "428": { $ref: "#/components/responses/Error" }
+
+  /api/v1/me/password:
+    post:
+      tags: [account]
+      operationId: changePassword
+      summary: Change password (signs out other sessions)
+      description: Requires an interactive session (not an API token).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "204": { description: Changed. }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/me/2fa:
+    get:
+      tags: [account]
+      operationId: getTwoFactorStatus
+      summary: Two-factor authentication status
+      responses:
+        "200":
+          description: Status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TwoFactorStatus" }
+
+  /api/v1/me/2fa/setup:
+    post:
+      tags: [account]
+      operationId: setupTwoFactor
+      summary: Start TOTP enrollment (returns the secret and otpauth URI once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordRequest" }
+      responses:
+        "200":
+          description: Pending secret.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TOTPSetup" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/me/2fa/enable:
+    post:
+      tags: [account]
+      operationId: enableTwoFactor
+      summary: Confirm enrollment with a code; returns recovery codes once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CodeRequest" }
+      responses:
+        "200":
+          description: Enabled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecoveryCodes" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/v1/me/2fa/disable:
+    post:
+      tags: [account]
+      operationId: disableTwoFactor
+      summary: Turn off 2FA (password and a code or recovery code required)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DisableTwoFactorRequest" }
+      responses:
+        "204": { description: Disabled. }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/me/2fa/recovery-codes:
+    post:
+      tags: [account]
+      operationId: regenerateRecoveryCodes
+      summary: Replace recovery codes (requires a current TOTP code)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CodeRequest" }
+      responses:
+        "200":
+          description: New codes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecoveryCodes" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /api/v1/me/sessions:
+    get:
+      tags: [account]
+      operationId: listSessions
+      summary: Signed-in devices
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Sessions, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionPage" }
+
+  /api/v1/me/sessions/{id}:
+    delete:
+      tags: [account]
+      operationId: revokeSession
+      summary: Sign out a device
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "204": { description: Revoked. }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/me/tokens:
+    get:
+      tags: [account]
+      operationId: listApiTokens
+      summary: Personal API tokens
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Tokens, newest first (secrets are never returned).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APITokenPage" }
+    post:
+      tags: [account]
+      operationId: createApiToken
+      summary: Create a personal API token (secret shown once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAPITokenRequest" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedAPIToken" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/me/tokens/{id}:
+    delete:
+      tags: [account]
+      operationId: revokeApiToken
+      summary: Revoke a token
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "204": { description: Revoked. }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/me/identities:
+    get:
+      tags: [account]
+      operationId: listIdentities
+      summary: Linked SSO accounts
+      responses:
+        "200":
+          description: Identities.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Identity" }
+
+  /api/v1/me/identities/{id}:
+    delete:
+      tags: [account]
+      operationId: unlinkIdentity
+      summary: Unlink an SSO account (not the only sign-in method)
+      parameters:
+        - $ref: "#/components/parameters/PathID"
+      responses:
+        "204": { description: Unlinked. }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  # ─────────────────────────────── organizations ───────────────────────────────
+
+  /api/v1/orgs:
+    get:
+      tags: [organizations]
+      operationId: listOrganizations
+      summary: Organizations I belong to (for the org switcher)
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Organizations by name.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganizationPage" }
+    post:
+      tags: [organizations]
+      operationId: createOrganization
+      summary: Create an organization (the caller becomes Owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateOrganizationRequest" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}:
+    get:
+      tags: [organizations]
+      operationId: getOrganization
+      summary: An organization I belong to
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Organization.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+        "404": { $ref: "#/components/responses/Error" }
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Access JWT (15 min) or personal API token (`ohp_…`).
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: opshub_rt
+
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from `next_cursor`.
+      schema: { type: string }
+    PathID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: The `ETag` from the last read, e.g. `"v3"`.
+      schema: { type: string }
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: Must equal the `opshub_csrf` cookie.
+      schema: { type: string }
+    SSOProvider:
+      name: provider
+      in: path
+      required: true
+      schema: { type: string, enum: [github, google, keycloak] }
+
+  headers:
+    ETag:
+      description: Resource version for If-Match.
+      schema: { type: string, examples: ['"v3"'] }
+
   responses:
     Error:
       description: Error envelope.
@@ -81,19 +645,284 @@ components:
 
     Meta:
       type: object
-      required: [version, locales, default_locale, default_timezone]
+      required: [version, locales, default_locale, default_timezone, signup_enabled, sso_providers]
       properties:
-        version: { type: string, examples: ["0.1.0"] }
+        version: { type: string, examples: ["0.2.0"] }
         locales:
           type: array
           items: { $ref: "#/components/schemas/Locale" }
         default_locale: { $ref: "#/components/schemas/Locale" }
         default_timezone: { type: string, examples: [Asia/Phnom_Penh] }
+        signup_enabled: { type: boolean }
+        sso_providers:
+          type: array
+          items: { type: string, enum: [github, google, keycloak] }
+
+    RegisterRequest:
+      type: object
+      required: [email, password, display_name]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 12, maxLength: 128, description: "12–128 characters; not a common password; must not contain the email name." }
+        display_name: { type: string, minLength: 1, maxLength: 100 }
+        locale: { $ref: "#/components/schemas/Locale" }
+        timezone: { type: string, examples: [Asia/Phnom_Penh] }
+
+    TokenRequest:
+      type: object
+      required: [token]
+      additionalProperties: false
+      properties:
+        token: { type: string, maxLength: 128 }
+
+    EmailRequest:
+      type: object
+      required: [email]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email: { type: string }
+        password: { type: string }
+
+    LoginTwoFactorRequest:
+      type: object
+      additionalProperties: false
+      description: Provide `code` or `recovery_code`.
+      properties:
+        mfa_token: { type: string }
+        code: { type: string, examples: ["123456"] }
+        recovery_code: { type: string, examples: [abcde-fghij] }
+
+    ResetPasswordRequest:
+      type: object
+      required: [token, password]
+      additionalProperties: false
+      properties:
+        token: { type: string }
+        password: { type: string }
+
+    LoginResponse:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [authenticated, mfa_required] }
+        tokens: { $ref: "#/components/schemas/TokenResponse" }
+        mfa: { $ref: "#/components/schemas/MFAChallenge" }
+
+    MFAChallenge:
+      type: object
+      required: [token, expires_at]
+      properties:
+        token: { type: string }
+        expires_at: { type: string, format: date-time }
+
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in, expires_at, user]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, const: Bearer }
+        expires_in: { type: integer, description: Seconds until expiry. }
+        expires_at: { type: string, format: date-time }
+        user: { $ref: "#/components/schemas/User" }
+
+    User:
+      type: object
+      required: [id, email, display_name, locale, timezone, khmer_numerals, email_verified, two_factor_enabled, has_password, is_platform_admin, created_at, version]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        locale: { $ref: "#/components/schemas/Locale" }
+        timezone: { type: string }
+        khmer_numerals: { type: boolean }
+        email_verified: { type: boolean }
+        two_factor_enabled: { type: boolean }
+        has_password: { type: boolean, description: False for SSO-only accounts. }
+        is_platform_admin: { type: boolean }
+        created_at: { type: string, format: date-time }
+        version: { type: integer }
+
+    UpdateProfileRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 100 }
+        locale: { $ref: "#/components/schemas/Locale" }
+        timezone: { type: string }
+        khmer_numerals: { type: boolean }
+
+    ChangePasswordRequest:
+      type: object
+      required: [new_password]
+      additionalProperties: false
+      properties:
+        current_password: { type: string, description: Required when the account has a password. }
+        new_password: { type: string }
+
+    PasswordRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        password: { type: string }
+
+    CodeRequest:
+      type: object
+      required: [code]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+
+    DisableTwoFactorRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        password: { type: string }
+        code: { type: string }
+        recovery_code: { type: string }
+
+    TwoFactorStatus:
+      type: object
+      required: [enabled, recovery_codes_remaining]
+      properties:
+        enabled: { type: boolean }
+        recovery_codes_remaining: { type: integer }
+
+    TOTPSetup:
+      type: object
+      required: [secret, otpauth_uri]
+      properties:
+        secret: { type: string, description: Base32 secret for manual entry. }
+        otpauth_uri: { type: string, description: Encode as a QR code. }
+
+    RecoveryCodes:
+      type: object
+      required: [recovery_codes]
+      properties:
+        recovery_codes:
+          type: array
+          items: { type: string }
+
+    Session:
+      type: object
+      required: [id, auth_method, ip, user_agent, created_at, last_used_at, expires_at, current]
+      properties:
+        id: { type: string, format: uuid }
+        auth_method: { type: string, enum: [password, oidc] }
+        ip: { type: [string, "null"] }
+        user_agent: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        current: { type: boolean }
+
+    SessionPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Session" }
+        next_cursor: { type: [string, "null"] }
+
+    APIScope:
+      type: string
+      enum: [api:read, api:write]
+
+    APIToken:
+      type: object
+      required: [id, name, prefix, scopes, expires_at, last_used_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        prefix: { type: string, examples: [ohp_abcd2345] }
+        scopes:
+          type: array
+          items: { $ref: "#/components/schemas/APIScope" }
+        expires_at: { type: [string, "null"], format: date-time }
+        last_used_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    CreatedAPIToken:
+      allOf:
+        - $ref: "#/components/schemas/APIToken"
+        - type: object
+          required: [token]
+          properties:
+            token: { type: string, description: The secret. Shown only in this response. }
+
+    APITokenPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/APIToken" }
+        next_cursor: { type: [string, "null"] }
+
+    CreateAPITokenRequest:
+      type: object
+      required: [name, scopes]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        scopes:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/APIScope" }
+        expires_in_days: { type: integer, minimum: 1, maximum: 365 }
+
+    Identity:
+      type: object
+      required: [id, provider, email, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, examples: [github] }
+        email: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+
+    Role:
+      type: string
+      enum: [owner, admin, developer, viewer]
+
+    Organization:
+      type: object
+      required: [id, slug, name, role, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, examples: [angkor-tech] }
+        name: { type: string, examples: ["Angkor Tech · អង្គរ តិច"] }
+        role: { $ref: "#/components/schemas/Role" }
+        created_at: { type: string, format: date-time }
+
+    OrganizationPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Organization" }
+        next_cursor: { type: [string, "null"] }
+
+    CreateOrganizationRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        slug: { type: string, pattern: "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$", description: Defaults to one derived from the name. }
 
     ErrorCode:
       type: string
       description: Stable machine-readable error code. New codes may be added over time.
-      examples: [VALIDATION_FAILED, NOT_FOUND, FORBIDDEN]
+      examples: [VALIDATION_FAILED, INVALID_CREDENTIALS, ACCOUNT_LOCKED]
 
     FieldError:
       type: object
@@ -116,8 +945,9 @@ components:
             details:
               type: object
               additionalProperties: true
-              description: Code-specific data. For VALIDATION_FAILED contains `fields`.
+              description: Code-specific data (VALIDATION_FAILED → `fields`; ACCOUNT_LOCKED / RATE_LIMITED → `retry_after_seconds`).
               properties:
                 fields:
                   type: array
                   items: { $ref: "#/components/schemas/FieldError" }
+                retry_after_seconds: { type: integer }

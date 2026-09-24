@@ -11,6 +11,8 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5" // registers "pgx5://"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/opshub/opshub/db"
@@ -89,3 +91,34 @@ func (mg *Migrator) Close() error {
 	srcErr, dbErr := mg.m.Close()
 	return errors.Join(srcErr, dbErr)
 }
+
+// InTx runs fn in a transaction, committing on success and rolling back on error or panic.
+func InTx(ctx context.Context, pool *pgxpool.Pool, fn func(tx pgx.Tx) error) (err error) {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback(ctx)
+			panic(p)
+		}
+		if err != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+	if err = fn(tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// IsUniqueViolation reports whether err is a unique_violation on the named constraint/index
+// ("" matches any).
+func IsUniqueViolation(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && (constraint == "" || pgErr.ConstraintName == constraint)
+}
+
+// IsNoRows reports whether err means the query returned no rows.
+func IsNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }

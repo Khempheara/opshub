@@ -13,14 +13,18 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/opshub/opshub/api"
 	"github.com/opshub/opshub/internal/apperr"
+	"github.com/opshub/opshub/internal/audit"
+	"github.com/opshub/opshub/internal/authn"
 	"github.com/opshub/opshub/internal/config"
 	"github.com/opshub/opshub/internal/httpx"
 	"github.com/opshub/opshub/internal/i18n"
+	"github.com/opshub/opshub/internal/ratelimit"
 	"github.com/opshub/opshub/internal/telemetry"
 )
 
@@ -29,14 +33,22 @@ type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
-// Deps are the collaborators the router needs. Module handlers are added here as
-// each module lands (auth, projects, pipelines, ...).
+// Module is a feature module that mounts its routes under /api/v1.
+type Module interface {
+	Mount(r chi.Router)
+}
+
+// Deps are the collaborators the router needs.
 type Deps struct {
 	Config  config.Config
 	Logger  *slog.Logger
 	DB      Pinger
 	Metrics *telemetry.Metrics
 	Version string
+	// Authenticator resolves bearer credentials; nil disables authentication (tests).
+	Authenticator *authn.Authenticator
+	Modules       []Module
+	SSOProviders  []string
 }
 
 // New returns the fully wired root handler.
@@ -49,7 +61,9 @@ func New(d Deps) http.Handler {
 	r.Use(requestLogger(d.Logger))
 	r.Use(recoverer(d.Logger))
 	r.Use(securityHeaders)
+	r.Use(corsMiddleware(d.Config))
 	r.Use(i18n.Middleware)
+	r.Use(audit.Middleware)
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, r, apperr.New(apperr.CodeRouteNotFound, http.StatusNotFound, "route not found"))
@@ -74,7 +88,17 @@ func New(d Deps) http.Handler {
 	r.Get("/docs/init.js", swaggerInit)
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// Coarse per-IP limit before authentication (bounds credential-guessing load), then a
+		// per-user/token limit after it.
+		r.Use(ratelimit.Middleware(ratelimit.New(d.Config.RateLimitRPS*3, d.Config.RateLimitBurst*3), ipKey))
+		if d.Authenticator != nil {
+			r.Use(d.Authenticator.Middleware)
+		}
+		r.Use(ratelimit.Middleware(ratelimit.New(d.Config.RateLimitRPS, d.Config.RateLimitBurst), principalKey))
 		r.Get("/meta", meta(d))
+		for _, m := range d.Modules {
+			m.Mount(r)
+		}
 	})
 
 	return otelhttp.NewHandler(r, "opshub-api",
@@ -106,6 +130,8 @@ type MetaResponse struct {
 	Locales         []string `json:"locales"`
 	DefaultLocale   string   `json:"default_locale"`
 	DefaultTimezone string   `json:"default_timezone"`
+	SignupEnabled   bool     `json:"signup_enabled"`
+	SSOProviders    []string `json:"sso_providers"`
 }
 
 func meta(d Deps) http.HandlerFunc {
@@ -115,8 +141,38 @@ func meta(d Deps) http.HandlerFunc {
 			Locales:         config.SupportedLocales,
 			DefaultLocale:   d.Config.DefaultLocale,
 			DefaultTimezone: d.Config.DefaultTimezone,
+			SignupEnabled:   d.Config.AllowSignup,
+			SSOProviders:    append([]string{}, d.SSOProviders...),
 		})
 	}
+}
+
+func ipKey(r *http.Request) string { return "ip:" + middleware.GetClientIP(r.Context()) }
+
+func principalKey(r *http.Request) string {
+	if p, ok := authn.PrincipalFrom(r.Context()); ok {
+		if p.Kind == authn.KindAPIToken {
+			return "token:" + p.TokenID.String()
+		}
+		return "user:" + p.UserID.String()
+	}
+	return "ip:" + middleware.GetClientIP(r.Context())
+}
+
+// corsMiddleware allows credentialed cross-origin calls only from the configured origins.
+// With no origins configured (the default, same-origin deployment) it is a no-op.
+func corsMiddleware(cfg config.Config) func(http.Handler) http.Handler {
+	if len(cfg.CORSAllowedOrigins) == 0 {
+		return func(next http.Handler) http.Handler { return next }
+	}
+	return cors.Handler(cors.Options{
+		AllowedOrigins:   cfg.CORSAllowedOrigins,
+		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
+		AllowedHeaders:   []string{"Authorization", "Content-Type", "Accept-Language", "If-Match", "Idempotency-Key", authn.CSRFHeader, middleware.RequestIDHeader},
+		ExposedHeaders:   []string{"ETag", "Retry-After", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", middleware.RequestIDHeader},
+		AllowCredentials: true,
+		MaxAge:           600,
+	})
 }
 
 // requestID assigns every request an ID (echoed in X-Request-Id and readable with

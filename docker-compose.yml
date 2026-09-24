@@ -1,7 +1,32 @@
-# Local development stack.
-#   docker compose up -d postgres        # database only; run API/web natively (make dev)
-#   docker compose --profile app up -d   # everything in containers
+# Local development stack: `make dev` starts everything.
+#
+#   web         http://localhost:${OPSHUB_WEB_PORT:-3000}   UI (nginx; proxies /api to the API)
+#   api         http://localhost:${OPSHUB_API_PORT:-8080}   API, /docs, /metrics
+#   mailpit     http://localhost:${OPSHUB_MAILPIT_PORT:-8025}   captured emails
+#   prometheus  http://localhost:${OPSHUB_PROMETHEUS_PORT:-9090}
+#   grafana     http://localhost:${OPSHUB_GRAFANA_PORT:-3001}   "OpsHub API" dashboard
+#
+# The runner agent joins this file with Module 5.
 name: opshub
+
+x-api-env: &api-env
+  OPSHUB_ENV: development
+  OPSHUB_LOG_FORMAT: json
+  # The API connects as the DML-only role; migrations use the schema owner.
+  OPSHUB_DATABASE_URL: postgres://opshub_app:opshub_app@postgres:5432/opshub?sslmode=disable
+  OPSHUB_MIGRATE_DATABASE_URL: postgres://opshub_migrator:opshub_migrator@postgres:5432/opshub?sslmode=disable
+  OPSHUB_PUBLIC_URL: ${OPSHUB_COMPOSE_PUBLIC_URL:-http://localhost:3000}
+  OPSHUB_MASTER_KEYS: ${OPSHUB_MASTER_KEYS:?run `make .env` to generate keys}
+  OPSHUB_JWT_KEYS: ${OPSHUB_JWT_KEYS:?run `make .env` to generate keys}
+  OPSHUB_BOOTSTRAP_ADMIN_EMAIL: ${OPSHUB_BOOTSTRAP_ADMIN_EMAIL:-}
+  OPSHUB_ALLOW_SIGNUP: ${OPSHUB_ALLOW_SIGNUP:-true}
+  OPSHUB_AUTH_LOGIN_PER_MINUTE: ${OPSHUB_AUTH_LOGIN_PER_MINUTE:-10}
+  OPSHUB_AUTH_EMAIL_PER_MINUTE: ${OPSHUB_AUTH_EMAIL_PER_MINUTE:-5}
+  OPSHUB_SMTP_HOST: mailpit
+  OPSHUB_SMTP_PORT: "1025"
+  OPSHUB_SMTP_TLS: none
+  # Trust X-Forwarded-For only from the web container (pinned IP below).
+  OPSHUB_TRUSTED_PROXIES: 172.28.0.10/32
 
 services:
   postgres:
@@ -12,37 +37,64 @@ services:
       POSTGRES_PASSWORD: opshub
     # Override if a local PostgreSQL already uses 5432: OPSHUB_PG_PORT=55432
     ports: ["${OPSHUB_PG_PORT:-5432}:5432"]
-    volumes: [pgdata:/var/lib/postgresql/data]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/compose/postgres/init-roles.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U opshub -d opshub"]
       interval: 2s
       timeout: 3s
       retries: 30
 
+  mailpit:
+    image: axllent/mailpit:v1.31.2
+    ports:
+      - "${OPSHUB_MAILPIT_PORT:-8025}:8025"
+      - "${OPSHUB_SMTP_HOST_PORT:-1025}:1025"
+
   api:
-    profiles: [app]
     build:
       context: .
       dockerfile: deploy/docker/api.Dockerfile
       args: { VERSION: "${OPSHUB_VERSION:-dev}" }
-    environment:
-      OPSHUB_ENV: development
-      OPSHUB_DATABASE_URL: postgres://opshub:opshub@postgres:5432/opshub?sslmode=disable
-      OPSHUB_PUBLIC_URL: http://localhost:3000
-      # Trust X-Forwarded-For only from the nginx container (pinned IP below), so the
-      # real client IP is recorded and clients cannot spoof it.
-      OPSHUB_TRUSTED_PROXIES: 172.28.0.10/32
+    environment: *api-env
     depends_on:
       postgres: { condition: service_healthy }
+      mailpit: { condition: service_started }
     ports: ["${OPSHUB_API_PORT:-8080}:8080"]
+    healthcheck:
+      test: ["CMD", "/opshub-api", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   web:
-    profiles: [app]
     build: { context: ., dockerfile: deploy/docker/web.Dockerfile }
-    depends_on: [api]
+    depends_on:
+      api: { condition: service_healthy }
     ports: ["${OPSHUB_WEB_PORT:-3000}:8080"]
     networks:
       default: { ipv4_address: 172.28.0.10 }
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    volumes:
+      - ./deploy/compose/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["${OPSHUB_PROMETHEUS_PORT:-9090}:9090"]
+    depends_on: [api]
+
+  grafana:
+    image: grafana/grafana-oss:13.0.2
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: opshub
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/opshub-api.json
+    volumes:
+      - ./deploy/compose/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/compose/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["${OPSHUB_GRAFANA_PORT:-3001}:3000"]
+    depends_on: [prometheus]
 
 networks:
   default:

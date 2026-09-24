@@ -14,27 +14,28 @@ concurrency:
 
 jobs:
   go:
-    name: Go — lint, test, security
+    name: Go — lint, test, coverage, security
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod }
-      - name: golangci-lint
+      - name: golangci-lint (incl. gosec)
         uses: golangci/golangci-lint-action@v8
         with: { version: latest }
       - name: sqlc generated code is up to date
-        run: |
-          docker run --rm -v "$PWD":/src -w /src sqlc/sqlc:1.31.1 diff
-      - name: Test (unit + testcontainers integration)
-        run: go test -race -count=1 -coverprofile=coverage.out ./...
+        run: docker run --rm -v "$PWD":/src -w /src sqlc/sqlc:1.31.1 diff
+      - name: Test (unit + testcontainers integration, race detector)
+        run: go test -race -count=1 ./...
+      - name: Service coverage ≥ 70%
+        run: ./scripts/coverage.sh
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
       - name: gosec
-        run: go run github.com/securego/gosec/v2/cmd/gosec@latest -exclude-generated ./...
+        run: go run github.com/securego/gosec/v2/cmd/gosec@latest -quiet -exclude-generated ./...
 
   web:
-    name: Web — lint, i18n, test, build
+    name: Web — i18n, lint, test, build, mocked E2E
     runs-on: ubuntu-latest
     defaults:
       run: { working-directory: web }
@@ -55,16 +56,57 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - run: npm audit --audit-level=high
       - run: npm run build
-      - name: Playwright E2E
+      - name: Playwright (mocked UI + Khmer typography)
         run: |
           npx playwright install --with-deps chromium
-          npm run e2e
+          npx playwright test --project=mocked
       - uses: actions/upload-artifact@v4
         if: failure()
+        with: { name: playwright-mocked, path: web/playwright-report, retention-days: 7 }
+
+  e2e:
+    name: Full-stack E2E (docker compose)
+    runs-on: ubuntu-latest
+    needs: [go, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-node@v4
         with:
-          name: playwright-report
-          path: web/playwright-report
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Configure (.env with fresh keys; relaxed auth rate limits for the test run)
+        run: |
+          make .env
+          sed -i 's/^OPSHUB_AUTH_LOGIN_PER_MINUTE=.*/OPSHUB_AUTH_LOGIN_PER_MINUTE=1000/; s/^OPSHUB_AUTH_EMAIL_PER_MINUTE=.*/OPSHUB_AUTH_EMAIL_PER_MINUTE=1000/' .env
+      - name: Start the stack
+        run: docker compose up -d --build --wait
+      - name: Seed demo data
+        run: OPSHUB_SEED_PASSWORD=angkor-wat-sunrise-2026 make seed
+      - name: Playwright (full stack)
+        working-directory: web
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_MAILPIT_URL: http://localhost:8025
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npx playwright test --project=full --workers=1
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose logs --no-color > compose.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-results
+          path: |
+            web/playwright-report
+            web/test-results
+            compose.log
           retention-days: 7
 
   images:
@@ -72,6 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [go, web]
     strategy:
+      fail-fast: false # scan both images even if one fails
       matrix:
         image: [api, web]
     steps:
@@ -87,8 +130,9 @@ jobs:
           build-args: VERSION=${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
-      - name: Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@0.33.1
+      - name: Trivy vulnerability scan (fail on HIGH/CRITICAL)
+        # Pinned to a commit (v0.36.0): action tags are mutable.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: opshub-${{ matrix.image }}:ci
           severity: CRITICAL,HIGH

@@ -40,6 +40,14 @@ func TestMigrationsAndSchemaInvariants(t *testing.T) {
 	dsn := startPostgres(t)
 	ctx := context.Background()
 
+	// Mirror production: a DML-only application role with default privileges on new tables.
+	setup, err := pgxpool.New(ctx, dsn)
+	require.NoError(t, err)
+	_, err = setup.Exec(ctx, `CREATE ROLE opshub_app NOLOGIN;
+		ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO opshub_app`)
+	require.NoError(t, err)
+	setup.Close()
+
 	m, err := database.NewMigrator(dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = m.Close() })
@@ -108,6 +116,20 @@ func TestMigrationsAndSchemaInvariants(t *testing.T) {
 		assert.ErrorContains(t, err, "append-only")
 		_, err = pool.Exec(ctx, "TRUNCATE audit_log")
 		assert.ErrorContains(t, err, "append-only")
+	})
+
+	t.Run("application role cannot rewrite the audit log", func(t *testing.T) {
+		priv := func(table, p string) bool {
+			var ok bool
+			require.NoError(t, pool.QueryRow(ctx, "SELECT has_table_privilege('opshub_app', $1, $2)", table, p).Scan(&ok))
+			return ok
+		}
+		assert.True(t, priv("audit_log", "INSERT"))
+		assert.True(t, priv("audit_log", "SELECT"))
+		assert.False(t, priv("audit_log", "UPDATE"))
+		assert.False(t, priv("audit_log", "DELETE"))
+		assert.False(t, priv("audit_log", "TRUNCATE"))
+		assert.True(t, priv("users", "UPDATE"), "other tables keep DML")
 	})
 
 	t.Run("sessions store UTC", func(t *testing.T) {

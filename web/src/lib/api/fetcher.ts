@@ -1,3 +1,4 @@
+import { CSRF_COOKIE, CSRF_HEADER, clearSession, getAccessToken, readCookie, refreshSession } from '@/auth/session';
 import i18n from '@/i18n';
 
 export interface FieldError {
@@ -24,6 +25,12 @@ export class ApiError extends Error {
     const fields = this.details.fields;
     return Array.isArray(fields) ? (fields as FieldError[]) : [];
   }
+
+  /** Seconds until retry is allowed (ACCOUNT_LOCKED, RATE_LIMITED). */
+  get retryAfterSeconds(): number | undefined {
+    const v = this.details.retry_after_seconds;
+    return typeof v === 'number' ? v : undefined;
+  }
 }
 
 /** Thrown when the server could not be reached at all. */
@@ -38,21 +45,37 @@ interface ErrorEnvelope {
   error?: { code?: string; message?: string; details?: Record<string, unknown> };
 }
 
-/**
- * Mutator used by every orval-generated hook. Sends cookies (same-origin session),
- * the active language, and normalizes errors into ApiError / NetworkError.
- */
-export async function customFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
+// Endpoints that manage the session themselves must not trigger the refresh-and-retry.
+const NO_RETRY = /\/api\/v1\/auth\//;
+
+async function send(url: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
   headers.set('Accept-Language', i18n.resolvedLanguage ?? 'en');
-
-  let res: Response;
+  const token = getAccessToken();
+  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+  const csrf = readCookie(CSRF_COOKIE);
+  if (csrf) headers.set(CSRF_HEADER, csrf);
   try {
-    res = await fetch(url, { ...init, headers, credentials: 'same-origin' });
+    return await fetch(url, { ...init, headers, credentials: 'same-origin' });
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
     throw new NetworkError(err);
+  }
+}
+
+/**
+ * Mutator used by every orval-generated function. Adds the access token, language and CSRF
+ * header; on 401 it refreshes the session once and retries; errors become ApiError/NetworkError.
+ */
+export async function customFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
+  let res = await send(url, init);
+  if (res.status === 401 && !NO_RETRY.test(url) && getAccessToken() !== null) {
+    if (await refreshSession()) {
+      res = await send(url, init);
+    } else {
+      clearSession();
+    }
   }
 
   const text = await res.text();

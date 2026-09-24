@@ -1,21 +1,42 @@
-// Command api runs the OpsHub API server.
+// Command opshub-api runs the OpsHub API server and its operator subcommands:
+//
+//	opshub-api [serve]              run the API + background workers (default)
+//	opshub-api migrate up|down|status
+//	opshub-api seed                 create demo data (not in production)
+//	opshub-api keys generate        print new OPSHUB_MASTER_KEYS / OPSHUB_JWT_KEYS values
+//	opshub-api healthcheck          exit 0 if the local server is live (for distroless images)
+//	opshub-api version
 package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 	_ "time/tzdata" // distroless images ship without a zoneinfo database
 
+	"github.com/opshub/opshub/internal/auth"
+	"github.com/opshub/opshub/internal/auth/sso"
+	"github.com/opshub/opshub/internal/authn"
 	"github.com/opshub/opshub/internal/config"
+	"github.com/opshub/opshub/internal/crypto"
 	"github.com/opshub/opshub/internal/database"
+	"github.com/opshub/opshub/internal/i18n"
+	"github.com/opshub/opshub/internal/jobs"
 	"github.com/opshub/opshub/internal/logging"
+	"github.com/opshub/opshub/internal/mail"
+	"github.com/opshub/opshub/internal/org"
+	"github.com/opshub/opshub/internal/seed"
 	"github.com/opshub/opshub/internal/server"
 	"github.com/opshub/opshub/internal/telemetry"
 )
@@ -24,20 +45,48 @@ import (
 var version = "dev"
 
 func main() {
-	if err := run(); err != nil {
-		slog.Error("fatal", "error", err)
+	cmd, args := "serve", os.Args[1:]
+	if len(args) > 0 {
+		cmd, args = args[0], args[1:]
+	}
+	var err error
+	switch cmd {
+	case "serve":
+		err = serve()
+	case "migrate":
+		err = migrateCmd(args)
+	case "seed":
+		err = seedCmd()
+	case "keys":
+		err = keysCmd(args)
+	case "healthcheck":
+		err = healthcheck()
+	case "version":
+		fmt.Println(version)
+	default:
+		err = fmt.Errorf("unknown command %q (serve, migrate, seed, keys, healthcheck, version)", cmd)
+	}
+	if err != nil {
+		slog.Error("fatal", "command", cmd, "error", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func loadConfig() (config.Config, *slog.Logger, error) {
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("config: %w", err)
+		return cfg, nil, fmt.Errorf("config: %w", err)
 	}
 	logger := logging.New(os.Stdout, cfg.LogFormat, cfg.LogLevel)
 	slog.SetDefault(logger)
+	return cfg, logger, nil
+}
 
+func serve() error {
+	cfg, logger, err := loadConfig()
+	if err != nil {
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -45,27 +94,67 @@ func run() error {
 	if err != nil {
 		return err
 	}
-
 	if cfg.MigrateOnStart {
-		if err := migrate(cfg.DatabaseURL, logger); err != nil {
+		if err := migrateUp(ctx, cfg, logger); err != nil {
 			return err
 		}
 	}
-
 	pool, err := database.Connect(ctx, cfg.DatabaseURL, cfg.DBMaxConns)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
 
+	masterKeys, _ := config.ParseKeyRing(cfg.MasterKeys) // validated by config.Load
+	jwtKeys, _ := config.ParseKeyRing(cfg.JWTKeys)
+	keyRing, err := crypto.NewKeyRing(masterKeys)
+	if err != nil {
+		return err
+	}
+	signer, err := authn.NewJWTSigner(jwtKeys, nil)
+	if err != nil {
+		return err
+	}
+	bundle, err := i18n.NewBundle()
+	if err != nil {
+		return err
+	}
+	river, err := jobs.NewClient(jobs.Deps{
+		Pool: pool, Logger: logger,
+		Renderer: &mail.Renderer{Bundle: bundle},
+		Sender:   &mail.SMTPSender{Config: cfg.SMTP},
+	})
+	if err != nil {
+		return err
+	}
+	if err := river.Start(ctx); err != nil {
+		return fmt.Errorf("start workers: %w", err)
+	}
+
+	ssoRegistry := sso.NewRegistry(cfg.SSO, cfg.PublicURL, nil)
+	authSvc := auth.NewService(pool, auth.Config{
+		PublicURL: cfg.PublicURL, AllowSignup: cfg.AllowSignup, BootstrapAdminEmail: cfg.BootstrapAdminEmail,
+		DefaultLocale: cfg.DefaultLocale, DefaultTimezone: cfg.DefaultTimezone,
+	}, authn.NewHasher(authn.DefaultArgon2Params), signer, keyRing, river, logger)
+
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: server.New(server.Deps{
-			Config:  cfg,
-			Logger:  logger,
-			DB:      pool,
-			Metrics: telemetry.NewMetrics(),
-			Version: version,
+			Config:        cfg,
+			Logger:        logger,
+			DB:            pool,
+			Metrics:       telemetry.NewMetrics(),
+			Version:       version,
+			Authenticator: &authn.Authenticator{JWT: signer, Tokens: authSvc},
+			SSOProviders:  ssoRegistry.Names(),
+			Modules: []server.Module{
+				auth.NewHandler(authSvc, ssoRegistry, keyRing, auth.HandlerConfig{
+					PublicURL: cfg.PublicURL, SecureCookies: cfg.SecureCookies(),
+					AllowedOrigins: append([]string{originOf(cfg.PublicURL)}, cfg.CORSAllowedOrigins...),
+					LoginPerMinute: cfg.AuthLoginPerMinute, EmailPerMinute: cfg.AuthEmailPerMinute,
+				}, logger),
+				org.NewHandler(org.NewService(pool)),
+			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -90,11 +179,20 @@ func run() error {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
-	return errors.Join(srv.Shutdown(shutdownCtx), shutdownTracing(shutdownCtx))
+	return errors.Join(srv.Shutdown(shutdownCtx), river.Stop(shutdownCtx), shutdownTracing(shutdownCtx))
 }
 
-func migrate(dsn string, logger *slog.Logger) (err error) {
-	m, err := database.NewMigrator(dsn)
+func originOf(u string) string {
+	p, err := url.Parse(u)
+	if err != nil {
+		return u
+	}
+	return p.Scheme + "://" + p.Host
+}
+
+// migrateUp applies OpsHub migrations, then River's, using the schema-owner connection.
+func migrateUp(ctx context.Context, cfg config.Config, logger *slog.Logger) (err error) {
+	m, err := database.NewMigrator(cfg.MigrateDatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -102,10 +200,143 @@ func migrate(dsn string, logger *slog.Logger) (err error) {
 	if err := m.Up(); err != nil {
 		return fmt.Errorf("migrate up: %w", err)
 	}
+	pool, err := database.Connect(ctx, cfg.MigrateDatabaseURL, 2)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	if err := jobs.Migrate(ctx, pool, true); err != nil {
+		return err
+	}
 	v, dirty, err := m.Version()
 	if err != nil {
 		return err
 	}
 	logger.Info("database schema ready", "version", v, "dirty", dirty)
+	return nil
+}
+
+func migrateCmd(args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: opshub-api migrate up|down|status")
+	}
+	cfg, logger, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	switch args[0] {
+	case "up":
+		return migrateUp(ctx, cfg, logger)
+	case "down":
+		if cfg.IsProduction() {
+			return errors.New("refusing to roll back all migrations in production")
+		}
+		pool, err := database.Connect(ctx, cfg.MigrateDatabaseURL, 2)
+		if err != nil {
+			return err
+		}
+		defer pool.Close()
+		if err := jobs.Migrate(ctx, pool, false); err != nil {
+			return err
+		}
+		m, err := database.NewMigrator(cfg.MigrateDatabaseURL)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = m.Close() }()
+		if err := m.Down(); err != nil {
+			return err
+		}
+		logger.Info("all migrations rolled back")
+		return nil
+	case "status":
+		m, err := database.NewMigrator(cfg.MigrateDatabaseURL)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = m.Close() }()
+		v, dirty, err := m.Version()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("schema version %d (dirty=%t)\n", v, dirty)
+		return nil
+	default:
+		return fmt.Errorf("unknown migrate action %q", args[0])
+	}
+}
+
+func seedCmd() error {
+	cfg, _, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	if cfg.IsProduction() {
+		return errors.New("refusing to seed demo data in production")
+	}
+	ctx := context.Background()
+	if err := migrateUp(ctx, cfg, slog.Default()); err != nil {
+		return err
+	}
+	pool, err := database.Connect(ctx, cfg.DatabaseURL, 2)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	return seed.Run(ctx, pool, seed.Options{
+		Password: os.Getenv("OPSHUB_SEED_PASSWORD"),
+		Hasher:   authn.NewHasher(authn.DefaultArgon2Params),
+		Out:      os.Stdout,
+	})
+}
+
+// healthcheck probes /healthz on the local listener. Distroless images have no curl.
+// Only the port is taken from OPSHUB_HTTP_ADDR; the probe always targets 127.0.0.1.
+func healthcheck() error {
+	addr := os.Getenv("OPSHUB_HTTP_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+	_, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return err
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil || port < 1 || port > 65535 {
+		return fmt.Errorf("invalid port in OPSHUB_HTTP_ADDR %q", addr)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	target := fmt.Sprintf("http://127.0.0.1:%d/healthz", port)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil) // #nosec G704 -- loopback only; port is a validated integer
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req) // #nosec G704 -- loopback only; port is a validated integer
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthz returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func keysCmd(args []string) error {
+	if len(args) != 1 || args[0] != "generate" {
+		return errors.New("usage: opshub-api keys generate")
+	}
+	id := time.Now().UTC().Format("20060102")
+	gen := func() string {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			panic(err)
+		}
+		return base64.StdEncoding.EncodeToString(b)
+	}
+	fmt.Printf("OPSHUB_MASTER_KEYS=m%s:%s\n", id, gen())
+	fmt.Printf("OPSHUB_JWT_KEYS=k%s:%s\n", id, gen())
 	return nil
 }
