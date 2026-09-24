@@ -8,6 +8,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -67,8 +68,8 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 			return err
 		}
 		if exists {
-			_, _ = fmt.Fprintf(opts.Out, "seed: organization %q already exists; skipping\n", DemoOrgSlug)
-			return nil
+			_, _ = fmt.Fprintf(opts.Out, "seed: organization %q already exists; skipping users and teams\n", DemoOrgSlug)
+			return seedProject(ctx, q, tx, opts.Out)
 		}
 		org, err := q.CreateOrganization(ctx, store.CreateOrganizationParams{Slug: DemoOrgSlug, Name: DemoOrgName})
 		if err != nil {
@@ -114,6 +115,73 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 			_, _ = fmt.Fprintf(opts.Out, "  %-28s %s\n", du.Email, du.Role)
 		}
 		_, _ = fmt.Fprintf(opts.Out, "  password (all demo users): %s\n", password)
-		return nil
+		return seedProject(ctx, q, tx, opts.Out)
 	})
+}
+
+// DemoProjectSlug is the seeded project in the demo organization.
+const DemoProjectSlug = "payments-api"
+
+// seedProject creates the demo project with development, staging and a protected
+// production environment, and gives the Platform team Developer access. It runs on every
+// seed so databases seeded before Module 3 get it too.
+func seedProject(ctx context.Context, q *store.Queries, tx pgx.Tx, out io.Writer) error {
+	var orgID, ownerID uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT o.id, om.user_id FROM organizations o
+		JOIN organization_members om ON om.organization_id = o.id AND om.role = 'owner'
+		WHERE o.slug = $1 AND o.deleted_at IS NULL ORDER BY om.created_at LIMIT 1`, DemoOrgSlug).Scan(&orgID, &ownerID); err != nil {
+		return fmt.Errorf("seed project: demo organization: %w", err)
+	}
+	var exists bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM projects WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL)",
+		orgID, DemoProjectSlug).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		_, _ = fmt.Fprintf(out, "seed: project %q already exists; skipping\n", DemoProjectSlug)
+		return nil
+	}
+	p, err := q.CreateProject(ctx, store.CreateProjectParams{
+		OrganizationID: orgID, Slug: DemoProjectSlug, Name: "Payments API · API ទូទាត់ប្រាក់",
+		Description: "Card and KHQR payment processing · ដំណើរការការទូទាត់តាមកាត និង KHQR", DefaultBranch: "main",
+		CreatedBy: &ownerID,
+	})
+	if err != nil {
+		return err
+	}
+	envs := []struct {
+		name, kind string
+		vars       string
+	}{
+		{"development", "development", `{"LOG_LEVEL":"debug","PAYMENT_GATEWAY":"sandbox"}`},
+		{"staging", "staging", `{"LOG_LEVEL":"info","PAYMENT_GATEWAY":"sandbox"}`},
+		{"production", "production", `{"LOG_LEVEL":"warn","PAYMENT_GATEWAY":"live","REGION":"ap-southeast-1"}`},
+	}
+	for _, e := range envs {
+		env, err := q.CreateEnvironment(ctx, store.CreateEnvironmentParams{
+			ProjectID: p.ID, Name: e.name, Kind: store.EnvironmentKind(e.kind), Variables: []byte(e.vars),
+		})
+		if err != nil {
+			return err
+		}
+		if e.kind == "production" {
+			if err := q.UpsertProtectionRule(ctx, store.UpsertProtectionRuleParams{
+				EnvironmentID: env.ID, RequiredApprovals: 1, AllowedBranches: []string{"main"}, AllowedRoles: []string{"owner", "admin"},
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	var teamID uuid.UUID
+	err = tx.QueryRow(ctx, "SELECT id FROM teams WHERE organization_id = $1 AND slug = 'platform' AND deleted_at IS NULL", orgID).Scan(&teamID)
+	switch {
+	case err == nil:
+		if err := q.UpsertProjectTeamGrant(ctx, store.UpsertProjectTeamGrantParams{ProjectID: p.ID, TeamID: teamID, Role: store.MemberRoleDeveloper}); err != nil {
+			return err
+		}
+	case !database.IsNoRows(err):
+		return err
+	}
+	_, _ = fmt.Fprintf(out, "seed: created project %q with development, staging and protected production\n", DemoProjectSlug)
+	return nil
 }

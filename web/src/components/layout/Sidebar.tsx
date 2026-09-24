@@ -1,4 +1,4 @@
-import { Building2, KeyRound, LayoutDashboard, Settings, ShieldCheck, UserRound, Users, UsersRound, type LucideIcon } from 'lucide-react';
+import { Building2, FolderGit2, KeyRound, LayoutDashboard, Settings, ShieldCheck, UserRound, Users, UsersRound, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router';
 import { lastOrg } from '@/app/org';
@@ -15,14 +15,19 @@ interface Item {
 
 /** Navigation groups; feature modules add their entries here as they ship. */
 function useNavGroups(): { label?: string; items: Item[] }[] {
-  const { t } = useTranslation(['common', 'org']);
+  const { t } = useTranslation(['common', 'org', 'project']);
   const routeOrg = useRouteOrg();
   const remembered = lastOrg();
   const org = routeOrg ?? (remembered ? { slug: remembered } : null);
   const groups: { label?: string; items: Item[] }[] = [];
   if (org) {
     const base = `/o/${org.slug}`;
-    groups.push({ items: [{ to: base, label: t('nav.overview'), icon: LayoutDashboard, end: true }] });
+    groups.push({
+      items: [
+        { to: base, label: t('nav.overview'), icon: LayoutDashboard, end: true },
+        { to: `${base}/projects`, label: t('project:nav.projects'), icon: FolderGit2 },
+      ],
+    });
     groups.push({
       label: t('org:nav.group'),
       items: [

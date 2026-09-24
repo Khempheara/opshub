@@ -90,6 +90,7 @@ one. The essentials:
 | `OPSHUB_SMTP_*` | Outgoing email |
 | `OPSHUB_SSO_*` | GitHub, Google and Keycloak sign-in (enabled when the client ID is set) |
 | `OPSHUB_TRUSTED_PROXIES` | CIDRs of your reverse proxy/ingress, so audit logs record real client IPs |
+| `OPSHUB_OUTBOUND_ALLOWED_CIDRS` | Internal networks OpsHub may call (e.g. a self-hosted GitLab on `10.0.0.0/8`); everything private is blocked otherwise |
 | `OPSHUB_CORS_ALLOWED_ORIGINS` | Extra browser origins (empty = same-origin, recommended) |
 
 Generate keys with `go run ./cmd/api keys generate`. To rotate, put the new key first and keep the
@@ -108,7 +109,7 @@ old one after it (`id2:…,id1:…`).
 Details: [architecture](docs/architecture.md) · [API endpoints](docs/api.md) ·
 [database](docs/database.md) · [RBAC](docs/rbac.md) · [i18n & glossary](docs/i18n.md)
 
-## Security model (Module 1)
+## Security model
 
 - Passwords: argon2id; 12–128 characters; common passwords rejected; lockout after 5 failures
   (15 min, doubling); per-IP rate limits on sign-in and email endpoints.
@@ -120,6 +121,16 @@ Details: [architecture](docs/architecture.md) · [API endpoints](docs/api.md) ·
 - Personal API tokens (`ohp_…`, scoped `api:read` / `api:write`) can't manage passwords, 2FA,
   sessions or other tokens.
 - Every security event is in the append-only audit log (who, what, when, IP, before/after).
+- Permissions are checked in the service layer against one role matrix ([RBAC](docs/rbac.md)).
+  Resources of other organizations, and projects you can't see, answer 404 — a test calls every
+  tenant-scoped route with another tenant's IDs.
+- Git access tokens and webhook secrets are encrypted at rest (AES-256-GCM) and never returned.
+  Webhooks are verified with HMAC-SHA256 (GitHub) or a constant-time token compare (GitLab) and
+  de-duplicated by delivery ID.
+- Calls to user-supplied hosts go through an SSRF-safe client: the resolved IP is checked when
+  connecting (private, loopback, link-local and metadata addresses are refused), and redirects
+  and proxies are not followed.
+- `Idempotency-Key` on create endpoints makes retries safe (24 h replay, per user).
 
 ## Production notes
 
@@ -129,6 +140,9 @@ Details: [architecture](docs/architecture.md) · [API endpoints](docs/api.md) ·
 - Create the roles as in `deploy/compose/postgres/init-roles.sql` (with real passwords).
 - Set `OPSHUB_TRUSTED_PROXIES` to your ingress range, and configure real SMTP with TLS.
 - Keep `/metrics` on an internal network (the bundled nginx doesn't expose it).
+- Git webhooks are delivered to `OPSHUB_PUBLIC_URL/api/v1/webhooks/…`, so the Git host must be
+  able to reach it. If OpsHub can't install a webhook itself, the Repository tab shows the URL and
+  secret to add by hand.
 
 ## Runners and pipelines
 
@@ -137,6 +151,6 @@ to register a runner and run a pipeline.
 
 ## Roadmap
 
-1. ✅ Auth & users · 2. RBAC · 3. Projects & repositories · 4. CI/CD pipelines · 5. Runner agent ·
+1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. CI/CD pipelines · 5. Runner agent ·
 6. Deployments · 7. Infrastructure · 8. Secrets · 9. Monitoring & alerts · 10. Logs ·
 11. Audit log · 12. Dashboard & DORA metrics

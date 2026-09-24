@@ -31,11 +31,15 @@ import (
 	"github.com/opshub/opshub/internal/config"
 	"github.com/opshub/opshub/internal/crypto"
 	"github.com/opshub/opshub/internal/database"
+	"github.com/opshub/opshub/internal/gitprovider"
 	"github.com/opshub/opshub/internal/i18n"
+	"github.com/opshub/opshub/internal/idempotency"
 	"github.com/opshub/opshub/internal/jobs"
 	"github.com/opshub/opshub/internal/logging"
 	"github.com/opshub/opshub/internal/mail"
 	"github.com/opshub/opshub/internal/org"
+	"github.com/opshub/opshub/internal/project"
+	"github.com/opshub/opshub/internal/safehttp"
 	"github.com/opshub/opshub/internal/seed"
 	"github.com/opshub/opshub/internal/server"
 	"github.com/opshub/opshub/internal/telemetry"
@@ -137,6 +141,10 @@ func serve() error {
 		DefaultLocale: cfg.DefaultLocale, DefaultTimezone: cfg.DefaultTimezone,
 	}, authn.NewHasher(authn.DefaultArgon2Params), signer, keyRing, river, logger)
 
+	outboundCIDRs, _ := safehttp.ParseCIDRs(cfg.OutboundAllowedCIDRs) // validated by config.Load
+	gitFactory := gitprovider.Factory{HTTP: safehttp.NewClient(safehttp.Options{AllowedCIDRs: outboundCIDRs})}
+	projectSvc := project.NewService(pool, keyRing, gitFactory, project.Config{PublicURL: cfg.PublicURL}, logger)
+
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: server.New(server.Deps{
@@ -154,6 +162,7 @@ func serve() error {
 					LoginPerMinute: cfg.AuthLoginPerMinute, EmailPerMinute: cfg.AuthEmailPerMinute,
 				}, logger),
 				org.NewHandler(org.NewService(pool, river, org.Config{PublicURL: cfg.PublicURL})),
+				project.NewHandler(projectSvc, idempotency.Middleware(pool)),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

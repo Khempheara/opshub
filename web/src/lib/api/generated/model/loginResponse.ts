@@ -20,9 +20,12 @@
  * **Optimistic locking.** Editable resources return an `ETag`; updates require
  * `If-Match` and fail with `409 VERSION_CONFLICT` when the resource changed.
  *
+ * **Idempotency.** Create endpoints marked with the `Idempotency-Key` header can be
+ * retried safely: the same key and request replay the first response for 24 hours.
+ *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.3.0
+ * OpenAPI spec version: 0.4.0
  */
 import type { LoginResponseStatus } from './loginResponseStatus';
 import type { MFAChallenge } from './mFAChallenge';

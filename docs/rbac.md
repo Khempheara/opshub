@@ -23,6 +23,18 @@ Personal API tokens act as their user, optionally narrowed by `scopes` (never wi
 Runners use their own credentials and can only fetch jobs, the secrets injected into those jobs, and
 upload logs/artifacts for jobs assigned to them.
 
+Rules (Module 3):
+
+- A Developer who creates a project gets a direct **Admin** grant on it.
+- Grants can be **Admin, Developer or Viewer**; project Owners are always the organization's
+  Owners, so Owner is never granted per project.
+- Grants only apply to organization members: when someone leaves the organization their direct
+  grants are deleted; deleting a team deletes its grants.
+- Grants never lower an inherited role (an org Admin granted Viewer stays Admin), but can raise
+  an org Viewer or Developer on one project.
+- Projects a user can't see answer `404 PROJECT_NOT_FOUND`; environments of such projects
+  `404 ENVIRONMENT_NOT_FOUND`.
+
 ## Enforcement
 
 - Checked in the **service layer** (`authz.Require(ctx, q, orgID, action)` in `internal/authz`) before

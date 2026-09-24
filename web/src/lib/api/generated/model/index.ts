@@ -20,9 +20,12 @@
  * **Optimistic locking.** Editable resources return an `ETag`; updates require
  * `If-Match` and fail with `409 VERSION_CONFLICT` when the resource changed.
  *
+ * **Idempotency.** Create endpoints marked with the `Idempotency-Key` header can be
+ * retried safely: the same key and request replay the first response for 24 hours.
+ *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.3.0
+ * OpenAPI spec version: 0.4.0
  */
 
 export * from './aPIScope';
@@ -30,20 +33,36 @@ export * from './aPIToken';
 export * from './aPITokenPage';
 export * from './changePasswordRequest';
 export * from './codeRequest';
+export * from './connectRepositoryRequest';
+export * from './connectRepositoryResult';
+export * from './connectRepositoryResultWebhook';
+export * from './connectRepositoryResultWebhookMode';
+export * from './connectRepositoryResultWebhookReason';
 export * from './createAPITokenRequest';
 export * from './createdAPIToken';
 export * from './createOrganizationRequest';
+export * from './createProjectRequest';
 export * from './cSRFTokenParameter';
 export * from './cursorParameter';
 export * from './deleteOrganizationParams';
+export * from './deleteProjectParams';
 export * from './disableTwoFactorRequest';
 export * from './emailRequest';
+export * from './environment';
+export * from './environmentKind';
+export * from './environmentRequest';
+export * from './environmentRequestVariables';
+export * from './environmentVariables';
 export * from './error';
 export * from './errorCode';
 export * from './errorError';
 export * from './errorErrorDetails';
 export * from './errorResponse';
 export * from './fieldError';
+export * from './gitProvider';
+export * from './grantRequest';
+export * from './grantRequestRole';
+export * from './idempotencyKeyParameter';
 export * from './identity';
 export * from './ifMatchParameter';
 export * from './invitation';
@@ -52,12 +71,16 @@ export * from './invitationPreview';
 export * from './inviteRequest';
 export * from './limitParameter';
 export * from './listApiTokensParams';
+export * from './listEnvironments200';
 export * from './listIdentities200';
 export * from './listInvitationsParams';
 export * from './listMembersParams';
 export * from './listOrganizationsParams';
+export * from './listProjectMembers200';
+export * from './listProjectsParams';
 export * from './listSessionsParams';
 export * from './listTeamsParams';
+export * from './listWebhookDeliveriesParams';
 export * from './locale';
 export * from './loginRequest';
 export * from './loginResponse';
@@ -72,9 +95,23 @@ export * from './organization';
 export * from './organizationPage';
 export * from './passwordRequest';
 export * from './permissions';
+export * from './project';
+export * from './projectAction';
+export * from './projectDetail';
+export * from './projectMember';
+export * from './projectMemberSource';
+export * from './projectMemberType';
+export * from './projectPage';
+export * from './protection';
+export * from './protectionAllowedRolesItem';
+export * from './receiveGitHubWebhookBody';
+export * from './receiveGitLabWebhookBody';
 export * from './recoveryCodes';
 export * from './register202';
 export * from './registerRequest';
+export * from './repository';
+export * from './repositoryTest';
+export * from './repositoryWebhookMode';
 export * from './resetPasswordRequest';
 export * from './role';
 export * from './session';
@@ -96,4 +133,9 @@ export * from './twoFactorStatus';
 export * from './updateMemberRoleRequest';
 export * from './updateOrganizationRequest';
 export * from './updateProfileRequest';
+export * from './updateProjectRequest';
 export * from './user';
+export * from './webhookAck';
+export * from './webhookAckStatus';
+export * from './webhookDelivery';
+export * from './webhookDeliveryPage';

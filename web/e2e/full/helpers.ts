@@ -63,3 +63,17 @@ export async function signIn(page: Page, email: string, password = PASSWORD) {
   // cookies are set before the test navigates elsewhere.
   await page.waitForURL((url) => url.pathname !== '/login');
 }
+
+/** Registers a new user who creates (and so owns) a fresh organization; returns its slug. */
+export async function newOwnerWithOrg(page: Page, name: string): Promise<string> {
+  const email = uniqueEmail('owner');
+  await registerAndVerify(page, email, 'Org Owner');
+  await signIn(page, email);
+  await expect(page).toHaveURL(/\/onboarding$/);
+  const slug = `e2e-${Date.now().toString(36)}`;
+  await page.getByLabel('Organization name').fill(name);
+  await page.getByLabel('URL name').fill(slug);
+  await page.getByRole('button', { name: 'Create organization' }).click();
+  await expect(page).toHaveURL(new RegExp(`/o/${slug}$`));
+  return slug;
+}

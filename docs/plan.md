@@ -69,3 +69,12 @@ recorded; zero HIGH/CRITICAL findings; short changelog.
 | D7 | JWT signing | Ed25519 (EdDSA) key from env/secret, with `kid` for rotation |
 | D8 | Kubernetes deploys need `client-go` (large but the standard, well-maintained client) | Accept `client-go`; SSH via `golang.org/x/crypto/ssh`; Docker via the Engine HTTP API directly (no moby SDK) |
 | D9 | Who can self-register? | Anyone can register, but can only see orgs they create or are invited to |
+
+## Decisions made during delivery
+
+| # | Module | Decision |
+|---|---|---|
+| M2-1 | 2 | Invitees can register with their invitation token even when `OPSHUB_ALLOW_SIGNUP=false` |
+| M3-1 | 3 | Git hosts: github.com, gitlab.com, GitHub Enterprise and self-managed GitLab (https `base_url`); internal addresses need `OPSHUB_OUTBOUND_ALLOWED_CIDRS` |
+| M3-2 | 3 | Webhooks: OpsHub creates the hook with the access token; if it can't, the repository connects in manual mode and the UI shows the URL + secret once |
+| M3-3 | 3 | Until pipelines exist (Module 4), valid webhooks are verified, de-duplicated and recorded only |

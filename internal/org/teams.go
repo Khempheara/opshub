@@ -95,7 +95,7 @@ func (s *Service) CreateTeam(ctx context.Context, orgID uuid.UUID, in TeamInput)
 	name := strings.TrimSpace(in.Name)
 	slug := in.Slug
 	if slug == "" {
-		slug = Slugify(name)
+		slug = SlugOrFallback(name, "team")
 	}
 	if !slugPattern.MatchString(slug) {
 		return Team{}, apperr.Validation([]apperr.FieldError{{Field: "slug", Rule: "slug"}})
@@ -172,6 +172,9 @@ func (s *Service) DeleteTeam(ctx context.Context, id uuid.UUID) error {
 			return err
 		}
 		if err := q.SoftDeleteTeam(ctx, id); err != nil {
+			return err
+		}
+		if err := q.DeleteProjectGrantsForTeam(ctx, id); err != nil {
 			return err
 		}
 		return audit.Record(ctx, q, audit.Entry{

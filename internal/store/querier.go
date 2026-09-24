@@ -15,28 +15,46 @@ type Querier interface {
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) error
 	// Accepts a TOTP time step only once (replay protection); returns no row if already used.
 	AdvanceTOTPStep(ctx context.Context, arg AdvanceTOTPStepParams) (uuid.UUID, error)
+	// Inserts an in-flight record (or takes over an expired one); returns no row when a live
+	// record already exists for this user and key.
+	ClaimIdempotencyKey(ctx context.Context, arg ClaimIdempotencyKeyParams) (uuid.UUID, error)
+	CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error
 	ConsumeEmailToken(ctx context.Context, arg ConsumeEmailTokenParams) (uuid.UUID, error)
 	ConsumeRecoveryCode(ctx context.Context, arg ConsumeRecoveryCodeParams) (uuid.UUID, error)
+	CountEnvironments(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountIdentities(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountOwners(ctx context.Context, organizationID uuid.UUID) (int64, error)
 	CountUnusedRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateEmailToken(ctx context.Context, arg CreateEmailTokenParams) error
+	CreateEnvironment(ctx context.Context, arg CreateEnvironmentParams) (Environment, error)
 	CreateIdentity(ctx context.Context, arg CreateIdentityParams) (UserIdentity, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreateMFAChallenge(ctx context.Context, arg CreateMFAChallengeParams) error
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
+	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// Periodic cleanup. Sessions are kept 30 days after expiry/revocation for the security page history.
 	DeleteExpiredAuthRecords(ctx context.Context) error
+	// Periodic cleanup: expired idempotency keys and webhook deliveries older than 30 days.
+	DeleteExpiredHousekeeping(ctx context.Context) error
 	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (UserIdentity, error)
+	DeleteProjectGrantsForTeam(ctx context.Context, teamID uuid.UUID) error
+	// Called when someone leaves or is removed from an organization.
+	DeleteProjectGrantsForUserInOrg(ctx context.Context, arg DeleteProjectGrantsForUserInOrgParams) error
+	DeleteProjectTeamGrant(ctx context.Context, arg DeleteProjectTeamGrantParams) (int64, error)
+	DeleteProjectUserGrant(ctx context.Context, arg DeleteProjectUserGrantParams) (int64, error)
+	DeleteProtectionRule(ctx context.Context, environmentID uuid.UUID) error
 	DeleteRecoveryCodes(ctx context.Context, userID uuid.UUID) error
+	DeleteRepositoryByProject(ctx context.Context, projectID uuid.UUID) (Repository, error)
 	DisableTOTP(ctx context.Context, id uuid.UUID) error
 	EnableTOTP(ctx context.Context, arg EnableTOTPParams) error
 	GetActiveAPITokenByHash(ctx context.Context, tokenHash []byte) (GetActiveAPITokenByHashRow, error)
+	GetEnvironment(ctx context.Context, id uuid.UUID) (GetEnvironmentRow, error)
+	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetInvitation(ctx context.Context, id uuid.UUID) (Invitation, error)
 	GetInvitationByTokenForUpdate(ctx context.Context, tokenHash []byte) (GetInvitationByTokenForUpdateRow, error)
 	GetMFAChallengeForUpdate(ctx context.Context, tokenHash []byte) (MfaChallenge, error)
@@ -48,8 +66,17 @@ type Querier interface {
 	GetOpenInvitationEmailByToken(ctx context.Context, tokenHash []byte) (string, error)
 	// Tenant-scoped read: returns no row unless the user is a member.
 	GetOrganizationForMember(ctx context.Context, arg GetOrganizationForMemberParams) (GetOrganizationForMemberRow, error)
+	// A project with the caller's organization role and project grants (docs/rbac.md); '' means
+	// none. The member_role enum is declared owner → viewer, so min() is the most privileged role.
+	GetProjectAccess(ctx context.Context, arg GetProjectAccessParams) (GetProjectAccessRow, error)
+	GetProjectTeamGrant(ctx context.Context, arg GetProjectTeamGrantParams) (MemberRole, error)
+	GetProjectUserGrant(ctx context.Context, arg GetProjectUserGrantParams) (MemberRole, error)
 	GetRefreshTokenForUpdate(ctx context.Context, tokenHash []byte) (GetRefreshTokenForUpdateRow, error)
+	GetRepositoryByProject(ctx context.Context, projectID uuid.UUID) (Repository, error)
+	// Webhook receiver lookup: the repository and whether its project still exists.
+	GetRepositoryForWebhook(ctx context.Context, arg GetRepositoryForWebhookParams) (Repository, error)
 	GetTeam(ctx context.Context, id uuid.UUID) (Team, error)
+	GetTeamInOrg(ctx context.Context, arg GetTeamInOrgParams) (Team, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByIDForUpdate(ctx context.Context, id uuid.UUID) (User, error)
@@ -57,24 +84,39 @@ type Querier interface {
 	IncrementMFAAttempts(ctx context.Context, id uuid.UUID) error
 	InsertAuditLog(ctx context.Context, arg InsertAuditLogParams) (AuditLog, error)
 	InsertRecoveryCodes(ctx context.Context, arg []InsertRecoveryCodesParams) (int64, error)
+	InsertRepository(ctx context.Context, arg InsertRepositoryParams) (Repository, error)
+	// Returns no row when a valid delivery with the same id was already recorded (a redelivery).
+	InsertWebhookDelivery(ctx context.Context, arg InsertWebhookDeliveryParams) (uuid.UUID, error)
 	InvalidateEmailTokens(ctx context.Context, arg InvalidateEmailTokensParams) error
 	ListAPITokens(ctx context.Context, arg ListAPITokensParams) ([]ApiToken, error)
 	// Keyset pagination (newest first).
 	ListActiveSessions(ctx context.Context, arg ListActiveSessionsParams) ([]Session, error)
 	// Keyset pagination on (created_at, id) newest first.
 	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
+	// Ordered development, staging, production, then by name.
+	ListEnvironments(ctx context.Context, projectID uuid.UUID) ([]ListEnvironmentsRow, error)
 	ListIdentities(ctx context.Context, userID uuid.UUID) ([]UserIdentity, error)
 	ListMembers(ctx context.Context, arg ListMembersParams) ([]ListMembersRow, error)
 	ListOpenInvitations(ctx context.Context, arg ListOpenInvitationsParams) ([]ListOpenInvitationsRow, error)
+	// Organization Owners and Admins, who inherit that role on every project.
+	ListOrgManagers(ctx context.Context, organizationID uuid.UUID) ([]ListOrgManagersRow, error)
+	ListProjectTeamGrants(ctx context.Context, projectID uuid.UUID) ([]ListProjectTeamGrantsRow, error)
+	ListProjectUserGrants(ctx context.Context, projectID uuid.UUID) ([]ListProjectUserGrantsRow, error)
+	// Projects the caller can see: all of them when their organization role inherits a project
+	// role (owner/admin/viewer), otherwise those granted directly or through a team.
+	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
 	ListTeamMembers(ctx context.Context, teamID uuid.UUID) ([]ListTeamMembersRow, error)
 	ListTeams(ctx context.Context, arg ListTeamsParams) ([]ListTeamsRow, error)
 	ListUserOrganizations(ctx context.Context, arg ListUserOrganizationsParams) ([]ListUserOrganizationsRow, error)
+	ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeliveriesParams) ([]ListWebhookDeliveriesRow, error)
 	// Serializes membership changes (last-owner checks) within one organization.
 	LockOrganization(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) error
 	MarkRefreshTokenUsed(ctx context.Context, id uuid.UUID) error
 	RecordLoginFailure(ctx context.Context, arg RecordLoginFailureParams) error
 	RecordLoginSuccess(ctx context.Context, id uuid.UUID) error
+	// The request failed with a server error: forget the key so the client can retry.
+	ReleaseIdempotencyKey(ctx context.Context, id uuid.UUID) error
 	RemoveMember(ctx context.Context, arg RemoveMemberParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error)
 	RemoveUserFromOrgTeams(ctx context.Context, arg RemoveUserFromOrgTeamsParams) error
@@ -87,17 +129,26 @@ type Querier interface {
 	SetTOTPPending(ctx context.Context, arg SetTOTPPendingParams) error
 	SetUserEmailVerified(ctx context.Context, id uuid.UUID) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error
+	SoftDeleteEnvironment(ctx context.Context, id uuid.UUID) error
 	SoftDeleteOrganization(ctx context.Context, id uuid.UUID) error
+	SoftDeleteProject(ctx context.Context, id uuid.UUID) error
 	SoftDeleteTeam(ctx context.Context, id uuid.UUID) error
 	// Throttled to one write per minute per token.
 	TouchAPIToken(ctx context.Context, id uuid.UUID) error
+	TouchRepositoryDelivery(ctx context.Context, id uuid.UUID) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	UpdateEnvironment(ctx context.Context, arg UpdateEnvironmentParams) (Environment, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error
 	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error)
+	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
+	UpdateRepositoryDefaultBranch(ctx context.Context, arg UpdateRepositoryDefaultBranchParams) error
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
 	UpdateUserPreferences(ctx context.Context, arg UpdateUserPreferencesParams) (User, error)
 	// Optimistic locking: no row is returned when the version does not match.
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
+	UpsertProjectTeamGrant(ctx context.Context, arg UpsertProjectTeamGrantParams) error
+	UpsertProjectUserGrant(ctx context.Context, arg UpsertProjectUserGrantParams) error
+	UpsertProtectionRule(ctx context.Context, arg UpsertProtectionRuleParams) error
 	UseMFAChallenge(ctx context.Context, id uuid.UUID) error
 }
 

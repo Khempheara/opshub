@@ -72,6 +72,20 @@ func (w *CleanupAuthWorker) Work(ctx context.Context, _ *river.Job[CleanupAuthAr
 	return store.New(w.Pool).DeleteExpiredAuthRecords(ctx)
 }
 
+// HousekeepingArgs purges expired idempotency keys and webhook deliveries older than 30 days.
+type HousekeepingArgs struct{}
+
+func (HousekeepingArgs) Kind() string { return "housekeeping" }
+
+type HousekeepingWorker struct {
+	river.WorkerDefaults[HousekeepingArgs]
+	Pool *pgxpool.Pool
+}
+
+func (w *HousekeepingWorker) Work(ctx context.Context, _ *river.Job[HousekeepingArgs]) error {
+	return store.New(w.Pool).DeleteExpiredHousekeeping(ctx)
+}
+
 const (
 	QueueDefault = river.QueueDefault
 	QueueEmail   = "email"
@@ -90,6 +104,7 @@ func NewClient(d Deps) (*river.Client[pgx.Tx], error) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, &SendEmailWorker{Renderer: d.Renderer, Sender: d.Sender})
 	river.AddWorker(workers, &CleanupAuthWorker{Pool: d.Pool})
+	river.AddWorker(workers, &HousekeepingWorker{Pool: d.Pool})
 
 	client, err := river.NewClient(riverpgxv5.New(d.Pool), &river.Config{
 		Logger: d.Logger,
@@ -101,6 +116,9 @@ func NewClient(d Deps) (*river.Client[pgx.Tx], error) {
 		PeriodicJobs: []*river.PeriodicJob{
 			river.NewPeriodicJob(river.PeriodicInterval(time.Hour),
 				func() (river.JobArgs, *river.InsertOpts) { return CleanupAuthArgs{}, nil },
+				&river.PeriodicJobOpts{RunOnStart: true}),
+			river.NewPeriodicJob(river.PeriodicInterval(time.Hour),
+				func() (river.JobArgs, *river.InsertOpts) { return HousekeepingArgs{}, nil },
 				&river.PeriodicJobOpts{RunOnStart: true}),
 		},
 		// Completed jobs (including email payloads with one-time links) are removed after a day.

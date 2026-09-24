@@ -79,6 +79,22 @@ const (
 	CodeConfirmationMismatch    Code = "CONFIRMATION_MISMATCH"
 )
 
+// Module 3: projects, repositories, environments, idempotency.
+const (
+	CodeProjectNotFound          Code = "PROJECT_NOT_FOUND"
+	CodeEnvironmentNotFound      Code = "ENVIRONMENT_NOT_FOUND"
+	CodeEnvironmentNameTaken     Code = "ENVIRONMENT_NAME_TAKEN"
+	CodeEnvironmentLimit         Code = "ENVIRONMENT_LIMIT_REACHED"
+	CodeRepositoryNotFound       Code = "REPOSITORY_NOT_FOUND"
+	CodeGitRepoNotFound          Code = "GIT_REPO_NOT_FOUND"
+	CodeGitAccessDenied          Code = "GIT_ACCESS_DENIED"
+	CodeGitProviderUnreachable   Code = "GIT_PROVIDER_UNREACHABLE"
+	CodeSSRFBlocked              Code = "SSRF_BLOCKED"
+	CodeWebhookSignatureInvalid  Code = "WEBHOOK_SIGNATURE_INVALID"
+	CodeIdempotencyKeyReused     Code = "IDEMPOTENCY_KEY_REUSED"
+	CodeIdempotencyKeyInProgress Code = "IDEMPOTENCY_KEY_IN_PROGRESS"
+)
+
 // AllCodes lists every code; append new codes here as modules add them.
 var AllCodes = []Code{
 	CodeInternal, CodeBadRequest, CodeValidation, CodeUnauthenticated, CodeForbidden,
@@ -96,6 +112,10 @@ var AllCodes = []Code{
 
 	CodeLastOwner, CodeAlreadyMember, CodeMemberNotFound, CodeRoleNotAllowed, CodeInvitationNotFound,
 	CodeInvitationEmailMismatch, CodeTeamNotFound, CodeConfirmationMismatch,
+
+	CodeProjectNotFound, CodeEnvironmentNotFound, CodeEnvironmentNameTaken, CodeEnvironmentLimit,
+	CodeRepositoryNotFound, CodeGitRepoNotFound, CodeGitAccessDenied, CodeGitProviderUnreachable,
+	CodeSSRFBlocked, CodeWebhookSignatureInvalid, CodeIdempotencyKeyReused, CodeIdempotencyKeyInProgress,
 }
 
 // Error is an application error carrying its HTTP status and client-facing code.
