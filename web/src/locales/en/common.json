@@ -1,0 +1,45 @@
+{
+  "appName": "OpsHub",
+  "tagline": "All-in-One DevOps Platform",
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "km": "Khmer"
+  },
+  "nav": {
+    "home": "Home",
+    "preferences": "Preferences",
+    "apiDocs": "API docs",
+    "skipToContent": "Skip to main content"
+  },
+  "status": {
+    "loading": "Loading…",
+    "online": "Online",
+    "offline": "Offline",
+    "version": "Version {{version}}"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "backHome": "Back to home"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "The page you requested doesn't exist or was moved."
+  },
+  "modules": {
+    "auth": "Auth & Users",
+    "rbac": "Roles & Permissions",
+    "projects": "Projects & Repositories",
+    "pipelines": "CI/CD Pipelines",
+    "runners": "Runner Agents",
+    "deployments": "Deployments",
+    "infrastructure": "Infrastructure",
+    "secrets": "Secrets",
+    "monitoring": "Monitoring & Alerts",
+    "logs": "Logs",
+    "audit": "Audit Log",
+    "dashboard": "Dashboard & DORA Metrics"
+  }
+}

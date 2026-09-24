@@ -1,0 +1,19 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      otel: { patterns: ["go.opentelemetry.io/*"] }
+  - package-ecosystem: npm
+    directory: /web
+    schedule: { interval: weekly }
+    groups:
+      react: { patterns: ["react", "react-dom", "@types/react*"] }
+      tooling: { patterns: ["eslint*", "@eslint/*", "typescript-eslint", "vite", "vitest", "@vitejs/*"] }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directory: /deploy/docker
+    schedule: { interval: weekly }

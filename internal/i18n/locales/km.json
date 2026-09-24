@@ -1,0 +1,10 @@
+{
+  "app.name": "OpsHub",
+  "notify.footer": "អ្នកទទួលបានសារនេះ ដោយសារអ្នកជាសមាជិកនៃ {{.Org}} នៅលើ OpsHub។",
+  "notify.pipeline.failed.title": "Pipeline #{{.Number}} បានបរាជ័យនៅលើ {{.Branch}}",
+  "notify.pipeline.succeeded.title": "Pipeline #{{.Number}} បានជោគជ័យនៅលើ {{.Branch}}",
+  "notify.deploy.succeeded.title": "បាន Deploy {{.Version}} ទៅ {{.Environment}}",
+  "notify.deploy.failed.title": "ការ Deploy {{.Version}} ទៅ {{.Environment}} បានបរាជ័យ",
+  "notify.alert.firing.title": "ការជូនដំណឹងកំពុងសកម្ម៖ {{.Rule}}",
+  "notify.alert.resolved.title": "ការជូនដំណឹងត្រូវបានដោះស្រាយ៖ {{.Rule}}"
+}

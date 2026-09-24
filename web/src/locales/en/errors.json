@@ -1,0 +1,27 @@
+{
+  "fallback": "Something went wrong. Please try again.",
+  "network": "Cannot reach the OpsHub server. Check your connection.",
+  "codes": {
+    "INTERNAL": "An unexpected error occurred. Please try again.",
+    "BAD_REQUEST": "The request was invalid.",
+    "VALIDATION_FAILED": "Please correct the highlighted fields.",
+    "UNAUTHENTICATED": "Please sign in to continue.",
+    "FORBIDDEN": "You don't have permission to do this.",
+    "NOT_FOUND": "The item you're looking for doesn't exist.",
+    "ROUTE_NOT_FOUND": "This API endpoint doesn't exist.",
+    "METHOD_NOT_ALLOWED": "This action isn't supported here.",
+    "CONFLICT": "This conflicts with an existing item.",
+    "PAYLOAD_TOO_LARGE": "The data you sent is too large.",
+    "RATE_LIMITED": "Too many requests. Please wait a moment.",
+    "SERVICE_UNAVAILABLE": "The service is temporarily unavailable."
+  },
+  "rules": {
+    "required": "This field is required.",
+    "email": "Enter a valid email address.",
+    "min": "Must be at least {{param}} characters.",
+    "max": "Must be at most {{param}} characters.",
+    "oneof": "Choose one of: {{param}}.",
+    "url": "Enter a valid URL.",
+    "default": "This value is invalid."
+  }
+}

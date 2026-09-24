@@ -1,0 +1,10 @@
+{
+  "app.name": "OpsHub",
+  "notify.footer": "You are receiving this because you are a member of {{.Org}} on OpsHub.",
+  "notify.pipeline.failed.title": "Pipeline #{{.Number}} failed on {{.Branch}}",
+  "notify.pipeline.succeeded.title": "Pipeline #{{.Number}} succeeded on {{.Branch}}",
+  "notify.deploy.succeeded.title": "Deployed {{.Version}} to {{.Environment}}",
+  "notify.deploy.failed.title": "Deployment of {{.Version}} to {{.Environment}} failed",
+  "notify.alert.firing.title": "Alert firing: {{.Rule}}",
+  "notify.alert.resolved.title": "Alert resolved: {{.Rule}}"
+}

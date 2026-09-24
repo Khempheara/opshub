@@ -1,0 +1,45 @@
+{
+  "appName": "OpsHub",
+  "tagline": "វេទិកា DevOps គ្រប់មុខងារក្នុងមួយ",
+  "language": {
+    "label": "ភាសា",
+    "en": "អង់គ្លេស",
+    "km": "ខ្មែរ"
+  },
+  "nav": {
+    "home": "ទំព័រដើម",
+    "preferences": "ចំណូលចិត្ត",
+    "apiDocs": "ឯកសារ API",
+    "skipToContent": "រំលងទៅមាតិកាចម្បង"
+  },
+  "status": {
+    "loading": "កំពុងផ្ទុក…",
+    "online": "កំពុងដំណើរការ",
+    "offline": "មិនដំណើរការ",
+    "version": "កំណែ {{version}}"
+  },
+  "actions": {
+    "save": "រក្សាទុក",
+    "cancel": "បោះបង់",
+    "retry": "ព្យាយាមម្តងទៀត",
+    "backHome": "ត្រឡប់ទៅទំព័រដើម"
+  },
+  "notFound": {
+    "title": "រកមិនឃើញទំព័រ",
+    "body": "ទំព័រដែលអ្នកស្នើសុំមិនមាន ឬត្រូវបានផ្លាស់ទីហើយ។"
+  },
+  "modules": {
+    "auth": "ការផ្ទៀងផ្ទាត់ និងអ្នកប្រើប្រាស់",
+    "rbac": "តួនាទី និងសិទ្ធិ",
+    "projects": "គម្រោង និង Repository",
+    "pipelines": "CI/CD Pipeline",
+    "runners": "Runner Agent",
+    "deployments": "ការ Deploy",
+    "infrastructure": "ហេដ្ឋារចនាសម្ព័ន្ធ",
+    "secrets": "Secret",
+    "monitoring": "ការត្រួតពិនិត្យ និងការជូនដំណឹង",
+    "logs": "កំណត់ហេតុ (Logs)",
+    "audit": "កំណត់ហេតុសវនកម្ម",
+    "dashboard": "ផ្ទាំងគ្រប់គ្រង និង DORA Metrics"
+  }
+}

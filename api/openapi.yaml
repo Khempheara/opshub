@@ -1,0 +1,123 @@
+openapi: 3.1.0
+info:
+  title: OpsHub API
+  version: 0.1.0
+  summary: All-in-One DevOps Platform
+  description: |
+    REST API for OpsHub. All resource endpoints are versioned under `/api/v1`.
+
+    **Errors** never contain localized text. Every error response uses the `Error`
+    envelope; clients translate `error.code` (see `web/src/locales/*/errors.json`).
+    `message` is an English fallback only.
+
+    **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
+  license:
+    name: Proprietary
+servers:
+  - url: /
+tags:
+  - name: system
+    description: Health, readiness and platform metadata.
+
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      operationId: getHealth
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Process is alive.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+
+  /readyz:
+    get:
+      tags: [system]
+      operationId: getReadiness
+      summary: Readiness probe (checks database connectivity)
+      responses:
+        "200":
+          description: Ready to serve traffic.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+        "503":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/meta:
+    get:
+      tags: [system]
+      operationId: getMeta
+      summary: Public platform metadata used to bootstrap the UI
+      responses:
+        "200":
+          description: Platform metadata.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Meta" }
+        default:
+          $ref: "#/components/responses/Error"
+
+components:
+  responses:
+    Error:
+      description: Error envelope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Status:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, examples: [ok] }
+
+    Locale:
+      type: string
+      enum: [en, km]
+
+    Meta:
+      type: object
+      required: [version, locales, default_locale, default_timezone]
+      properties:
+        version: { type: string, examples: ["0.1.0"] }
+        locales:
+          type: array
+          items: { $ref: "#/components/schemas/Locale" }
+        default_locale: { $ref: "#/components/schemas/Locale" }
+        default_timezone: { type: string, examples: [Asia/Phnom_Penh] }
+
+    ErrorCode:
+      type: string
+      description: Stable machine-readable error code. New codes may be added over time.
+      examples: [VALIDATION_FAILED, NOT_FOUND, FORBIDDEN]
+
+    FieldError:
+      type: object
+      required: [field, rule]
+      properties:
+        field: { type: string, description: JSON path of the invalid field, examples: [email] }
+        rule: { type: string, description: Failed validation rule, examples: [required, email, min] }
+        param: { type: string, description: Rule parameter, e.g. the minimum length }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code: { $ref: "#/components/schemas/ErrorCode" }
+            message: { type: string, description: English fallback. Clients should translate `code`. }
+            details:
+              type: object
+              additionalProperties: true
+              description: Code-specific data. For VALIDATION_FAILED contains `fields`.
+              properties:
+                fields:
+                  type: array
+                  items: { $ref: "#/components/schemas/FieldError" }

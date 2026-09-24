@@ -1,0 +1,53 @@
+# Local development stack.
+#   docker compose up -d postgres        # database only; run API/web natively (make dev)
+#   docker compose --profile app up -d   # everything in containers
+name: opshub
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: opshub
+      POSTGRES_USER: opshub
+      POSTGRES_PASSWORD: opshub
+    # Override if a local PostgreSQL already uses 5432: OPSHUB_PG_PORT=55432
+    ports: ["${OPSHUB_PG_PORT:-5432}:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opshub -d opshub"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: deploy/docker/api.Dockerfile
+      args: { VERSION: "${OPSHUB_VERSION:-dev}" }
+    environment:
+      OPSHUB_ENV: development
+      OPSHUB_DATABASE_URL: postgres://opshub:opshub@postgres:5432/opshub?sslmode=disable
+      OPSHUB_PUBLIC_URL: http://localhost:3000
+      # Trust X-Forwarded-For only from the nginx container (pinned IP below), so the
+      # real client IP is recorded and clients cannot spoof it.
+      OPSHUB_TRUSTED_PROXIES: 172.28.0.10/32
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["${OPSHUB_API_PORT:-8080}:8080"]
+
+  web:
+    profiles: [app]
+    build: { context: ., dockerfile: deploy/docker/web.Dockerfile }
+    depends_on: [api]
+    ports: ["${OPSHUB_WEB_PORT:-3000}:8080"]
+    networks:
+      default: { ipv4_address: 172.28.0.10 }
+
+networks:
+  default:
+    ipam:
+      config: [{ subnet: 172.28.0.0/24 }]
+
+volumes:
+  pgdata:

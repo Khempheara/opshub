@@ -1,0 +1,15 @@
+{
+  "title": "Welcome to OpsHub",
+  "intro": "One place to build, test, deploy, and monitor your software — from a push to production.",
+  "systemStatus": "System status",
+  "api": "API server",
+  "localeDemo": {
+    "title": "Your display settings",
+    "now": "Current time",
+    "timezone": "Time zone",
+    "number": "Sample number",
+    "duration": "Sample build duration"
+  },
+  "modulesTitle": "Platform modules",
+  "comingSoon": "Coming soon"
+}

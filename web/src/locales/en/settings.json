@@ -1,0 +1,12 @@
+{
+  "preferences": {
+    "title": "Preferences",
+    "description": "Choose how OpsHub displays language, dates, and numbers. Saved in this browser until you sign in.",
+    "language": "Language",
+    "timezone": "Time zone",
+    "timezoneHint": "IANA name, e.g. Asia/Phnom_Penh or UTC.",
+    "khmerNumerals": "Show Khmer numerals (០១២៣) when the language is Khmer",
+    "saved": "Preferences saved.",
+    "invalidTimezone": "Unknown time zone."
+  }
+}
