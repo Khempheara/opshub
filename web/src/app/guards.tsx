@@ -7,6 +7,7 @@ import type { Role } from '@/lib/api/generated/model';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { useSession } from '@/auth/session';
 import { safeNext } from './navigation';
+import { usePermissions } from './permissions';
 import { hasRole, lastOrg, OrgContext, rememberOrg, useCurrentOrg } from './org';
 
 function FullPageLoading() {
@@ -75,17 +76,28 @@ export function OrgRoute() {
   );
 }
 
+/** Renders children only when the caller holds the permission (UI convenience; the API enforces it). */
+export function RequirePermission({ action, children }: { action: string; children: ReactNode }) {
+  const org = useCurrentOrg();
+  const perms = usePermissions(org.id);
+  if (perms.isPending) return <LoadingState />;
+  if (!perms.can(action)) return <Forbidden />;
+  return <>{children}</>;
+}
+
+function Forbidden() {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-2 py-16 text-center">
+      <h1 className="text-2xl font-bold">{t('forbidden.title')}</h1>
+      <p className="text-muted-foreground">{t('forbidden.body')}</p>
+    </div>
+  );
+}
+
 /** Renders children only for members with at least the given role (UI convenience; the API enforces it). */
 export function RequireRole({ min, children }: { min: Role; children: ReactNode }) {
   const org = useCurrentOrg();
-  const { t } = useTranslation();
-  if (!hasRole(org.role, min)) {
-    return (
-      <div className="space-y-2 py-16 text-center">
-        <h1 className="text-2xl font-bold">{t('forbidden.title')}</h1>
-        <p className="text-muted-foreground">{t('forbidden.body')}</p>
-      </div>
-    );
-  }
+  if (!hasRole(org.role, min)) return <Forbidden />;
   return <>{children}</>;
 }

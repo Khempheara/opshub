@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpsHub API
-  version: 0.2.0
+  version: 0.3.0
   summary: All-in-One DevOps Platform
   description: |
     REST API for OpsHub. All resource endpoints are versioned under `/api/v1`.
@@ -35,7 +35,14 @@ tags:
   - name: account
     description: The signed-in user's profile, security settings and API tokens.
   - name: organizations
-    description: Organizations (tenants) the user belongs to.
+    description: |
+      Organizations (tenants). Every organization-scoped endpoint answers 404 for
+      non-members (never 403), so other tenants' IDs reveal nothing. Members lacking a
+      permission get 403 FORBIDDEN. See docs/rbac.md for the permission matrix.
+  - name: members
+    description: Members, roles and invitations.
+  - name: teams
+    description: Teams group members for project access.
 
 security:
   - bearerAuth: []
@@ -559,21 +566,341 @@ paths:
         "422": { $ref: "#/components/responses/Error" }
 
   /api/v1/orgs/{orgId}:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
     get:
       tags: [organizations]
       operationId: getOrganization
-      summary: An organization I belong to
-      parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
+      summary: An organization I belong to (org.view)
       responses:
         "200":
           description: Organization.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Organization" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [organizations]
+      operationId: updateOrganization
+      summary: Rename the organization (org.update — Admin+)
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateOrganizationRequest" }
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "428": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [organizations]
+      operationId: deleteOrganization
+      summary: Delete the organization (org.delete — Owner only)
+      parameters:
+        - name: confirm
+          in: query
+          required: true
+          description: The organization's slug, retyped by the user.
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/transfer-ownership:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    post:
+      tags: [organizations]
+      operationId: transferOwnership
+      summary: Make another member Owner and become Admin (org.transfer — Owner only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransferOwnershipRequest" }
+      responses:
+        "204": { description: Transferred. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/permissions:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [organizations]
+      operationId: getOrganizationPermissions
+      summary: My role and allowed actions (drives UI route guards)
+      responses:
+        "200":
+          description: Permissions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Permissions" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/members:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [members]
+      operationId: listMembers
+      summary: Members by name (member.view)
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - name: role
+          in: query
+          schema: { $ref: "#/components/schemas/Role" }
+        - name: q
+          in: query
+          description: Search by name or email.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Members.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemberPage" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/members/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+      - $ref: "#/components/parameters/UserID"
+    patch:
+      tags: [members]
+      operationId: updateMemberRole
+      summary: Change a member's role (member.update_role)
+      description: |
+        Owners change anyone. Admins change Developers and Viewers (and may step down), and
+        can't assign Admin or Owner. The last Owner can't be demoted (409 LAST_OWNER).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateMemberRoleRequest" }
+      responses:
+        "200":
+          description: Updated member.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [members]
+      operationId: removeMember
+      summary: Remove a member, or leave (your own user ID)
+      responses:
+        "204": { description: Removed. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/invitations:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [members]
+      operationId: listInvitations
+      summary: Open invitations (member.invite)
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Invitations, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvitationPage" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [members]
+      operationId: inviteMember
+      summary: Invite someone by email (member.invite)
+      description: Emails a 7-day single-use link. Inviting an address again replaces its open invitation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InviteRequest" }
+      responses:
+        "201":
+          description: Invitation sent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Invitation" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/v1/invitations/{invitationId}:
+    parameters:
+      - name: invitationId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [members]
+      operationId: revokeInvitation
+      summary: Revoke an open invitation (member.invite)
+      responses:
+        "204": { description: Revoked. }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/invitations/preview:
+    post:
+      tags: [members]
+      operationId: previewInvitation
+      summary: Show an invitation to the signed-in holder of its token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TokenRequest" }
+      responses:
+        "200":
+          description: Invitation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvitationPreview" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /api/v1/invitations/accept:
+    post:
+      tags: [members]
+      operationId: acceptInvitation
+      summary: Join the organization (your verified email must match the invitation)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TokenRequest" }
+      responses:
+        "200":
+          description: The organization joined.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/teams:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [teams]
+      operationId: listTeams
+      summary: Teams by name (team.view)
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Teams.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamPage" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [teams]
+      operationId: createTeam
+      summary: Create a team (team.manage — Admin+)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeamRequest" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Team" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/v1/teams/{teamId}:
+    parameters:
+      - $ref: "#/components/parameters/TeamID"
+    get:
+      tags: [teams]
+      operationId: getTeam
+      summary: A team with its members (team.view)
+      responses:
+        "200":
+          description: Team.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [teams]
+      operationId: updateTeam
+      summary: Rename or describe a team (team.manage)
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeamRequest" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Team" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [teams]
+      operationId: deleteTeam
+      summary: Delete a team (team.manage)
+      responses:
+        "204": { description: Deleted. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/teams/{teamId}/members/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/TeamID"
+      - $ref: "#/components/parameters/UserID"
+    put:
+      tags: [teams]
+      operationId: addTeamMember
+      summary: Add an organization member to the team (team.manage)
+      responses:
+        "204": { description: Added. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [teams]
+      operationId: removeTeamMember
+      summary: Remove someone from the team (team.manage)
+      responses:
+        "204": { description: Removed. }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
 components:
@@ -597,6 +924,21 @@ components:
       in: query
       description: Opaque cursor from `next_cursor`.
       schema: { type: string }
+    OrgID:
+      name: orgId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TeamID:
+      name: teamId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UserID:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     PathID:
       name: id
       in: path
@@ -668,6 +1010,7 @@ components:
         display_name: { type: string, minLength: 1, maxLength: 100 }
         locale: { $ref: "#/components/schemas/Locale" }
         timezone: { type: string, examples: [Asia/Phnom_Penh] }
+        invitation_token: { type: string, maxLength: 128, description: "Token from an invitation link. When self-service sign-up is disabled, an open invitation sent to the same email still allows registration." }
 
     TokenRequest:
       type: object
@@ -894,13 +1237,153 @@ components:
 
     Organization:
       type: object
-      required: [id, slug, name, role, created_at]
+      required: [id, slug, name, role, version, created_at]
       properties:
         id: { type: string, format: uuid }
         slug: { type: string, examples: [angkor-tech] }
         name: { type: string, examples: ["Angkor Tech · អង្គរ តិច"] }
         role: { $ref: "#/components/schemas/Role" }
+        version: { type: integer, description: 0 in list responses; use GET for the current version. }
         created_at: { type: string, format: date-time }
+
+    UpdateOrganizationRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+
+    TransferOwnershipRequest:
+      type: object
+      required: [user_id]
+      additionalProperties: false
+      properties:
+        user_id: { type: string, format: uuid }
+
+    Permissions:
+      type: object
+      required: [role, actions]
+      properties:
+        role: { $ref: "#/components/schemas/Role" }
+        actions:
+          type: array
+          items: { type: string, examples: [member.invite] }
+
+    Member:
+      type: object
+      required: [user_id, email, display_name, two_factor_enabled, last_login_at, role, joined_at]
+      properties:
+        user_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        two_factor_enabled: { type: boolean }
+        last_login_at: { type: [string, "null"], format: date-time }
+        role: { $ref: "#/components/schemas/Role" }
+        joined_at: { type: string, format: date-time }
+
+    MemberPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Member" }
+        next_cursor: { type: [string, "null"] }
+
+    UpdateMemberRoleRequest:
+      type: object
+      required: [role]
+      additionalProperties: false
+      properties:
+        role: { $ref: "#/components/schemas/Role" }
+
+    InviteRequest:
+      type: object
+      required: [email, role]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/Role" }
+
+    Invitation:
+      type: object
+      required: [id, email, role, invited_by_name, expires_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/Role" }
+        invited_by_name: { type: [string, "null"] }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    InvitationPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Invitation" }
+        next_cursor: { type: [string, "null"] }
+
+    InvitationPreview:
+      type: object
+      required: [organization_name, organization_slug, role, email, invited_by_name, expires_at]
+      properties:
+        organization_name: { type: string }
+        organization_slug: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        email: { type: string, format: email }
+        invited_by_name: { type: [string, "null"] }
+        expires_at: { type: string, format: date-time }
+
+    TeamRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        slug: { type: string, description: Create only; defaults to one derived from the name. }
+        description: { type: string, maxLength: 500 }
+
+    Team:
+      type: object
+      required: [id, slug, name, description, member_count, version, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        member_count: { type: integer }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    TeamPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Team" }
+        next_cursor: { type: [string, "null"] }
+
+    TeamMember:
+      type: object
+      required: [user_id, email, display_name, added_at]
+      properties:
+        user_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        added_at: { type: string, format: date-time }
+
+    TeamDetail:
+      allOf:
+        - $ref: "#/components/schemas/Team"
+        - type: object
+          required: [members]
+          properties:
+            members:
+              type: array
+              items: { $ref: "#/components/schemas/TeamMember" }
 
     OrganizationPage:
       type: object

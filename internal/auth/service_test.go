@@ -187,6 +187,44 @@ func TestRegisterPolicies(t *testing.T) {
 	assert.True(t, closed.login(t, boot).User.IsPlatformAdmin, "bootstrap admin becomes platform admin")
 }
 
+// TestRegisterWithInvitation: when sign-up is disabled, an open invitation for the same
+// address still lets the invitee register; other addresses and dead invitations don't.
+func TestRegisterWithInvitation(t *testing.T) {
+	closed := newEnv(t, func(c *Config) { c.AllowSignup = false })
+	ctx := context.Background()
+	q := store.New(closed.svc.pool)
+	o, err := q.CreateOrganization(ctx, store.CreateOrganizationParams{Slug: "inv-" + uuid.NewString()[:8], Name: "Invite Co"})
+	require.NoError(t, err)
+	invite := func(email string, expires time.Time) string {
+		token := uuid.NewString()
+		_, err := q.CreateInvitation(ctx, store.CreateInvitationParams{
+			OrganizationID: o.ID, Email: email, Role: store.MemberRoleDeveloper,
+			TokenHash: crypto.HashToken(token), ExpiresAt: expires,
+		})
+		require.NoError(t, err)
+		return token
+	}
+	invited, expired := uniqueEmail("invited"), uniqueEmail("expired")
+	token := invite(invited, time.Now().Add(time.Hour))
+	old := invite(expired, time.Now().Add(-time.Hour))
+
+	for _, c := range []struct{ email, token string }{
+		{uniqueEmail("other"), token}, // someone else's invitation
+		{invited, "not-a-token"},
+		{invited, ""},
+		{expired, old},
+	} {
+		err = closed.svc.Register(ctx, RegisterInput{Email: c.email, Password: goodPassword, DisplayName: "X", InvitationToken: c.token})
+		assert.Equal(t, apperr.CodeSignupDisabled, codeOf(t, err), c.email)
+	}
+
+	require.NoError(t, closed.svc.Register(ctx, RegisterInput{
+		Email: strings.ToUpper(invited), Password: goodPassword, DisplayName: "Invitee", InvitationToken: token,
+	}))
+	_, ok := closed.jobs.last(invited, "verify_email")
+	assert.True(t, ok, "the invitee still has to verify the address")
+}
+
 func TestLoginLockout(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()

@@ -3,8 +3,9 @@ import { MailCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { z } from 'zod';
+import { safeNext } from '@/app/navigation';
 import { PasswordField, TextField } from '@/components/common/Field';
 import { FormError } from '@/components/common/States';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { currentLocale } from '@/i18n';
 import { applyFieldErrors, errorMessage, hasCode } from '@/lib/api/errors';
 import { register as registerAccount } from '@/lib/api/generated/auth/auth';
 import { useGetMeta } from '@/lib/api/generated/system/system';
+import { getPendingInvitation } from '@/features/org/pendingInvitation';
 import { getDisplayPrefs } from '@/preferences/store';
 import { SSOButtons } from './SSOButtons';
 
@@ -26,6 +28,11 @@ const FIELDS = ['display_name', 'email', 'password'] as const;
 export function RegisterPage() {
   const { t } = useTranslation(['auth', 'errors']);
   const meta = useGetMeta({ query: { staleTime: Infinity } });
+  const [params] = useSearchParams();
+  const next = safeNext(params.get('next'));
+  const loginTo = next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`;
+  // An invitation lets someone register even when self-service sign-up is disabled.
+  const [invitation] = useState(getPendingInvitation);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { display_name: '', email: '', password: '' } });
@@ -35,7 +42,12 @@ export function RegisterPage() {
   const onSubmit = async (v: Values) => {
     setError(null);
     try {
-      await registerAccount({ ...v, locale: currentLocale(), timezone: getDisplayPrefs().timeZone });
+      await registerAccount({
+        ...v,
+        locale: currentLocale(),
+        timezone: getDisplayPrefs().timeZone,
+        ...(invitation ? { invitation_token: invitation } : {}),
+      });
       setSentTo(v.email);
     } catch (err) {
       if (hasCode(err, 'PASSWORD_TOO_SHORT', 'PASSWORD_TOO_LONG', 'PASSWORD_BREACHED', 'PASSWORD_TOO_WEAK')) {
@@ -53,19 +65,19 @@ export function RegisterPage() {
         <h1 className="text-2xl font-bold">{t('register.checkEmailTitle')}</h1>
         <p className="text-muted-foreground text-sm">{t('register.checkEmailBody', { email: sentTo })}</p>
         <Button asChild variant="outline" className="w-full">
-          <Link to="/login">{t('register.signIn')}</Link>
+          <Link to={loginTo}>{t('register.signIn')}</Link>
         </Button>
       </div>
     );
   }
 
-  if (meta.data?.signup_enabled === false) {
+  if (meta.data?.signup_enabled === false && !invitation) {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold">{t('register.title')}</h1>
         <p className="text-muted-foreground text-sm">{t('register.disabled')}</p>
         <Button asChild className="w-full">
-          <Link to="/login">{t('register.signIn')}</Link>
+          <Link to={loginTo}>{t('register.signIn')}</Link>
         </Button>
       </div>
     );
@@ -77,7 +89,7 @@ export function RegisterPage() {
         <h1 className="text-2xl font-bold">{t('register.title')}</h1>
         <p className="text-muted-foreground text-sm">{t('register.subtitle')}</p>
       </div>
-      <SSOButtons next="/" />
+      <SSOButtons next={next} />
       <form noValidate className="space-y-4" onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}>
         <TextField label={t('fields.displayName')} autoComplete="name" error={msg(errors.display_name?.message)} {...form.register('display_name')} />
         <TextField label={t('fields.email')} type="email" autoComplete="email" inputMode="email" error={msg(errors.email?.message)} {...form.register('email')} />
@@ -95,7 +107,7 @@ export function RegisterPage() {
       </form>
       <p className="text-sm">
         {t('register.haveAccount')}{' '}
-        <Link to="/login" className="text-primary font-medium underline-offset-4 hover:underline">
+        <Link to={loginTo} className="text-primary font-medium underline-offset-4 hover:underline">
           {t('register.signIn')}
         </Link>
       </p>

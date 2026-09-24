@@ -31,5 +31,9 @@
   "email.two_factor_enabled.body": "Two-factor authentication was just turned on for your OpsHub account. Keep your recovery codes somewhere safe. If this wasn't you, reset your password immediately.",
   "email.two_factor_disabled.subject": "Two-factor authentication was disabled",
   "email.two_factor_disabled.heading": "Two-factor authentication disabled",
-  "email.two_factor_disabled.body": "Two-factor authentication was just turned off for your OpsHub account. If this wasn't you, reset your password immediately and turn it back on."
+  "email.two_factor_disabled.body": "Two-factor authentication was just turned off for your OpsHub account. If this wasn't you, reset your password immediately and turn it back on.",
+  "email.invitation.subject": "{{.Inviter}} invited you to {{.Org}} on OpsHub",
+  "email.invitation.heading": "Join {{.Org}} on OpsHub",
+  "email.invitation.body": "{{.Inviter}} invited you to join {{.Org}} as {{.Role}}. Sign in or create an account with this email address to accept. The invitation expires in 7 days.",
+  "email.invitation.button": "Accept invitation"
 }

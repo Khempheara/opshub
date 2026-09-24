@@ -1,5 +1,56 @@
 # Changelog
 
+## Module 2 — RBAC: members, invitations, teams
+
+### Built
+
+**Backend**
+- `internal/authz`: one enforcement point for the organization permission matrix
+  (`docs/rbac.md`), used by every service before reading or changing tenant data. Non-members get
+  `404 ORG_NOT_FOUND`; members without the permission get `403 FORBIDDEN`. The matrix is pinned by
+  a test.
+- Organizations: rename with optimistic locking (ETag / If-Match), soft delete confirmed by slug
+  (Owner only), transfer ownership, `GET /orgs/{id}/permissions` for UI guards.
+- Members: list with role filter and name/email search, change role, remove, leave. Admins can
+  grant at most Developer and can't touch Owners or other Admins; the last Owner can't be
+  removed, demoted or leave (`LAST_OWNER`, checked under a row lock).
+- Invitations: invite by email + role, 7-day single-use link (token in the URL fragment, only its
+  hash stored), re-invite replaces the open one, revoke, preview, accept (the verified email
+  must match). Invitation emails are in EN/KM. With `OPSHUB_ALLOW_SIGNUP=false`, an invitee can
+  still register by passing their invitation token.
+- Teams: create, rename/describe (If-Match), delete, add/remove members (org members only).
+- Every change is audited (`member.*`, `team.*`, `org.*`, before/after for role changes and
+  renames).
+- Migration `000002_rbac`: `invitations`, team `description`/`version`, member role index.
+- Fixed: `make seed` failed on a second run instead of skipping the existing demo organization.
+- Seed adds the team "Platform Team · ក្រុមវេទិកា".
+
+**Frontend**
+- Pages: Members (role editing limited to what you may grant, remove/leave, search, role filter,
+  pending invitations with revoke, invite dialog), Teams and Team detail, Organization settings
+  (rename, transfer ownership, leave, delete with slug confirmation), and Accept invitation
+  (keeps the invitation through sign-in or sign-up, and handles a wrong signed-in account).
+- `usePermissions`, `<RequirePermission>` and sidebar entries for the organization pages; controls
+  are hidden by permission (the API enforces them regardless).
+- New `org` translation namespace (EN + KM) and 8 new error codes.
+
+### Quality
+
+- Go: authz matrix test; service tests for every rule above; `TestTenantIsolation` calls all 18
+  tenant-scoped routes with another tenant's IDs (404 each), and a companion test fails when a
+  new route isn't covered; role enforcement over HTTP; invitation sign-up with sign-up disabled.
+  Service coverage 75.3 %.
+- Web: 51 Vitest tests (+ permission helpers, pending invitation storage); 25 Playwright tests
+  (+4 full-stack: invite → register → accept via Mailpit, last-owner guard and teams, viewer sees
+  no management controls, Khmer layout of the org pages on mobile and desktop).
+- golangci-lint, gosec, govulncheck, ESLint, i18n check clean; Trivy 0 HIGH/CRITICAL; migrations
+  up/down/up tested; sqlc and orval output deterministic.
+
+### Next — Module 3: Projects
+
+Projects, repositories and environments; project roles resolved from org role, teams and direct
+grants.
+
 ## Module 1 — Auth & users
 
 ### Built

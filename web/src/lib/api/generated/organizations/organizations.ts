@@ -22,7 +22,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import {
   useQuery
@@ -41,10 +41,14 @@ import type {
 
 import type {
   CreateOrganizationRequest,
+  DeleteOrganizationParams,
   ErrorResponse,
   ListOrganizationsParams,
   Organization,
-  OrganizationPage
+  OrganizationPage,
+  Permissions,
+  TransferOwnershipRequest,
+  UpdateOrganizationRequest
 } from '../model';
 
 import { customFetch } from '../../fetcher';
@@ -299,7 +303,7 @@ export const getGetOrganizationUrl = (orgId: string,) => {
 }
 
 /**
- * @summary An organization I belong to
+ * @summary An organization I belong to (org.view)
  */
 export const getOrganization = async (orgId: string, options?: Parameters<typeof customFetch>[1]): Promise<Organization> => {
 
@@ -370,7 +374,7 @@ export function useGetOrganization<TData = Awaited<ReturnType<typeof getOrganiza
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary An organization I belong to
+ * @summary An organization I belong to (org.view)
  */
 
 export function useGetOrganization<TData = Awaited<ReturnType<typeof getOrganization>>, TError = ErrorResponse>(
@@ -379,6 +383,463 @@ export function useGetOrganization<TData = Awaited<ReturnType<typeof getOrganiza
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetOrganizationQueryOptions(orgId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getUpdateOrganizationUrl = (orgId: string,) => {
+
+
+
+
+  return `/api/v1/orgs/${orgId}`
+}
+
+/**
+ * @summary Rename the organization (org.update — Admin+)
+ */
+export const updateOrganization = async (orgId: string,
+    updateOrganizationRequest: UpdateOrganizationRequest, options?: Parameters<typeof customFetch>[1]): Promise<Organization> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Organization>(getUpdateOrganizationUrl(orgId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateOrganizationRequest)
+  }
+);}
+
+
+
+
+
+export const getUpdateOrganizationQueryKey = (orgId: string,
+    updateOrganizationRequest?: UpdateOrganizationRequest,) => {
+    return [
+    'PATCH', `/api/v1/orgs/${orgId}`, updateOrganizationRequest
+    ] as const;
+    }
+
+
+export const getUpdateOrganizationQueryOptions = <TData = Awaited<ReturnType<typeof updateOrganization>>, TError = ErrorResponse>(orgId: string,
+    updateOrganizationRequest: UpdateOrganizationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateOrganization>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getUpdateOrganizationQueryKey(orgId,updateOrganizationRequest);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof updateOrganization>>> = ({ signal }) => updateOrganization(orgId,updateOrganizationRequest, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: orgId !== null && orgId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof updateOrganization>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type UpdateOrganizationQueryResult = NonNullable<Awaited<ReturnType<typeof updateOrganization>>>
+export type UpdateOrganizationQueryError = ErrorResponse
+
+
+export function useUpdateOrganization<TData = Awaited<ReturnType<typeof updateOrganization>>, TError = ErrorResponse>(
+ orgId: string,
+    updateOrganizationRequest: UpdateOrganizationRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateOrganization>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof updateOrganization>>,
+          TError,
+          Awaited<ReturnType<typeof updateOrganization>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUpdateOrganization<TData = Awaited<ReturnType<typeof updateOrganization>>, TError = ErrorResponse>(
+ orgId: string,
+    updateOrganizationRequest: UpdateOrganizationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateOrganization>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof updateOrganization>>,
+          TError,
+          Awaited<ReturnType<typeof updateOrganization>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUpdateOrganization<TData = Awaited<ReturnType<typeof updateOrganization>>, TError = ErrorResponse>(
+ orgId: string,
+    updateOrganizationRequest: UpdateOrganizationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateOrganization>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Rename the organization (org.update — Admin+)
+ */
+
+export function useUpdateOrganization<TData = Awaited<ReturnType<typeof updateOrganization>>, TError = ErrorResponse>(
+ orgId: string,
+    updateOrganizationRequest: UpdateOrganizationRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof updateOrganization>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getUpdateOrganizationQueryOptions(orgId,updateOrganizationRequest,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getDeleteOrganizationUrl = (orgId: string,
+    params: DeleteOrganizationParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/orgs/${orgId}?${stringifiedParams}` : `/api/v1/orgs/${orgId}`
+}
+
+/**
+ * @summary Delete the organization (org.delete — Owner only)
+ */
+export const deleteOrganization = async (orgId: string,
+    params: DeleteOrganizationParams, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteOrganizationUrl(orgId,params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteOrganizationQueryKey = (orgId: string,
+    params?: DeleteOrganizationParams,) => {
+    return [
+    'DELETE', `/api/v1/orgs/${orgId}`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getDeleteOrganizationQueryOptions = <TData = Awaited<ReturnType<typeof deleteOrganization>>, TError = ErrorResponse>(orgId: string,
+    params: DeleteOrganizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof deleteOrganization>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDeleteOrganizationQueryKey(orgId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof deleteOrganization>>> = ({ signal }) => deleteOrganization(orgId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: orgId !== null && orgId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof deleteOrganization>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DeleteOrganizationQueryResult = NonNullable<Awaited<ReturnType<typeof deleteOrganization>>>
+export type DeleteOrganizationQueryError = ErrorResponse
+
+
+export function useDeleteOrganization<TData = Awaited<ReturnType<typeof deleteOrganization>>, TError = ErrorResponse>(
+ orgId: string,
+    params: DeleteOrganizationParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof deleteOrganization>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof deleteOrganization>>,
+          TError,
+          Awaited<ReturnType<typeof deleteOrganization>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDeleteOrganization<TData = Awaited<ReturnType<typeof deleteOrganization>>, TError = ErrorResponse>(
+ orgId: string,
+    params: DeleteOrganizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof deleteOrganization>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof deleteOrganization>>,
+          TError,
+          Awaited<ReturnType<typeof deleteOrganization>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDeleteOrganization<TData = Awaited<ReturnType<typeof deleteOrganization>>, TError = ErrorResponse>(
+ orgId: string,
+    params: DeleteOrganizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof deleteOrganization>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Delete the organization (org.delete — Owner only)
+ */
+
+export function useDeleteOrganization<TData = Awaited<ReturnType<typeof deleteOrganization>>, TError = ErrorResponse>(
+ orgId: string,
+    params: DeleteOrganizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof deleteOrganization>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getDeleteOrganizationQueryOptions(orgId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getTransferOwnershipUrl = (orgId: string,) => {
+
+
+
+
+  return `/api/v1/orgs/${orgId}/transfer-ownership`
+}
+
+/**
+ * @summary Make another member Owner and become Admin (org.transfer — Owner only)
+ */
+export const transferOwnership = async (orgId: string,
+    transferOwnershipRequest: TransferOwnershipRequest, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<void>(getTransferOwnershipUrl(orgId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(transferOwnershipRequest)
+  }
+);}
+
+
+
+
+
+export const getTransferOwnershipQueryKey = (orgId: string,
+    transferOwnershipRequest?: TransferOwnershipRequest,) => {
+    return [
+    'POST', `/api/v1/orgs/${orgId}/transfer-ownership`, transferOwnershipRequest
+    ] as const;
+    }
+
+
+export const getTransferOwnershipQueryOptions = <TData = Awaited<ReturnType<typeof transferOwnership>>, TError = ErrorResponse>(orgId: string,
+    transferOwnershipRequest: TransferOwnershipRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof transferOwnership>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getTransferOwnershipQueryKey(orgId,transferOwnershipRequest);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof transferOwnership>>> = ({ signal }) => transferOwnership(orgId,transferOwnershipRequest, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: orgId !== null && orgId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof transferOwnership>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type TransferOwnershipQueryResult = NonNullable<Awaited<ReturnType<typeof transferOwnership>>>
+export type TransferOwnershipQueryError = ErrorResponse
+
+
+export function useTransferOwnership<TData = Awaited<ReturnType<typeof transferOwnership>>, TError = ErrorResponse>(
+ orgId: string,
+    transferOwnershipRequest: TransferOwnershipRequest, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof transferOwnership>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof transferOwnership>>,
+          TError,
+          Awaited<ReturnType<typeof transferOwnership>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useTransferOwnership<TData = Awaited<ReturnType<typeof transferOwnership>>, TError = ErrorResponse>(
+ orgId: string,
+    transferOwnershipRequest: TransferOwnershipRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof transferOwnership>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof transferOwnership>>,
+          TError,
+          Awaited<ReturnType<typeof transferOwnership>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useTransferOwnership<TData = Awaited<ReturnType<typeof transferOwnership>>, TError = ErrorResponse>(
+ orgId: string,
+    transferOwnershipRequest: TransferOwnershipRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof transferOwnership>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Make another member Owner and become Admin (org.transfer — Owner only)
+ */
+
+export function useTransferOwnership<TData = Awaited<ReturnType<typeof transferOwnership>>, TError = ErrorResponse>(
+ orgId: string,
+    transferOwnershipRequest: TransferOwnershipRequest, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof transferOwnership>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getTransferOwnershipQueryOptions(orgId,transferOwnershipRequest,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetOrganizationPermissionsUrl = (orgId: string,) => {
+
+
+
+
+  return `/api/v1/orgs/${orgId}/permissions`
+}
+
+/**
+ * @summary My role and allowed actions (drives UI route guards)
+ */
+export const getOrganizationPermissions = async (orgId: string, options?: Parameters<typeof customFetch>[1]): Promise<Permissions> => {
+
+  return customFetch<Permissions>(getGetOrganizationPermissionsUrl(orgId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOrganizationPermissionsQueryKey = (orgId: string,) => {
+    return [
+    `/api/v1/orgs/${orgId}/permissions`
+    ] as const;
+    }
+
+
+export const getGetOrganizationPermissionsQueryOptions = <TData = Awaited<ReturnType<typeof getOrganizationPermissions>>, TError = ErrorResponse>(orgId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOrganizationPermissions>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOrganizationPermissionsQueryKey(orgId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOrganizationPermissions>>> = ({ signal }) => getOrganizationPermissions(orgId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: orgId !== null && orgId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOrganizationPermissions>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetOrganizationPermissionsQueryResult = NonNullable<Awaited<ReturnType<typeof getOrganizationPermissions>>>
+export type GetOrganizationPermissionsQueryError = ErrorResponse
+
+
+export function useGetOrganizationPermissions<TData = Awaited<ReturnType<typeof getOrganizationPermissions>>, TError = ErrorResponse>(
+ orgId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOrganizationPermissions>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOrganizationPermissions>>,
+          TError,
+          Awaited<ReturnType<typeof getOrganizationPermissions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOrganizationPermissions<TData = Awaited<ReturnType<typeof getOrganizationPermissions>>, TError = ErrorResponse>(
+ orgId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOrganizationPermissions>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOrganizationPermissions>>,
+          TError,
+          Awaited<ReturnType<typeof getOrganizationPermissions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOrganizationPermissions<TData = Awaited<ReturnType<typeof getOrganizationPermissions>>, TError = ErrorResponse>(
+ orgId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOrganizationPermissions>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary My role and allowed actions (drives UI route guards)
+ */
+
+export function useGetOrganizationPermissions<TData = Awaited<ReturnType<typeof getOrganizationPermissions>>, TError = ErrorResponse>(
+ orgId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOrganizationPermissions>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetOrganizationPermissionsQueryOptions(orgId,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

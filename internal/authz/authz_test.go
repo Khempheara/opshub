@@ -1,0 +1,81 @@
+package authz
+
+import (
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+)
+
+// The permission matrix from docs/rbac.md, organization scope. A change here must be
+// mirrored in the docs (and vice versa): this table is the contract.
+func TestOrgPermissionMatrix(t *testing.T) {
+	type row struct{ owner, admin, developer, viewer bool }
+	matrix := map[Action]row{
+		OrgView:          {true, true, true, true},
+		MemberView:       {true, true, true, true},
+		TeamView:         {true, true, true, true},
+		OrgUpdate:        {true, true, false, false},
+		OrgDelete:        {true, false, false, false},
+		OrgTransfer:      {true, false, false, false},
+		MemberInvite:     {true, true, false, false},
+		MemberRemove:     {true, true, false, false},
+		MemberUpdateRole: {true, true, false, false},
+		TeamManage:       {true, true, false, false},
+		ProjectCreate:    {true, true, true, false},
+		RunnerView:       {true, true, true, false},
+		RunnerManage:     {true, true, false, false},
+		TargetView:       {true, true, true, true},
+		TargetManage:     {true, true, false, false},
+		InfraView:        {true, true, true, true},
+		InfraManage:      {true, true, true, false},
+		MonitorView:      {true, true, true, true},
+		MonitorManage:    {true, true, true, false},
+		AlertAck:         {true, true, true, false},
+		ChannelView:      {true, true, true, false},
+		ChannelManage:    {true, true, false, false},
+		AuditView:        {true, true, false, false},
+		AuditExport:      {true, true, false, false},
+		LogsView:         {true, true, true, true},
+	}
+	assert.Len(t, OrgActions(), len(matrix), "every action in the matrix is covered by this test")
+	for action, want := range matrix {
+		for role, allowed := range map[Role]bool{Owner: want.owner, Admin: want.admin, Developer: want.developer, Viewer: want.viewer} {
+			assert.Equal(t, allowed, Can(role, action), "%s × %s", role, action)
+		}
+	}
+	assert.False(t, Can(Owner, "unknown.action"), "unknown actions are denied")
+	assert.False(t, Can("guest", OrgView), "unknown roles are denied")
+}
+
+func TestAllowedIsSortedAndConsistent(t *testing.T) {
+	viewer := Allowed(Viewer)
+	assert.Contains(t, viewer, OrgView)
+	assert.NotContains(t, viewer, MemberInvite)
+	assert.IsIncreasing(t, viewer)
+	assert.Len(t, Allowed(Owner), len(OrgActions()), "owners can do everything")
+}
+
+func TestMemberManagementRules(t *testing.T) {
+	me, other := uuid.New(), uuid.New()
+	owner := Membership{UserID: me, Role: Owner}
+	admin := Membership{UserID: me, Role: Admin}
+
+	assert.Equal(t, Owner, owner.MaxAssignableRole())
+	assert.Equal(t, Developer, admin.MaxAssignableRole())
+
+	assert.True(t, owner.CanManageMember(Owner, other))
+	assert.True(t, admin.CanManageMember(Developer, other))
+	assert.True(t, admin.CanManageMember(Viewer, other))
+	assert.False(t, admin.CanManageMember(Admin, other), "admins can't change other admins")
+	assert.False(t, admin.CanManageMember(Owner, other), "admins can't change owners")
+	assert.True(t, admin.CanManageMember(Admin, me), "but can step down themselves")
+}
+
+func TestRoleOrdering(t *testing.T) {
+	assert.True(t, AtLeast(Owner, Admin))
+	assert.True(t, AtLeast(Developer, Developer))
+	assert.False(t, AtLeast(Viewer, Developer))
+	assert.True(t, ValidRole(Viewer))
+	assert.False(t, ValidRole("root"))
+}

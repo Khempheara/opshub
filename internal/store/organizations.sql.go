@@ -27,6 +27,17 @@ func (q *Queries) AddOrganizationMember(ctx context.Context, arg AddOrganization
 	return err
 }
 
+const countOwners = `-- name: CountOwners :one
+SELECT count(*) FROM organization_members WHERE organization_id = $1 AND role = 'owner'
+`
+
+func (q *Queries) CountOwners(ctx context.Context, organizationID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countOwners, organizationID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createOrganization = `-- name: CreateOrganization :one
 INSERT INTO organizations (slug, name) VALUES ($1, $2) RETURNING id, slug, name, settings, version, created_at, updated_at, deleted_at
 `
@@ -50,6 +61,63 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 		&i.DeletedAt,
 	)
 	return i, err
+}
+
+const getMember = `-- name: GetMember :one
+SELECT u.id AS user_id, u.email, u.display_name, (u.totp_enabled_at IS NOT NULL)::boolean AS two_factor_enabled,
+       u.last_login_at, m.role, m.created_at AS joined_at
+FROM organization_members m
+JOIN users u ON u.id = m.user_id AND u.deleted_at IS NULL
+WHERE m.organization_id = $1 AND m.user_id = $2
+`
+
+type GetMemberParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	UserID         uuid.UUID `json:"user_id"`
+}
+
+type GetMemberRow struct {
+	UserID           uuid.UUID  `json:"user_id"`
+	Email            string     `json:"email"`
+	DisplayName      string     `json:"display_name"`
+	TwoFactorEnabled bool       `json:"two_factor_enabled"`
+	LastLoginAt      *time.Time `json:"last_login_at"`
+	Role             MemberRole `json:"role"`
+	JoinedAt         time.Time  `json:"joined_at"`
+}
+
+func (q *Queries) GetMember(ctx context.Context, arg GetMemberParams) (GetMemberRow, error) {
+	row := q.db.QueryRow(ctx, getMember, arg.OrganizationID, arg.UserID)
+	var i GetMemberRow
+	err := row.Scan(
+		&i.UserID,
+		&i.Email,
+		&i.DisplayName,
+		&i.TwoFactorEnabled,
+		&i.LastLoginAt,
+		&i.Role,
+		&i.JoinedAt,
+	)
+	return i, err
+}
+
+const getMembership = `-- name: GetMembership :one
+SELECT m.role FROM organization_members m
+JOIN organizations o ON o.id = m.organization_id AND o.deleted_at IS NULL
+WHERE m.organization_id = $1 AND m.user_id = $2
+`
+
+type GetMembershipParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	UserID         uuid.UUID `json:"user_id"`
+}
+
+// The caller's role in a live organization (tenant check for every org-scoped request).
+func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (MemberRole, error) {
+	row := q.db.QueryRow(ctx, getMembership, arg.OrganizationID, arg.UserID)
+	var role MemberRole
+	err := row.Scan(&role)
+	return role, err
 }
 
 const getOrganizationForMember = `-- name: GetOrganizationForMember :one
@@ -92,6 +160,76 @@ func (q *Queries) GetOrganizationForMember(ctx context.Context, arg GetOrganizat
 		&i.Role,
 	)
 	return i, err
+}
+
+const listMembers = `-- name: ListMembers :many
+SELECT u.id AS user_id, u.email, u.display_name, (u.totp_enabled_at IS NOT NULL)::boolean AS two_factor_enabled,
+       u.last_login_at, m.role, m.created_at AS joined_at
+FROM organization_members m
+JOIN users u ON u.id = m.user_id AND u.deleted_at IS NULL
+WHERE m.organization_id = $1
+  AND ($2::member_role IS NULL OR m.role = $2::member_role)
+  AND ($3::text IS NULL
+       OR u.email ILIKE '%' || $3::text || '%'
+       OR u.display_name ILIKE '%' || $3::text || '%')
+  AND ($4::text IS NULL
+       OR (u.display_name, u.id) > ($4::text, $5::uuid))
+ORDER BY u.display_name, u.id
+LIMIT $6
+`
+
+type ListMembersParams struct {
+	OrganizationID uuid.UUID   `json:"organization_id"`
+	Role           *MemberRole `json:"role"`
+	Search         *string     `json:"search"`
+	CursorName     *string     `json:"cursor_name"`
+	CursorID       *uuid.UUID  `json:"cursor_id"`
+	PageSize       int32       `json:"page_size"`
+}
+
+type ListMembersRow struct {
+	UserID           uuid.UUID  `json:"user_id"`
+	Email            string     `json:"email"`
+	DisplayName      string     `json:"display_name"`
+	TwoFactorEnabled bool       `json:"two_factor_enabled"`
+	LastLoginAt      *time.Time `json:"last_login_at"`
+	Role             MemberRole `json:"role"`
+	JoinedAt         time.Time  `json:"joined_at"`
+}
+
+func (q *Queries) ListMembers(ctx context.Context, arg ListMembersParams) ([]ListMembersRow, error) {
+	rows, err := q.db.Query(ctx, listMembers,
+		arg.OrganizationID,
+		arg.Role,
+		arg.Search,
+		arg.CursorName,
+		arg.CursorID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMembersRow{}
+	for rows.Next() {
+		var i ListMembersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Email,
+			&i.DisplayName,
+			&i.TwoFactorEnabled,
+			&i.LastLoginAt,
+			&i.Role,
+			&i.JoinedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listUserOrganizations = `-- name: ListUserOrganizations :many
@@ -149,4 +287,97 @@ func (q *Queries) ListUserOrganizations(ctx context.Context, arg ListUserOrganiz
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockOrganization = `-- name: LockOrganization :one
+SELECT id FROM organizations WHERE id = $1 AND deleted_at IS NULL FOR UPDATE
+`
+
+// Serializes membership changes (last-owner checks) within one organization.
+func (q *Queries) LockOrganization(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockOrganization, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
+const removeMember = `-- name: RemoveMember :exec
+DELETE FROM organization_members WHERE organization_id = $1 AND user_id = $2
+`
+
+type RemoveMemberParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	UserID         uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) RemoveMember(ctx context.Context, arg RemoveMemberParams) error {
+	_, err := q.db.Exec(ctx, removeMember, arg.OrganizationID, arg.UserID)
+	return err
+}
+
+const removeUserFromOrgTeams = `-- name: RemoveUserFromOrgTeams :exec
+DELETE FROM team_members tm USING teams t
+WHERE tm.team_id = t.id AND t.organization_id = $1 AND tm.user_id = $2
+`
+
+type RemoveUserFromOrgTeamsParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	UserID         uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) RemoveUserFromOrgTeams(ctx context.Context, arg RemoveUserFromOrgTeamsParams) error {
+	_, err := q.db.Exec(ctx, removeUserFromOrgTeams, arg.OrganizationID, arg.UserID)
+	return err
+}
+
+const softDeleteOrganization = `-- name: SoftDeleteOrganization :exec
+UPDATE organizations SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) SoftDeleteOrganization(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, softDeleteOrganization, id)
+	return err
+}
+
+const updateMemberRole = `-- name: UpdateMemberRole :exec
+UPDATE organization_members SET role = $1 WHERE organization_id = $2 AND user_id = $3
+`
+
+type UpdateMemberRoleParams struct {
+	Role           MemberRole `json:"role"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	UserID         uuid.UUID  `json:"user_id"`
+}
+
+func (q *Queries) UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error {
+	_, err := q.db.Exec(ctx, updateMemberRole, arg.Role, arg.OrganizationID, arg.UserID)
+	return err
+}
+
+const updateOrganization = `-- name: UpdateOrganization :one
+UPDATE organizations SET name = $1, version = version + 1
+WHERE id = $2 AND version = $3 AND deleted_at IS NULL
+RETURNING id, slug, name, settings, version, created_at, updated_at, deleted_at
+`
+
+type UpdateOrganizationParams struct {
+	Name    string    `json:"name"`
+	ID      uuid.UUID `json:"id"`
+	Version int32     `json:"version"`
+}
+
+func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error) {
+	row := q.db.QueryRow(ctx, updateOrganization, arg.Name, arg.ID, arg.Version)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Name,
+		&i.Settings,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
 }

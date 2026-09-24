@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -461,35 +460,18 @@ func (h *Handler) readSSOState(r *http.Request) (ssoState, bool) {
 
 // ─────────────────────────── /me ───────────────────────────
 
-func etag(version int32) string { return `"v` + strconv.Itoa(int(version)) + `"` }
-
-// parseIfMatch accepts `"v3"`, `W/"v3"` or `3`.
-func parseIfMatch(r *http.Request) (int32, error) {
-	v := strings.TrimSpace(r.Header.Get("If-Match"))
-	if v == "" {
-		return 0, apperr.PreconditionRequired()
-	}
-	v = strings.TrimPrefix(v, "W/")
-	v = strings.TrimPrefix(strings.Trim(v, `"`), "v")
-	n, err := strconv.ParseInt(v, 10, 32)
-	if err != nil {
-		return 0, apperr.BadRequest("malformed If-Match header")
-	}
-	return int32(n), nil
-}
-
 func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 	u, err := h.svc.Me(r.Context())
 	if err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
-	w.Header().Set("ETag", etag(u.Version))
+	w.Header().Set("ETag", httpx.ETag(u.Version))
 	httpx.JSON(w, http.StatusOK, u)
 }
 
 func (h *Handler) updateMe(w http.ResponseWriter, r *http.Request) {
-	version, err := parseIfMatch(r)
+	version, err := httpx.ParseIfMatch(r)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return
@@ -504,7 +486,7 @@ func (h *Handler) updateMe(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, r, err)
 		return
 	}
-	w.Header().Set("ETag", etag(u.Version))
+	w.Header().Set("ETag", httpx.ETag(u.Version))
 	httpx.JSON(w, http.StatusOK, u)
 }
 

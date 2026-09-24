@@ -85,14 +85,14 @@ erDiagram
 | `email_tokens` | `purpose (verify_email\|reset_password)`, `token_hash`, `expires_at`, `used_at` | Single use |
 | `user_recovery_codes` | `code_hash`, `used_at` | TOTP backup codes |
 
-### 2. Organizations, teams, RBAC **(✓ 000001 for org/team tables)**
+### 2. Organizations, teams, RBAC **(✓ 000001 org/team tables, ✓ 000002 invitations)**
 
 | Table | Key columns | Notes |
 |---|---|---|
 | `organizations` | `slug`, `name`, `settings jsonb` | Tenant boundary. Every tenant-owned table carries `organization_id` |
 | `organization_members` | `(organization_id, user_id)`, `role member_role` | `owner\|admin\|developer\|viewer` |
-| `teams`, `team_members` | | Grouping for project access grants |
-| `invitations` | `organization_id`, `email citext`, `role`, `token_hash`, `invited_by`, `expires_at` (7 days), `accepted_at`, `revoked_at` | |
+| `teams`, `team_members` | `teams.description` (≤ 500), `teams.version` | Grouping for project access grants. `version` for optimistic locking (000002) |
+| `invitations` | `organization_id`, `email citext`, `role`, `token_hash bytea UNIQUE`, `invited_by`, `expires_at` (7 days), `accepted_at`, `accepted_by`, `revoked_at` | At most one open invitation per `(organization_id, email)` (partial unique index). Only the token hash is stored |
 | `idempotency_keys` | `organization_id`, `user_id`, `key`, `request_hash bytea`, `response_status`, `response_body jsonb`, `resource_id`, `created_at`, `expires_at` (24 h) | `UNIQUE (organization_id, user_id, key)`; purged by a River periodic job |
 | `project_members` | `(project_id, user_id \| team_id)`, `role member_role` | Project-level role; see `docs/rbac.md` for resolution |
 

@@ -45,7 +45,15 @@
     "TOKEN_NOT_FOUND": "That token no longer exists.",
     "IDENTITY_NOT_FOUND": "That linked account no longer exists.",
     "ORG_NOT_FOUND": "Organization not found.",
-    "SLUG_TAKEN": "This URL name is already taken."
+    "SLUG_TAKEN": "This URL name is already taken.",
+    "LAST_OWNER": "An organization needs at least one owner. Make someone else an owner first.",
+    "ALREADY_MEMBER": "This person is already a member.",
+    "MEMBER_NOT_FOUND": "That member isn't in this organization.",
+    "ROLE_NOT_ALLOWED": "You can't assign this role.",
+    "INVITATION_NOT_FOUND": "That invitation no longer exists.",
+    "INVITATION_EMAIL_MISMATCH": "This invitation was sent to a different email address.",
+    "TEAM_NOT_FOUND": "Team not found.",
+    "CONFIRMATION_MISMATCH": "The confirmation text doesn't match."
   },
   "rules": {
     "required": "This field is required.",

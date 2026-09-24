@@ -153,7 +153,7 @@ func serve() error {
 					AllowedOrigins: append([]string{originOf(cfg.PublicURL)}, cfg.CORSAllowedOrigins...),
 					LoginPerMinute: cfg.AuthLoginPerMinute, EmailPerMinute: cfg.AuthEmailPerMinute,
 				}, logger),
-				org.NewHandler(org.NewService(pool)),
+				org.NewHandler(org.NewService(pool, river, org.Config{PublicURL: cfg.PublicURL})),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

@@ -22,7 +22,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 
 export * from './aPIScope';
@@ -35,6 +35,7 @@ export * from './createdAPIToken';
 export * from './createOrganizationRequest';
 export * from './cSRFTokenParameter';
 export * from './cursorParameter';
+export * from './deleteOrganizationParams';
 export * from './disableTwoFactorRequest';
 export * from './emailRequest';
 export * from './error';
@@ -45,22 +46,32 @@ export * from './errorResponse';
 export * from './fieldError';
 export * from './identity';
 export * from './ifMatchParameter';
+export * from './invitation';
+export * from './invitationPage';
+export * from './invitationPreview';
+export * from './inviteRequest';
 export * from './limitParameter';
 export * from './listApiTokensParams';
 export * from './listIdentities200';
+export * from './listInvitationsParams';
+export * from './listMembersParams';
 export * from './listOrganizationsParams';
 export * from './listSessionsParams';
+export * from './listTeamsParams';
 export * from './locale';
 export * from './loginRequest';
 export * from './loginResponse';
 export * from './loginResponseStatus';
 export * from './loginTwoFactorRequest';
+export * from './member';
+export * from './memberPage';
 export * from './meta';
 export * from './metaSsoProvidersItem';
 export * from './mFAChallenge';
 export * from './organization';
 export * from './organizationPage';
 export * from './passwordRequest';
+export * from './permissions';
 export * from './recoveryCodes';
 export * from './register202';
 export * from './registerRequest';
@@ -72,9 +83,17 @@ export * from './sessionPage';
 export * from './ssoCallbackParams';
 export * from './ssoStartParams';
 export * from './status';
+export * from './team';
+export * from './teamDetail';
+export * from './teamMember';
+export * from './teamPage';
+export * from './teamRequest';
 export * from './tokenRequest';
 export * from './tokenResponse';
 export * from './tOTPSetup';
+export * from './transferOwnershipRequest';
 export * from './twoFactorStatus';
+export * from './updateMemberRoleRequest';
+export * from './updateOrganizationRequest';
 export * from './updateProfileRequest';
 export * from './user';

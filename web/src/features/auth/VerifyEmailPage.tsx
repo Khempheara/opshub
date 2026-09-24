@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { ErrorState, LoadingState } from '@/components/common/States';
 import { Button } from '@/components/ui/button';
+import { ACCEPT_INVITATION_PATH, getPendingInvitation } from '@/features/org/pendingInvitation';
 import { verifyEmail } from '@/lib/api/generated/auth/auth';
 import { useHashToken } from './tokenFromHash';
 
@@ -50,7 +51,7 @@ export function VerifyEmailPage() {
       {state.kind === 'error' && <ErrorState error={state.error} />}
       {state.kind !== 'verifying' && (
         <Button asChild className="w-full">
-          <Link to="/login">{t('verify.goToLogin')}</Link>
+          <Link to={getPendingInvitation() ? `/login?next=${encodeURIComponent(ACCEPT_INVITATION_PATH)}` : '/login'}>{t('verify.goToLogin')}</Link>
         </Button>
       )}
     </div>

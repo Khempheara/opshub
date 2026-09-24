@@ -28,7 +28,7 @@ func TestRenderAllTemplatesInBothLocales(t *testing.T) {
 	r := renderer(t)
 	for _, name := range Templates {
 		for _, loc := range []string{"en", "km"} {
-			m, err := r.Render(name, loc, map[string]any{"Name": "Dara", "URL": "https://ops.example.com/x?token=abc"})
+			m, err := r.Render(name, loc, map[string]any{"Name": "Dara", "URL": "https://ops.example.com/x?token=abc", "Org": "Angkor Tech", "Inviter": "Sokha", "Role": "Developer"})
 			require.NoError(t, err, name+"/"+loc)
 			assert.NotEmpty(t, m.Subject)
 			assert.NotContains(t, m.Subject, "email.", "untranslated key in %s/%s", name, loc)
