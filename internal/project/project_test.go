@@ -13,6 +13,7 @@ import (
 	"github.com/opshub/opshub/internal/apperr"
 	"github.com/opshub/opshub/internal/authz"
 	"github.com/opshub/opshub/internal/gitprovider"
+	"github.com/opshub/opshub/internal/jobs"
 	"github.com/opshub/opshub/internal/pagination"
 	"github.com/opshub/opshub/internal/safehttp"
 	"github.com/opshub/opshub/internal/testutil/pgtest"
@@ -82,7 +83,7 @@ func TestCreateAndVisibility(t *testing.T) {
 	got, err := e.svc.Get(e.viewer.ctx, p.ID)
 	require.NoError(t, err)
 	assert.Equal(t, authz.Viewer, got.Role)
-	assert.Equal(t, []authz.Action{authz.ProjectView}, got.Actions)
+	assert.Equal(t, []authz.Action{authz.ProjectView, authz.RunView}, got.Actions)
 }
 
 func TestUpdateAndDelete(t *testing.T) {
@@ -379,6 +380,10 @@ func TestWebhookReceiver(t *testing.T) {
 	out, err = e.svc.ReceiveWebhook(ctx, gitprovider.GitHub, repoID, h, body)
 	require.NoError(t, err)
 	assert.Equal(t, WebhookDuplicate, out, "redelivery")
+	// The accepted push (and only it) was handed to the pipeline worker.
+	enqueued := e.jobs.all()
+	require.Len(t, enqueued, 1)
+	assert.Equal(t, jobs.PipelineFromEventArgs{RepositoryID: repoID, ProjectID: p.ID, Event: "push", Ref: "refs/heads/main", SHA: "0123456789abcdef"}, enqueued[0])
 
 	bad := h.Clone()
 	bad.Set("X-GitHub-Delivery", "d-2")

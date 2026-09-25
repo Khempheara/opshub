@@ -1,5 +1,61 @@
 # Changelog
 
+## Module 4 — CI/CD pipelines
+
+### Built
+
+**Backend**
+- `.opshub.yml` parser (`internal/pipeline/spec`): stages, steps, `needs` (implicit: every job of
+  earlier stages), `when` (on_success, on_failure, always, manual), environments, variables,
+  runner labels, timeouts, artifacts, cache and deploy blocks. Every problem has a line, column,
+  path and a stable rule code; cycles are reported with their path. The product spec's example
+  parses as written.
+- Triggers: push (branch filters), tags, pull requests (target-branch filters; opened, reopened,
+  new commits), manual runs, and cron schedules (in-house 5-field parser, UTC, default branch).
+- Engine: runs and jobs with attempts, a job graph advanced under a per-run lock, skip
+  cascades, derived run status, cancel, retry job, re-run failed jobs, full re-run from the
+  definition snapshot.
+- Approval gates: `when: manual` and protected environments (required approvals, allowed
+  branches, allowed roles "or higher"); the run's starter can't approve; one decision per
+  person; a rejection fails the job.
+- Webhook pushes and pull requests start runs through a River job that reads `.opshub.yml` at
+  the commit; an invalid file creates a failed run listing the problems. Retried events don't
+  duplicate runs.
+- Runner-side lifecycle (claim with labels and `SKIP LOCKED`, steps, logs, finish) as a service
+  exercised by tests; Module 5 adds the runner API and binary. Logs are chunked, idempotent,
+  masked, and capped at 10 MiB per job. A minute tick fails timed-out jobs and jobs nobody picks
+  up within 24 hours.
+- Live updates: `internal/events` (pg_notify on commit + one LISTEN per API process) feeds SSE
+  streams for run changes and log output (resumable with Last-Event-ID).
+- Migration `000004_pipelines`; 12 new endpoints; 9 new error codes (EN + KM); OpenAPI 0.5.0.
+- Seed: four demo runs (succeeded with an approved production deploy, failed, waiting for
+  approval, queued) with colored logs; the demo Developer always gets access to the demo project.
+
+**Frontend**
+- Pipelines tab (now the project's first tab): run list with filters, "Run pipeline" (branch or
+  commit, variables, Idempotency-Key) and "Check pipeline file" (problems with line numbers).
+- Run page: stage columns with job cards, cancel / re-run / re-run failed, invalid-file problems,
+  live status over SSE. Job panel: steps, attempts, approval card (why you can't approve),
+  retry, and a terminal-style log viewer (ANSI colors, follow mode, download).
+- `fetch`-based SSE client (the access token stays in memory; EventSource can't send headers).
+- New `pipeline` translation namespace (EN + KM).
+
+### Quality
+
+- Go: parser (87.8 % coverage), cron, engine rules, lifecycle with a simulated runner, approvals
+  and protection, cancel/retry/re-run, webhook- and schedule-triggered runs, reaper, events,
+  tenant isolation over all 12 pipeline routes with a coverage guard, SSE through the full HTTP
+  stack. Service coverage 79.2 %.
+- Web: 62 Vitest tests (+ SSE parser, ANSI parser); 35 Playwright tests (+6 pipeline: failed job
+  log, Viewer read-only, Admin approval, file checker, cancel, Khmer layout).
+- golangci-lint, gosec, govulncheck, ESLint, i18n check clean; Trivy 0 HIGH/CRITICAL; migrations
+  up/down/up; sqlc and orval deterministic; OpenAPI ↔ routes drift test.
+
+### Next — Module 5: Runner agent
+
+`cmd/runner` (register with a one-time token, long-poll for jobs, Docker executor with CPU/memory
+limits and timeouts), runner API on top of the pipeline lifecycle, artifacts and cache.
+
 ## Module 3 — Projects, repositories, environments
 
 ### Built

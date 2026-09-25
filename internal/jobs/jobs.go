@@ -5,10 +5,12 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
@@ -45,6 +47,10 @@ type SendEmailWorker struct {
 	river.WorkerDefaults[SendEmailArgs]
 	Renderer *mail.Renderer
 	Sender   mail.Sender
+	// Register adds workers owned by feature packages (e.g. pipelines); Periodic adds their
+	// periodic jobs.
+	Register func(*river.Workers)
+	Periodic []*river.PeriodicJob
 }
 
 func (w *SendEmailWorker) Work(ctx context.Context, job *river.Job[SendEmailArgs]) error {
@@ -86,9 +92,46 @@ func (w *HousekeepingWorker) Work(ctx context.Context, _ *river.Job[Housekeeping
 	return store.New(w.Pool).DeleteExpiredHousekeeping(ctx)
 }
 
+// PipelineFromEventArgs starts pipeline runs for a verified Git webhook event. It carries the
+// parsed event so the worker doesn't need the raw payload.
+type PipelineFromEventArgs struct {
+	RepositoryID uuid.UUID `json:"repository_id"`
+	ProjectID    uuid.UUID `json:"project_id"`
+	Event        string    `json:"event"` // push, tag_push, pull_request
+	Ref          string    `json:"ref"`
+	SHA          string    `json:"sha"`
+	BaseRef      string    `json:"base_ref,omitempty"`
+	Title        string    `json:"title,omitempty"`
+	Actor        string    `json:"actor,omitempty"`
+}
+
+func (PipelineFromEventArgs) Kind() string { return "pipeline_from_event" }
+
+func (PipelineFromEventArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{Queue: QueuePipelines, MaxAttempts: 8}
+}
+
+// PipelineScheduleArgs starts one scheduled (cron) run. Unique per schedule and due time.
+type PipelineScheduleArgs struct {
+	ScheduleID uuid.UUID `json:"schedule_id"`
+	Due        time.Time `json:"due"`
+}
+
+func (PipelineScheduleArgs) Kind() string { return "pipeline_schedule" }
+
+func (PipelineScheduleArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{Queue: QueuePipelines, MaxAttempts: 5, UniqueOpts: river.UniqueOpts{ByArgs: true}}
+}
+
+// PipelineTickArgs runs every minute: due cron schedules, job timeouts, stuck queues.
+type PipelineTickArgs struct{}
+
+func (PipelineTickArgs) Kind() string { return "pipeline_tick" }
+
 const (
-	QueueDefault = river.QueueDefault
-	QueueEmail   = "email"
+	QueuePipelines = "pipelines"
+	QueueDefault   = river.QueueDefault
+	QueueEmail     = "email"
 )
 
 // Deps are the collaborators workers need.
@@ -97,6 +140,10 @@ type Deps struct {
 	Logger   *slog.Logger
 	Renderer *mail.Renderer
 	Sender   mail.Sender
+	// Register adds workers owned by feature packages (e.g. pipelines); Periodic adds their
+	// periodic jobs.
+	Register func(*river.Workers)
+	Periodic []*river.PeriodicJob
 }
 
 // NewClient builds a River client that inserts and (after Start) works jobs.
@@ -105,22 +152,26 @@ func NewClient(d Deps) (*river.Client[pgx.Tx], error) {
 	river.AddWorker(workers, &SendEmailWorker{Renderer: d.Renderer, Sender: d.Sender})
 	river.AddWorker(workers, &CleanupAuthWorker{Pool: d.Pool})
 	river.AddWorker(workers, &HousekeepingWorker{Pool: d.Pool})
+	if d.Register != nil {
+		d.Register(workers)
+	}
 
 	client, err := river.NewClient(riverpgxv5.New(d.Pool), &river.Config{
 		Logger: d.Logger,
 		Queues: map[string]river.QueueConfig{
-			QueueDefault: {MaxWorkers: 20},
-			QueueEmail:   {MaxWorkers: 5},
+			QueueDefault:   {MaxWorkers: 20},
+			QueueEmail:     {MaxWorkers: 5},
+			QueuePipelines: {MaxWorkers: 10},
 		},
 		Workers: workers,
-		PeriodicJobs: []*river.PeriodicJob{
+		PeriodicJobs: append([]*river.PeriodicJob{
 			river.NewPeriodicJob(river.PeriodicInterval(time.Hour),
 				func() (river.JobArgs, *river.InsertOpts) { return CleanupAuthArgs{}, nil },
 				&river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Hour),
 				func() (river.JobArgs, *river.InsertOpts) { return HousekeepingArgs{}, nil },
 				&river.PeriodicJobOpts{RunOnStart: true}),
-		},
+		}, d.Periodic...),
 		// Completed jobs (including email payloads with one-time links) are removed after a day.
 		CompletedJobRetentionPeriod: 24 * time.Hour,
 	})
@@ -151,4 +202,20 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, up bool) error {
 		return fmt.Errorf("river migrate: %w", err)
 	}
 	return nil
+}
+
+// Deferred is an Inserter bound to a client after construction. It breaks the start-up
+// cycle where services need an inserter and the client needs those services' workers.
+type Deferred struct {
+	client Inserter
+}
+
+// Bind sets the client; call it before serving requests.
+func (d *Deferred) Bind(c Inserter) { d.client = c }
+
+func (d *Deferred) InsertTx(ctx context.Context, tx pgx.Tx, args river.JobArgs, opts *river.InsertOpts) (*rivertype.JobInsertResult, error) {
+	if d.client == nil {
+		return nil, errors.New("jobs: inserter used before Bind")
+	}
+	return d.client.InsertTx(ctx, tx, args, opts)
 }

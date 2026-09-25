@@ -23,6 +23,7 @@ import (
 	"github.com/opshub/opshub/internal/crypto"
 	"github.com/opshub/opshub/internal/database"
 	"github.com/opshub/opshub/internal/gitprovider"
+	"github.com/opshub/opshub/internal/jobs"
 	"github.com/opshub/opshub/internal/org"
 	"github.com/opshub/opshub/internal/pagination"
 	"github.com/opshub/opshub/internal/store"
@@ -38,17 +39,52 @@ type Service struct {
 	pool   *pgxpool.Pool
 	keys   *crypto.KeyRing
 	git    gitprovider.Factory
+	jobs   jobs.Inserter
 	cfg    Config
 	logger *slog.Logger
 }
 
-func NewService(pool *pgxpool.Pool, keys *crypto.KeyRing, git gitprovider.Factory, cfg Config, logger *slog.Logger) *Service {
-	return &Service{pool: pool, keys: keys, git: git, cfg: cfg, logger: logger}
+func NewService(pool *pgxpool.Pool, keys *crypto.KeyRing, git gitprovider.Factory, inserter jobs.Inserter, cfg Config, logger *slog.Logger) *Service {
+	return &Service{pool: pool, keys: keys, git: git, jobs: inserter, cfg: cfg, logger: logger}
 }
 
 func (s *Service) inTx(ctx context.Context, fn func(q *store.Queries) error) error {
 	return database.InTx(ctx, s.pool, func(tx pgx.Tx) error { return fn(store.New(tx)) })
 }
+
+// Access is a caller's verified access to a project, for other modules (pipelines).
+type Access struct {
+	Project store.Project
+	Role    authz.Role
+	UserID  uuid.UUID
+}
+
+// Authorize resolves the caller's effective role on a project and checks the action, with
+// the same 404/403 rules as this package (PROJECT_NOT_FOUND for projects they can't see).
+func Authorize(ctx context.Context, q *store.Queries, projectID uuid.UUID, a authz.Action) (Access, error) {
+	acc, err := load(ctx, q, projectID, a)
+	if err != nil {
+		return Access{}, err
+	}
+	return Access{Project: acc.project, Role: acc.role, UserID: acc.userID}, nil
+}
+
+// GitClient returns a client for the project's connected repository using its stored
+// token. It performs no authorization: callers authorize first (or are system workers).
+func (s *Service) GitClient(ctx context.Context, q *store.Queries, projectID uuid.UUID) (gitprovider.Client, store.Repository, error) {
+	r, err := q.GetRepositoryByProject(ctx, projectID)
+	if database.IsNoRows(err) {
+		return nil, store.Repository{}, errRepositoryNotFound()
+	}
+	if err != nil {
+		return nil, store.Repository{}, err
+	}
+	c, err := s.clientFor(r)
+	return c, r, err
+}
+
+// GitError maps provider errors to API errors (exported for pipelines).
+func GitError(err error) error { return gitError(err) }
 
 var (
 	slugPattern   = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$`)

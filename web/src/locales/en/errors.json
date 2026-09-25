@@ -65,7 +65,16 @@
     "SSRF_BLOCKED": "This address points to an internal network and isn't allowed. An operator can allow it in the server settings.",
     "WEBHOOK_SIGNATURE_INVALID": "The webhook signature is invalid.",
     "IDEMPOTENCY_KEY_REUSED": "This request was already sent with different content.",
-    "IDEMPOTENCY_KEY_IN_PROGRESS": "This request is still being processed. Try again in a moment."
+    "IDEMPOTENCY_KEY_IN_PROGRESS": "This request is still being processed. Try again in a moment.",
+    "RUN_NOT_FOUND": "This run doesn't exist or you don't have access to it.",
+    "JOB_NOT_FOUND": "This job doesn't exist or you don't have access to it.",
+    "PIPELINE_INVALID": "The pipeline file (.opshub.yml) has problems.",
+    "PIPELINE_FILE_NOT_FOUND": "There is no .opshub.yml at this commit.",
+    "REF_NOT_FOUND": "That branch, tag or commit doesn't exist in the repository.",
+    "RUN_NOT_CANCELABLE": "This run has already finished.",
+    "JOB_NOT_RETRYABLE": "Only a finished job that failed or was canceled can run again.",
+    "APPROVAL_NOT_ALLOWED": "You can't approve or reject this job.",
+    "JOB_NOT_RUNNING": "This job isn't running (it may have been canceled)."
   },
   "rules": {
     "required": "This field is required.",

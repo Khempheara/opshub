@@ -11,16 +11,21 @@ import (
 )
 
 type Querier interface {
+	AddLogBytes(ctx context.Context, arg AddLogBytesParams) (int64, error)
 	AddOrganizationMember(ctx context.Context, arg AddOrganizationMemberParams) error
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) error
+	AdvanceSchedule(ctx context.Context, arg AdvanceScheduleParams) error
 	// Accepts a TOTP time step only once (replay protection); returns no row if already used.
 	AdvanceTOTPStep(ctx context.Context, arg AdvanceTOTPStepParams) (uuid.UUID, error)
 	// Inserts an in-flight record (or takes over an expired one); returns no row when a live
 	// record already exists for this user and key.
 	ClaimIdempotencyKey(ctx context.Context, arg ClaimIdempotencyKeyParams) (uuid.UUID, error)
+	// Oldest queued job of the organization whose required labels the runner has.
+	ClaimJob(ctx context.Context, arg ClaimJobParams) (PipelineJob, error)
 	CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error
 	ConsumeEmailToken(ctx context.Context, arg ConsumeEmailTokenParams) (uuid.UUID, error)
 	ConsumeRecoveryCode(ctx context.Context, arg ConsumeRecoveryCodeParams) (uuid.UUID, error)
+	CountApprovals(ctx context.Context, jobID uuid.UUID) (int64, error)
 	CountEnvironments(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountIdentities(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountOwners(ctx context.Context, organizationID uuid.UUID) (int64, error)
@@ -37,6 +42,8 @@ type Querier interface {
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// The latest attempt of every job in a run.
+	CurrentJobs(ctx context.Context, runID uuid.UUID) ([]PipelineJob, error)
 	// Periodic cleanup. Sessions are kept 30 days after expiry/revocation for the security page history.
 	DeleteExpiredAuthRecords(ctx context.Context) error
 	// Periodic cleanup: expired idempotency keys and webhook deliveries older than 30 days.
@@ -50,13 +57,20 @@ type Querier interface {
 	DeleteProtectionRule(ctx context.Context, environmentID uuid.UUID) error
 	DeleteRecoveryCodes(ctx context.Context, userID uuid.UUID) error
 	DeleteRepositoryByProject(ctx context.Context, projectID uuid.UUID) (Repository, error)
+	DeleteSchedulesExcept(ctx context.Context, arg DeleteSchedulesExceptParams) error
 	DisableTOTP(ctx context.Context, id uuid.UUID) error
+	DueSchedules(ctx context.Context) ([]PipelineSchedule, error)
 	EnableTOTP(ctx context.Context, arg EnableTOTPParams) error
+	ExpiredRunningJobs(ctx context.Context) ([]ExpiredRunningJobsRow, error)
+	// Steps still pending or running when a job ends.
+	FinishOpenSteps(ctx context.Context, arg FinishOpenStepsParams) error
 	GetActiveAPITokenByHash(ctx context.Context, tokenHash []byte) (GetActiveAPITokenByHashRow, error)
 	GetEnvironment(ctx context.Context, id uuid.UUID) (GetEnvironmentRow, error)
+	GetEnvironmentByName(ctx context.Context, arg GetEnvironmentByNameParams) (GetEnvironmentByNameRow, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetInvitation(ctx context.Context, id uuid.UUID) (Invitation, error)
 	GetInvitationByTokenForUpdate(ctx context.Context, tokenHash []byte) (GetInvitationByTokenForUpdateRow, error)
+	GetJob(ctx context.Context, id uuid.UUID) (PipelineJob, error)
 	GetMFAChallengeForUpdate(ctx context.Context, tokenHash []byte) (MfaChallenge, error)
 	GetMember(ctx context.Context, arg GetMemberParams) (GetMemberRow, error)
 	// The caller's role in a live organization (tenant check for every org-scoped request).
@@ -69,12 +83,15 @@ type Querier interface {
 	// A project with the caller's organization role and project grants (docs/rbac.md); '' means
 	// none. The member_role enum is declared owner → viewer, so min() is the most privileged role.
 	GetProjectAccess(ctx context.Context, arg GetProjectAccessParams) (GetProjectAccessRow, error)
+	GetProjectForPipeline(ctx context.Context, id uuid.UUID) (GetProjectForPipelineRow, error)
 	GetProjectTeamGrant(ctx context.Context, arg GetProjectTeamGrantParams) (MemberRole, error)
 	GetProjectUserGrant(ctx context.Context, arg GetProjectUserGrantParams) (MemberRole, error)
 	GetRefreshTokenForUpdate(ctx context.Context, tokenHash []byte) (GetRefreshTokenForUpdateRow, error)
 	GetRepositoryByProject(ctx context.Context, projectID uuid.UUID) (Repository, error)
 	// Webhook receiver lookup: the repository and whether its project still exists.
 	GetRepositoryForWebhook(ctx context.Context, arg GetRepositoryForWebhookParams) (Repository, error)
+	GetRun(ctx context.Context, id uuid.UUID) (PipelineRun, error)
+	GetSchedule(ctx context.Context, id uuid.UUID) (PipelineSchedule, error)
 	GetTeam(ctx context.Context, id uuid.UUID) (Team, error)
 	GetTeamInOrg(ctx context.Context, arg GetTeamInOrgParams) (Team, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
@@ -82,20 +99,28 @@ type Querier interface {
 	GetUserByIDForUpdate(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (User, error)
 	IncrementMFAAttempts(ctx context.Context, id uuid.UUID) error
+	InsertApproval(ctx context.Context, arg InsertApprovalParams) (uuid.UUID, error)
 	InsertAuditLog(ctx context.Context, arg InsertAuditLogParams) (AuditLog, error)
+	InsertJob(ctx context.Context, arg InsertJobParams) (PipelineJob, error)
+	InsertLogChunk(ctx context.Context, arg InsertLogChunkParams) (int64, error)
 	InsertRecoveryCodes(ctx context.Context, arg []InsertRecoveryCodesParams) (int64, error)
 	InsertRepository(ctx context.Context, arg InsertRepositoryParams) (Repository, error)
+	InsertRun(ctx context.Context, arg InsertRunParams) (PipelineRun, error)
+	InsertStep(ctx context.Context, arg InsertStepParams) error
 	// Returns no row when a valid delivery with the same id was already recorded (a redelivery).
 	InsertWebhookDelivery(ctx context.Context, arg InsertWebhookDeliveryParams) (uuid.UUID, error)
 	InvalidateEmailTokens(ctx context.Context, arg InvalidateEmailTokensParams) error
 	ListAPITokens(ctx context.Context, arg ListAPITokensParams) ([]ApiToken, error)
 	// Keyset pagination (newest first).
 	ListActiveSessions(ctx context.Context, arg ListActiveSessionsParams) ([]Session, error)
+	ListApprovals(ctx context.Context, jobID uuid.UUID) ([]ListApprovalsRow, error)
 	// Keyset pagination on (created_at, id) newest first.
 	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
 	// Ordered development, staging, production, then by name.
 	ListEnvironments(ctx context.Context, projectID uuid.UUID) ([]ListEnvironmentsRow, error)
 	ListIdentities(ctx context.Context, userID uuid.UUID) ([]UserIdentity, error)
+	ListJobAttempts(ctx context.Context, arg ListJobAttemptsParams) ([]PipelineJob, error)
+	ListLogChunks(ctx context.Context, arg ListLogChunksParams) ([]ListLogChunksRow, error)
 	ListMembers(ctx context.Context, arg ListMembersParams) ([]ListMembersRow, error)
 	ListOpenInvitations(ctx context.Context, arg ListOpenInvitationsParams) ([]ListOpenInvitationsRow, error)
 	// Organization Owners and Admins, who inherit that role on every project.
@@ -105,14 +130,23 @@ type Querier interface {
 	// Projects the caller can see: all of them when their organization role inherits a project
 	// role (owner/admin/viewer), otherwise those granted directly or through a team.
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
+	ListRuns(ctx context.Context, arg ListRunsParams) ([]ListRunsRow, error)
+	ListSchedules(ctx context.Context, projectID uuid.UUID) ([]PipelineSchedule, error)
+	ListSteps(ctx context.Context, jobID uuid.UUID) ([]JobStep, error)
+	ListStepsForJobs(ctx context.Context, jobIds []uuid.UUID) ([]JobStep, error)
 	ListTeamMembers(ctx context.Context, teamID uuid.UUID) ([]ListTeamMembersRow, error)
 	ListTeams(ctx context.Context, arg ListTeamsParams) ([]ListTeamsRow, error)
 	ListUserOrganizations(ctx context.Context, arg ListUserOrganizationsParams) ([]ListUserOrganizationsRow, error)
 	ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeliveriesParams) ([]ListWebhookDeliveriesRow, error)
 	// Serializes membership changes (last-owner checks) within one organization.
 	LockOrganization(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	LockRun(ctx context.Context, id uuid.UUID) (PipelineRun, error)
 	MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) error
 	MarkRefreshTokenUsed(ctx context.Context, id uuid.UUID) error
+	// Serializes run creation per project (row lock on the project).
+	NextRunNumber(ctx context.Context, id uuid.UUID) (int32, error)
+	// Guards against creating a second run for the same event when a worker is retried.
+	RecentRunExists(ctx context.Context, arg RecentRunExistsParams) (bool, error)
 	RecordLoginFailure(ctx context.Context, arg RecordLoginFailureParams) error
 	RecordLoginSuccess(ctx context.Context, id uuid.UUID) error
 	// The request failed with a server error: forget the key so the client can retry.
@@ -126,6 +160,7 @@ type Querier interface {
 	RevokeSession(ctx context.Context, arg RevokeSessionParams) (uuid.UUID, error)
 	// Revokes every session of a user, optionally keeping one (the caller's).
 	RevokeUserSessions(ctx context.Context, arg RevokeUserSessionsParams) error
+	SetJobStatus(ctx context.Context, arg SetJobStatusParams) error
 	SetTOTPPending(ctx context.Context, arg SetTOTPPendingParams) error
 	SetUserEmailVerified(ctx context.Context, id uuid.UUID) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error
@@ -133,6 +168,8 @@ type Querier interface {
 	SoftDeleteOrganization(ctx context.Context, id uuid.UUID) error
 	SoftDeleteProject(ctx context.Context, id uuid.UUID) error
 	SoftDeleteTeam(ctx context.Context, id uuid.UUID) error
+	StaleQueuedJobs(ctx context.Context) ([]StaleQueuedJobsRow, error)
+	StartJob(ctx context.Context, arg StartJobParams) error
 	// Throttled to one write per minute per token.
 	TouchAPIToken(ctx context.Context, id uuid.UUID) error
 	TouchRepositoryDelivery(ctx context.Context, id uuid.UUID) error
@@ -142,6 +179,8 @@ type Querier interface {
 	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateRepositoryDefaultBranch(ctx context.Context, arg UpdateRepositoryDefaultBranchParams) error
+	UpdateRunStatus(ctx context.Context, arg UpdateRunStatusParams) error
+	UpdateStep(ctx context.Context, arg UpdateStepParams) (int64, error)
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
 	UpdateUserPreferences(ctx context.Context, arg UpdateUserPreferencesParams) (User, error)
 	// Optimistic locking: no row is returned when the version does not match.
@@ -149,6 +188,7 @@ type Querier interface {
 	UpsertProjectTeamGrant(ctx context.Context, arg UpsertProjectTeamGrantParams) error
 	UpsertProjectUserGrant(ctx context.Context, arg UpsertProjectUserGrantParams) error
 	UpsertProtectionRule(ctx context.Context, arg UpsertProtectionRuleParams) error
+	UpsertSchedule(ctx context.Context, arg UpsertScheduleParams) error
 	UseMFAChallenge(ctx context.Context, id uuid.UUID) error
 }
 

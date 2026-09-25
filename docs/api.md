@@ -98,22 +98,25 @@ Invitation links carry the token in the URL fragment (`/invitations/accept#token
 
 ## 4. Pipelines, runs, jobs
 
+Pipeline syntax and behavior: [pipelines.md](pipelines.md).
+
 | Method | Path | Auth | Action | Description |
 |---|---|---|---|---|
-| POST | `/projects/{projectId}/pipeline/validate` | JWT | `project.view` | Lint a `.opshub.yml` body (errors with line numbers) |
-| GET | `/projects/{projectId}/runs` | JWT | `run.view` | Filter status, ref, trigger, actor, from/to |
-| POST | `/projects/{projectId}/runs` | JWT | `pipeline.trigger` | Manual run {ref, variables} **(IK)** |
-| GET | `/runs/{runId}` | JWT | `run.view` | Run + job graph |
-| POST | `/runs/{runId}/cancel` | JWT | `run.cancel` | |
-| POST | `/runs/{runId}/rerun` | JWT | `pipeline.trigger` | Whole run, or `{failed_only: true}` **(IK)** |
-| GET | `/runs/{runId}/events` | JWT | `run.view` | **SSE** run/job status changes |
-| GET | `/jobs/{jobId}` | JWT | `run.view` | Steps, timings, runner |
-| POST | `/jobs/{jobId}/retry` | JWT | `pipeline.trigger` | New attempt **(IK)** |
-| GET | `/jobs/{jobId}/logs` | JWT | `run.view` | Chunks `?after_seq=` (download as text with `Accept: text/plain`) |
-| GET | `/jobs/{jobId}/logs/stream` | JWT | `run.view` | **SSE** live log (supports `Last-Event-ID` resume) |
-| POST | `/jobs/{jobId}/approvals` | JWT | `approval.decide` | {decision, comment}; protection rules enforced; approver ≠ triggerer |
-| GET | `/jobs/{jobId}/artifacts` | JWT | `run.view` | |
-| GET | `/artifacts/{artifactId}/download` | JWT | `run.view` | Streams the blob |
+| POST | `/projects/{projectId}/pipeline/validate` | JWT | `project.view` | Lint a `.opshub.yml` body → `{valid, problems[line, column, path, rule, param], definition}` |
+| GET | `/projects/{projectId}/runs` | JWT | `run.view` | `?status&trigger&ref`, cursor pagination, newest first |
+| POST | `/projects/{projectId}/runs` | JWT | `pipeline.trigger` | Manual run `{ref, variables}` — reads `.opshub.yml` at the commit **(IK)**; `REF_NOT_FOUND`, `PIPELINE_FILE_NOT_FOUND`, `PIPELINE_INVALID` |
+| GET | `/runs/{runId}` | JWT | `run.view` | Run + stages + current attempt of every job with steps |
+| POST | `/runs/{runId}/cancel` | JWT | `run.cancel` | Cancels unfinished jobs; `RUN_NOT_CANCELABLE` when finished |
+| POST | `/runs/{runId}/rerun` | JWT | `pipeline.trigger` | New run from the same snapshot (201), or `{failed_only: true}` in place (200) **(IK)** |
+| GET | `/runs/{runId}/events` | JWT | `run.view` | **SSE** `update` on connect and on every run/job change; streams end after 5 min |
+| GET | `/jobs/{jobId}` | JWT | `run.view` | Steps, attempts, approval gate (`can_decide`, `denied_reason`) |
+| POST | `/jobs/{jobId}/retry` | JWT | `pipeline.trigger` | New attempt + the jobs after it **(IK)** |
+| GET | `/jobs/{jobId}/logs` | JWT | `run.view` | `?after_seq&limit` → `{items, next_seq, complete}`; `Accept: text/plain` downloads the whole log |
+| GET | `/jobs/{jobId}/logs/stream` | JWT | `run.view` | **SSE** `log` (id = seq) … `end`; resume with `Last-Event-ID` |
+| POST | `/jobs/{jobId}/approvals` | JWT | `approval.decide` | `{decision, comment}`; protection rules enforced; approver ≠ run starter; `APPROVAL_NOT_ALLOWED` with `details.reason` |
+
+Webhook pushes, tag pushes and pull requests start runs through a background job after the
+delivery is recorded (see §3). Artifact upload/download endpoints arrive with runners (§5).
 
 ## 5. Runners
 

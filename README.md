@@ -146,11 +146,13 @@ Details: [architecture](docs/architecture.md) · [API endpoints](docs/api.md) ·
 
 ## Runners and pipelines
 
-The runner agent and the first pipeline arrive with Modules 4–5; this section will then explain how
-to register a runner and run a pipeline.
+Add a `.opshub.yml` to the connected repository ([pipeline reference](docs/pipelines.md)). Pushes,
+tags, pull requests and schedules start runs; the Pipelines tab shows the job graph, live logs
+and approval gates. Jobs execute on runners, which arrive with Module 5 — until then runs wait
+for a runner.
 
 ## Roadmap
 
-1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. CI/CD pipelines · 5. Runner agent ·
+1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. ✅ CI/CD pipelines · 5. Runner agent ·
 6. Deployments · 7. Infrastructure · 8. Secrets · 9. Monitoring & alerts · 10. Logs ·
 11. Audit log · 12. Dashboard & DORA metrics

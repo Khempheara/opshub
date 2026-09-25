@@ -140,11 +140,31 @@ func (noJobs) InsertTx(context.Context, pgx.Tx, river.JobArgs, *river.InsertOpts
 	return &rivertype.JobInsertResult{Job: &rivertype.JobRow{}}, nil
 }
 
+// recJobs records enqueued background jobs.
+type recJobs struct {
+	mu   sync.Mutex
+	args []river.JobArgs
+}
+
+func (r *recJobs) InsertTx(_ context.Context, _ pgx.Tx, args river.JobArgs, _ *river.InsertOpts) (*rivertype.JobInsertResult, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.args = append(r.args, args)
+	return &rivertype.JobInsertResult{Job: &rivertype.JobRow{}}, nil
+}
+
+func (r *recJobs) all() []river.JobArgs {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]river.JobArgs(nil), r.args...)
+}
+
 // env is an organization with one member per role, an outsider, and a fake Git host.
 type env struct {
 	svc                             *Service
 	orgs                            *org.Service
 	git                             *fakeGit
+	jobs                            *recJobs
 	keys                            *crypto.KeyRing
 	orgID                           uuid.UUID
 	owner, admin, dev, dev2, viewer user
@@ -160,8 +180,10 @@ func newEnv(t *testing.T) *env {
 	srv := httptest.NewServer(git)
 	t.Cleanup(srv.Close)
 	factory := gitprovider.Factory{HTTP: srv.Client(), GitHubAPIURL: srv.URL, GitLabURL: srv.URL}
+	rec := &recJobs{}
 	e := &env{
-		svc:  NewService(pool, keys, factory, Config{PublicURL: "https://ops.example.com"}, slog.New(slog.NewTextHandler(io.Discard, nil))),
+		jobs: rec,
+		svc:  NewService(pool, keys, factory, rec, Config{PublicURL: "https://ops.example.com"}, slog.New(slog.NewTextHandler(io.Discard, nil))),
 		orgs: org.NewService(pool, noJobs{}, org.Config{PublicURL: "https://ops.example.com"}),
 		git:  git, keys: keys,
 		owner: newUser(t), admin: newUser(t), dev: newUser(t), dev2: newUser(t), viewer: newUser(t), outsider: newUser(t),

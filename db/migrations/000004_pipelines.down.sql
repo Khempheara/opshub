@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS pipeline_schedules;
+DROP TABLE IF EXISTS job_approvals;
+DROP TABLE IF EXISTS job_log_chunks;
+DROP TABLE IF EXISTS job_steps;
+DROP TABLE IF EXISTS pipeline_jobs;
+DROP TABLE IF EXISTS pipeline_runs;
+DROP TYPE IF EXISTS approval_decision;
+DROP TYPE IF EXISTS step_status;
+DROP TYPE IF EXISTS job_status;
+DROP TYPE IF EXISTS run_trigger;
+DROP TYPE IF EXISTS run_status;
+ALTER TABLE projects DROP COLUMN IF EXISTS last_run_number;

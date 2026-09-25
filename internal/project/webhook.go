@@ -6,10 +6,12 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/opshub/opshub/internal/apperr"
 	"github.com/opshub/opshub/internal/database"
 	"github.com/opshub/opshub/internal/gitprovider"
+	"github.com/opshub/opshub/internal/jobs"
 	"github.com/opshub/opshub/internal/store"
 )
 
@@ -83,26 +85,47 @@ func (s *Service) ReceiveWebhook(ctx context.Context, provider gitprovider.Provi
 	if valid && len(body) <= maxStoredPayload && json.Valid(body) {
 		payload = body
 	}
-	_, err = q.InsertWebhookDelivery(ctx, store.InsertWebhookDeliveryParams{
-		RepositoryID: repo.ID, DeliveryID: ev.DeliveryID, Event: ev.Kind, Ref: ev.Ref, CommitSha: ev.CommitSHA,
-		SignatureValid: valid, Payload: payload,
-	})
 	if !valid {
-		if err != nil {
+		if _, err := q.InsertWebhookDelivery(ctx, store.InsertWebhookDeliveryParams{
+			RepositoryID: repo.ID, DeliveryID: ev.DeliveryID, Event: ev.Kind, Ref: ev.Ref, CommitSha: ev.CommitSHA,
+			SignatureValid: false,
+		}); err != nil && !database.IsNoRows(err) {
 			return "", err
 		}
 		return "", apperr.New(apperr.CodeWebhookSignatureInvalid, http.StatusUnauthorized, "webhook signature is invalid")
 	}
-	if database.IsNoRows(err) {
-		return WebhookDuplicate, nil
-	}
+
+	outcome := WebhookAccepted
+	err = database.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		qtx := store.New(tx)
+		_, err := qtx.InsertWebhookDelivery(ctx, store.InsertWebhookDeliveryParams{
+			RepositoryID: repo.ID, DeliveryID: ev.DeliveryID, Event: ev.Kind, Ref: ev.Ref, CommitSha: ev.CommitSHA,
+			SignatureValid: true, Payload: payload,
+		})
+		if database.IsNoRows(err) {
+			outcome = WebhookDuplicate
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := qtx.TouchRepositoryDelivery(ctx, repo.ID); err != nil {
+			return err
+		}
+		if !ev.Buildable() {
+			return nil
+		}
+		// Start pipeline runs after commit (fetching .opshub.yml needs the Git host).
+		_, err = s.jobs.InsertTx(ctx, tx, jobs.PipelineFromEventArgs{
+			RepositoryID: repo.ID, ProjectID: repo.ProjectID, Event: ev.Kind, Ref: ev.Ref, SHA: ev.CommitSHA,
+			BaseRef: ev.BaseRef, Title: ev.Title, Actor: ev.Actor,
+		}, nil)
+		return err
+	})
 	if err != nil {
 		return "", err
 	}
-	if err := q.TouchRepositoryDelivery(ctx, repo.ID); err != nil {
-		return "", err
-	}
-	return WebhookAccepted, nil
+	return outcome, nil
 }
 
 // sanitizeUnverified bounds header-derived fields of an unauthenticated request.

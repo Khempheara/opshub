@@ -52,7 +52,9 @@ export const routes: RouteObject[] = [
                 path: 'projects/:projectId',
                 ...page(() => import('@/features/project/ProjectLayout'), 'ProjectLayout'),
                 children: [
-                  { index: true, ...page(() => import('@/features/project/ProjectSettingsPage'), 'ProjectSettingsPage') },
+                  { index: true, ...page(() => import('@/features/pipeline/RunsPage'), 'RunsPage') },
+                  { path: 'runs/:runId', ...page(() => import('@/features/pipeline/RunPage'), 'RunPage') },
+                  { path: 'settings', ...page(() => import('@/features/project/ProjectSettingsPage'), 'ProjectSettingsPage') },
                   { path: 'environments', ...page(() => import('@/features/project/EnvironmentsPage'), 'EnvironmentsPage') },
                   { path: 'repository', ...page(() => import('@/features/project/RepositoryPage'), 'RepositoryPage') },
                   { path: 'access', ...page(() => import('@/features/project/AccessPage'), 'AccessPage') },

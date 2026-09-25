@@ -3,6 +3,7 @@ import type common from '@/locales/en/common.json';
 import type errors from '@/locales/en/errors.json';
 import type home from '@/locales/en/home.json';
 import type org from '@/locales/en/org.json';
+import type pipeline from '@/locales/en/pipeline.json';
 import type project from '@/locales/en/project.json';
 import type settings from '@/locales/en/settings.json';
 
@@ -17,6 +18,7 @@ declare module 'i18next' {
       errors: typeof errors;
       home: typeof home;
       org: typeof org;
+      pipeline: typeof pipeline;
       project: typeof project;
       settings: typeof settings;
     };

@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/opshub/opshub/internal/safehttp"
 )
@@ -56,7 +57,20 @@ type Client interface {
 	Repo(ctx context.Context) (Repo, error)
 	CreateHook(ctx context.Context, url, secret string) (id string, err error)
 	DeleteHook(ctx context.Context, id string) error
+	// File returns a file's content at a commit (ErrNotFound when it doesn't exist).
+	File(ctx context.Context, path, sha string) ([]byte, error)
+	// Commit resolves a branch, tag or SHA to a commit (ErrNotFound when unknown).
+	Commit(ctx context.Context, ref string) (Commit, error)
 }
+
+// Commit is a resolved ref.
+type Commit struct {
+	SHA     string
+	Message string
+}
+
+// MaxFileSize bounds files read from repositories (pipeline definitions are small).
+const MaxFileSize = 1 << 20
 
 // Factory builds clients. The cloud API URLs are overridable for tests.
 type Factory struct {
@@ -192,6 +206,51 @@ func (c apiClient) do(ctx context.Context, method, path string, in, out any) err
 	return nil
 }
 
+// raw fetches a non-JSON body (file contents) with the given Accept header.
+func (c apiClient) raw(ctx context.Context, path, accept string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidInput, err)
+	}
+	req.Header.Set("User-Agent", "OpsHub")
+	c.auth(req.Header, c.token)
+	req.Header.Set("Accept", accept)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		if safehttp.IsBlocked(err) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized:
+		return nil, ErrUnauthorized
+	case resp.StatusCode == http.StatusForbidden:
+		return nil, ErrForbidden
+	case resp.StatusCode == http.StatusNotFound:
+		return nil, ErrNotFound
+	case resp.StatusCode >= 300:
+		return nil, fmt.Errorf("%w: status %d", ErrUnavailable, resp.StatusCode)
+	}
+	b, cut, err := safehttp.ReadLimited(resp.Body, MaxFileSize)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
+	if cut {
+		return nil, ErrFileTooLarge
+	}
+	return b, nil
+}
+
+// ErrFileTooLarge is returned by File for files over MaxFileSize.
+var ErrFileTooLarge = errors.New("file too large")
+
+// validRef rejects refs that could change the API path.
+func validRef(ref string) bool {
+	return ref != "" && len(ref) <= 255 && !strings.Contains(ref, "..") && !strings.ContainsAny(ref, " \t\n?#%\\")
+}
+
 // ---- webhook verification and parsing (no network) ----
 
 // VerifyGitHubSignature checks X-Hub-Signature-256 ("sha256=<hex HMAC of the body>") in
@@ -229,35 +288,73 @@ func VerifyGitLabToken(secret []byte, header string) bool {
 type Event struct {
 	DeliveryID string
 	Kind       string // push, tag_push, pull_request, ping, or the provider's event name
-	Ref        string
+	Ref        string // refs/heads/… or refs/tags/…; for pull requests the source branch
 	CommitSHA  string
+	// Pull requests: normalized action (opened, synchronize, reopened, closed, edited) and
+	// the target branch.
+	Action  string
+	BaseRef string
+	Deleted bool   // a branch or tag was deleted (no commit to build)
+	Title   string // head commit message (first line) or pull request title
+	Actor   string // Git host username
 }
+
+// Buildable reports whether the event can start a pipeline run.
+func (e Event) Buildable() bool {
+	switch e.Kind {
+	case "push", "tag_push":
+		return !e.Deleted && e.CommitSHA != ""
+	case "pull_request":
+		return e.CommitSHA != "" && (e.Action == "opened" || e.Action == "synchronize" || e.Action == "reopened")
+	}
+	return false
+}
+
+const zeroSHA = "0000000000000000000000000000000000000000"
 
 // ParseGitHub reads a GitHub webhook's headers and (already verified) JSON body.
 func ParseGitHub(h http.Header, body []byte) (Event, error) {
 	ev := Event{DeliveryID: h.Get("X-GitHub-Delivery"), Kind: h.Get("X-GitHub-Event")}
 	var p struct {
-		Ref         string `json:"ref"`
-		After       string `json:"after"`
+		Ref        string `json:"ref"`
+		After      string `json:"after"`
+		Deleted    bool   `json:"deleted"`
+		Action     string `json:"action"`
+		HeadCommit *struct {
+			Message string `json:"message"`
+		} `json:"head_commit"`
+		Sender struct {
+			Login string `json:"login"`
+		} `json:"sender"`
 		PullRequest *struct {
-			Head struct {
+			Title string `json:"title"`
+			Head  struct {
 				Ref string `json:"ref"`
 				SHA string `json:"sha"`
 			} `json:"head"`
+			Base struct {
+				Ref string `json:"ref"`
+			} `json:"base"`
 		} `json:"pull_request"`
 	}
 	if err := json.Unmarshal(body, &p); err != nil {
 		return ev, err
 	}
+	ev.Actor = p.Sender.Login
 	switch ev.Kind {
 	case "push":
-		ev.Ref, ev.CommitSHA = p.Ref, p.After
+		ev.Ref, ev.CommitSHA, ev.Deleted = p.Ref, p.After, p.Deleted || p.After == zeroSHA
 		if strings.HasPrefix(p.Ref, "refs/tags/") {
 			ev.Kind = "tag_push"
 		}
+		if p.HeadCommit != nil {
+			ev.Title = p.HeadCommit.Message
+		}
 	case "pull_request":
+		ev.Action = p.Action
 		if p.PullRequest != nil {
 			ev.Ref, ev.CommitSHA = "refs/heads/"+p.PullRequest.Head.Ref, p.PullRequest.Head.SHA
+			ev.BaseRef, ev.Title = p.PullRequest.Base.Ref, p.PullRequest.Title
 		}
 	}
 	finish(&ev, body)
@@ -271,11 +368,23 @@ func ParseGitLab(h http.Header, body []byte) (Event, error) {
 		ev.DeliveryID = h.Get("Idempotency-Key")
 	}
 	var p struct {
-		Ref         string `json:"ref"`
-		CheckoutSHA string `json:"checkout_sha"`
-		After       string `json:"after"`
-		Attrs       *struct {
+		Ref          string `json:"ref"`
+		CheckoutSHA  string `json:"checkout_sha"`
+		After        string `json:"after"`
+		UserUsername string `json:"user_username"`
+		User         struct {
+			Username string `json:"username"`
+		} `json:"user"`
+		Commits []struct {
+			ID      string `json:"id"`
+			Message string `json:"message"`
+		} `json:"commits"`
+		Attrs *struct {
 			SourceBranch string `json:"source_branch"`
+			TargetBranch string `json:"target_branch"`
+			Title        string `json:"title"`
+			Action       string `json:"action"`
+			OldRev       string `json:"oldrev"`
 			LastCommit   struct {
 				ID string `json:"id"`
 			} `json:"last_commit"`
@@ -284,15 +393,44 @@ func ParseGitLab(h http.Header, body []byte) (Event, error) {
 	if err := json.Unmarshal(body, &p); err != nil {
 		return ev, err
 	}
+	pushTitle := func(sha string) string {
+		for _, c := range p.Commits {
+			if c.ID == sha {
+				return c.Message
+			}
+		}
+		if n := len(p.Commits); n > 0 {
+			return p.Commits[n-1].Message
+		}
+		return ""
+	}
 	switch event := h.Get("X-Gitlab-Event"); event {
-	case "Push Hook":
-		ev.Kind, ev.Ref, ev.CommitSHA = "push", p.Ref, firstNonEmpty(p.CheckoutSHA, p.After)
-	case "Tag Push Hook":
-		ev.Kind, ev.Ref, ev.CommitSHA = "tag_push", p.Ref, firstNonEmpty(p.CheckoutSHA, p.After)
+	case "Push Hook", "Tag Push Hook":
+		ev.Kind = "push"
+		if event == "Tag Push Hook" {
+			ev.Kind = "tag_push"
+		}
+		ev.Ref, ev.CommitSHA = p.Ref, firstNonEmpty(p.CheckoutSHA, p.After)
+		ev.Deleted = p.After == zeroSHA || ev.CommitSHA == ""
+		ev.Title, ev.Actor = pushTitle(ev.CommitSHA), p.UserUsername
 	case "Merge Request Hook":
-		ev.Kind = "pull_request"
-		if p.Attrs != nil {
-			ev.Ref, ev.CommitSHA = "refs/heads/"+p.Attrs.SourceBranch, p.Attrs.LastCommit.ID
+		ev.Kind, ev.Actor = "pull_request", p.User.Username
+		if a := p.Attrs; a != nil {
+			ev.Ref, ev.CommitSHA = "refs/heads/"+a.SourceBranch, a.LastCommit.ID
+			ev.BaseRef, ev.Title = a.TargetBranch, a.Title
+			switch a.Action {
+			case "open":
+				ev.Action = "opened"
+			case "reopen":
+				ev.Action = "reopened"
+			case "update":
+				ev.Action = "edited" // title or description only
+				if a.OldRev != "" {
+					ev.Action = "synchronize" // new commits
+				}
+			default:
+				ev.Action = a.Action
+			}
 		}
 	default:
 		ev.Kind = event
@@ -315,13 +453,30 @@ func finish(ev *Event, body []byte) {
 	ev.Kind = truncate(ev.Kind, 100)
 	ev.Ref = truncate(ev.Ref, 255)
 	ev.CommitSHA = truncate(ev.CommitSHA, 64)
+	ev.BaseRef = truncate(ev.BaseRef, 255)
+	ev.Action = truncate(ev.Action, 50)
+	ev.Actor = truncate(ev.Actor, 100)
+	ev.Title = truncate(firstLineOf(ev.Title), 200)
 }
 
+func firstLineOf(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	return s
+}
+
+// truncate cuts s to at most n bytes without splitting a UTF-8 character.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n]
+	s = s[:n]
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s
 }
 
 func firstNonEmpty(v ...string) string {

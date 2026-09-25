@@ -106,25 +106,29 @@ erDiagram
 | `protection_rules` | `environment_id` PK, `required_approvals 0–10`, `allowed_branches text[]` (globs; empty = any), `allowed_roles member_role[]` | 1:1 with a protected environment |
 | `idempotency_keys` | `user_id`, `key`, `request_hash`, `response_status`, `response_body`, `expires_at` (24 h) | Unique `(user_id, key)`; purged hourly |
 
-### 4–5. Pipelines & runners
+### 4. Pipelines **(✓ 000004)**
+
+One pipeline per project, defined in `.opshub.yml`; there is no `pipelines` table.
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `pipelines` | `project_id`, `name`, `definition_path` (`.opshub.yml`), `triggers jsonb`, `cron text` | |
-| `pipeline_runs` | `pipeline_id`, `number` (per pipeline, `UNIQUE`), `status`, `trigger (push\|pull_request\|tag\|manual\|cron)`, `commit_sha`, `ref`, `definition jsonb` (snapshot), `created_by`, `started_at`, `finished_at` | Status: `queued\|running\|waiting_approval\|succeeded\|failed\|canceled` |
-| `jobs` | `run_id`, `name`, `stage`, `needs text[]`, `image`, `status`, `runner_id`, `attempt`, `timeout_seconds`, `exit_code`, `started_at`, `finished_at` | `(run_id, name, attempt)` unique; retries create a new attempt |
-| `steps` | `job_id`, `index`, `command`, `status`, `exit_code`, `duration_ms` | |
-| `job_log_chunks` | `job_id`, `seq`, `content text`, `created_at` | Append-only chunks, streamed via SSE; secrets masked by the runner **and** API |
-| `artifacts` | `job_id`, `path`, `size_bytes`, `sha256`, `storage_key`, `expires_at` | Blob storage pluggable (local disk / S3) |
-| `approvals` | `job_id`, `user_id`, `decision (approved\|rejected)`, `comment` | Manual gates |
+| `projects.last_run_number` | | Incremented under a row lock to number runs per project |
+| `pipeline_runs` | `project_id`, `number` (`UNIQUE` per project), `status (queued\|running\|waiting\|succeeded\|failed\|canceled)`, `trigger (push\|pull_request\|tag\|manual\|schedule)`, `ref`, `commit_sha`, `title`, `actor_name`, `created_by`, `rerun_of`, `definition jsonb` (snapshot), `problems jsonb` (invalid file), `variables jsonb`, `started_at`, `finished_at` | Status is derived from the jobs by the engine |
+| `pipeline_jobs` | `run_id`, `organization_id`, `name`, `stage`, `stage_index`, `needs text[]` (resolved), `condition`, `environment`, `environment_id`, `runs_on text[]`, `spec jsonb`, `status (created\|waiting_approval\|queued\|running\|succeeded\|failed\|canceled\|skipped)`, `attempt`, `runner_id`, `timeout_seconds`, `exit_code`, `failure_reason`, `log_bytes` | One row per attempt, `UNIQUE (run_id, name, attempt)`; the highest attempt is current. Dispatch index `(organization_id, queued_at) WHERE status = 'queued'` |
+| `job_steps` | `(job_id, index)`, `name`, `command`, `status`, `exit_code`, timings | |
+| `job_log_chunks` | `(job_id, seq)`, `content` | Runner-chosen `seq` makes uploads idempotent; masked before insert; ≤ 10 MiB per job |
+| `job_approvals` | `job_id`, `user_id`, `decision`, `comment` | `UNIQUE (job_id, user_id)` |
+| `pipeline_schedules` | `project_id`, `cron`, `next_run_at`, `last_run_at` | Synced from the default branch's file; a minute tick enqueues due ones |
+
+### 5. Runners (planned)
+
+| Table | Key columns | Notes |
+|---|---|---|
 | `runners` | `organization_id`, `name`, `labels text[]`, `token_hash`, `version`, `os`, `arch`, `last_seen_at`, `max_concurrency`, `disabled_at` | Registered with a one-time token |
 | `runner_registration_tokens` | `organization_id`, `token_hash`, `expires_at`, `used_at` | One-time |
-
 | `job_tokens` | `job_id`, `token_hash`, `expires_at` (job timeout + 10 min) | Scopes runner calls to one job |
+| `artifacts` | `job_id`, `path`, `size_bytes`, `sha256`, `storage_key`, `expires_at` | Local blob store (D5) |
 | `cache_entries` | `project_id`, `key`, `storage_key`, `size_bytes`, `last_used_at` | LRU-evicted per project quota |
-
-Job dispatch uses `SELECT … FOR UPDATE SKIP LOCKED` on queued jobs matching runner labels, ordered by
-`created_at`. Index: `jobs (organization_id, status, created_at) WHERE status = 'queued'`.
 
 ### 6. Deployments
 

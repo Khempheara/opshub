@@ -3,6 +3,7 @@ export * from './auth/auth';
 export * from './environments/environments';
 export * from './members/members';
 export * from './organizations/organizations';
+export * from './pipelines/pipelines';
 export * from './projects/projects';
 export * from './repositories/repositories';
 export * from './system/system';
