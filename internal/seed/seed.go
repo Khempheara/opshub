@@ -48,6 +48,8 @@ type Options struct {
 	Password string
 	Hasher   *authn.Hasher
 	Out      io.Writer
+	// Keys encrypt the demo deploy target's credentials; without them it isn't seeded.
+	Keys *crypto.KeyRing
 }
 
 // Run seeds the demo organization and users.
@@ -122,7 +124,10 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 	}); err != nil {
 		return err
 	}
-	return seedRuns(ctx, pool, opts.Out)
+	if err := seedRuns(ctx, pool, opts.Out); err != nil {
+		return err
+	}
+	return seedDeployments(ctx, pool, opts.Keys, opts.Out)
 }
 
 // DemoProjectSlug is the seeded project in the demo organization.

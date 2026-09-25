@@ -48,6 +48,7 @@ export const routes: RouteObject[] = [
               { path: 'teams/:teamId', ...page(() => import('@/features/org/TeamDetailPage'), 'TeamDetailPage') },
               { path: 'settings', ...page(() => import('@/features/org/OrgSettingsPage'), 'OrgSettingsPage') },
               { path: 'runners', ...page(() => import('@/features/runner/RunnersRoute'), 'RunnersRoute') },
+              { path: 'deploy-targets', ...page(() => import('@/features/deploy/TargetsPage'), 'TargetsPage') },
               { path: 'projects', ...page(() => import('@/features/project/ProjectsPage'), 'ProjectsPage') },
               {
                 path: 'projects/:projectId',
@@ -55,6 +56,8 @@ export const routes: RouteObject[] = [
                 children: [
                   { index: true, ...page(() => import('@/features/pipeline/RunsPage'), 'RunsPage') },
                   { path: 'runs/:runId', ...page(() => import('@/features/pipeline/RunPage'), 'RunPage') },
+                  { path: 'deployments', ...page(() => import('@/features/deploy/DeploymentsPage'), 'DeploymentsPage') },
+                  { path: 'deployments/:deploymentId', ...page(() => import('@/features/deploy/DeploymentPage'), 'DeploymentPage') },
                   { path: 'settings', ...page(() => import('@/features/project/ProjectSettingsPage'), 'ProjectSettingsPage') },
                   { path: 'environments', ...page(() => import('@/features/project/EnvironmentsPage'), 'EnvironmentsPage') },
                   { path: 'repository', ...page(() => import('@/features/project/RepositoryPage'), 'RepositoryPage') },

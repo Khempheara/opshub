@@ -87,3 +87,11 @@ recorded; zero HIGH/CRITICAL findings; short changelog.
 | M5-3 | 5 | Local development runner is an opt-in compose profile (`make runner`) using the host Docker socket; documented as root-equivalent on the host |
 | M5-4 | 5 | Heartbeats every 10 s; a runner silent for 30 s is offline and its jobs fail `runner_lost`; jobs assigned to a runner that it doesn't report fail the same way (agent restarts, lost assignments) |
 | M5-5 | 5 | One artifact archive (gzip tar) per job, default 7 days; artifacts restore into jobs that `need` the producer; cache failures never fail a job; secrets/masks fields are in the job payload but empty until Module 8 |
+| M6-1 | 6 | A deployment's version is a container image. Kubernetes and Docker targets set that image; SSH targets run the operator's command with `$OPSHUB_VERSION` |
+| M6-2 | 6 | Deployments run in an OpsHub River worker (credentials never leave the server); targets on private networks need `OPSHUB_OUTBOUND_ALLOWED_CIDRS`. A worker crash marks the deployment `interrupted` rather than retrying a non-idempotent change |
+| M6-3 | 6 | Blue/green on Kubernetes only (two Deployments, Service selector switch); SSH and Docker targets roll host by host / replica by replica with automatic revert |
+| M6-4 | 6 | Kubernetes through its REST API with the standard library instead of client-go (D8 allowed client-go); kubeconfigs with a token or embedded client certificate, no exec/auth-provider plugins |
+| M6-5 | 6 | Pipeline `deploy:` jobs are performed by OpsHub, not runners: `deploy.version` (default `${DEPLOY_VERSION}`) with `${VAR}` expansion; a deploy job can't have steps (`deploy_with_steps`) |
+| M6-6 | 6 | Manual deploys to environments that require approvals are refused (use a pipeline, which has the approval gate); allowed roles still apply. Rollback needs an allowed role but no approvals |
+| M6-7 | 6 | SSH host keys (SSH targets and Docker over SSH) are pinned after "Test connection"; unpinned or changed keys are refused before any credentials are sent |
+| M6-8 | 6 | Docker targets on the API host's own socket only when the operator sets `OPSHUB_DEPLOY_LOCAL_DOCKER=true` |

@@ -72,7 +72,7 @@ func TestSpecExample(t *testing.T) {
 	deploy := def.Jobs[2]
 	assert.Equal(t, WhenManual, deploy.When)
 	assert.Equal(t, "production", deploy.Environment)
-	assert.Equal(t, &Deploy{Target: "k8s-prod", Strategy: "rolling"}, deploy.Deploy)
+	assert.Equal(t, &Deploy{Target: "k8s-prod", Strategy: "rolling", Version: DefaultDeployVersion}, deploy.Deploy)
 	assert.Empty(t, deploy.Steps, "a deploy job needs no steps or image")
 }
 
@@ -270,9 +270,11 @@ jobs:
     deploy: { target: k8s, strategy: canary }
 `, []string{"stages[1]:duplicate", "variables.1BAD:variable_name", "variables.OPSHUB_REF:reserved", "jobs.Bad_Name:job_name",
 			"jobs.x.when:oneof", "jobs.x.timeout:range", "jobs.x.environment:pattern", "jobs.x.runs_on[0]:pattern",
-			"jobs.x.artifacts[0]:path", "jobs.x.deploy.strategy:oneof"}},
+			"jobs.x.steps:deploy_with_steps", "jobs.x.artifacts[0]:path", "jobs.x.deploy.strategy:oneof"}},
 		{"deploy needs environment", "version: 1\nstages: [a]\njobs:\n  x:\n    stage: a\n    deploy: { target: t }\n",
 			[]string{"jobs.x.deploy:deploy_requires_environment"}},
+		{"deploy jobs have no steps", "version: 1\nstages: [a]\njobs:\n  x:\n    stage: a\n    environment: prod\n    image: alpine\n    steps: [make]\n    deploy: { target: t, version: \"app:1 2\" }\n",
+			[]string{"jobs.x.deploy.version:pattern", "jobs.x.steps:deploy_with_steps"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -1,5 +1,65 @@
 # Changelog
 
+## Module 6 — Deployments
+
+### Built
+
+**Backend** (`internal/deploy`)
+- Deploy targets per organization: SSH hosts, Docker hosts (over SSH, TCP+TLS, or — if the
+  operator allows — the API host's socket) and Kubernetes clusters. Per-kind validation that
+  reports every invalid field at once; credentials encrypted with the key ring (row id as
+  associated data) and write-only; audited create/update/delete.
+- Test connection: Docker/Kubernetes version and resources; SSH host key fingerprints, pinned
+  with one click. Unpinned or changed host keys are refused before any credentials are sent.
+- Deployments of a container image to an environment, run by a River worker (`deploys` queue):
+  - SSH: the operator's command in host batches, with `$OPSHUB_VERSION` and friends.
+  - Docker: replica-by-replica swap, keeping `<name>-previous` for an instant revert.
+  - Kubernetes rolling: image patch and rollout watch.
+  - Kubernetes blue/green: idle color created or updated, Service selector switched, switched
+    back if unhealthy.
+  - Kubernetes is reached through its REST API with the standard library: no client-go.
+- HTTP health checks through the SSRF-safe client; automatic revert on failure; results, failure
+  reason and `reverted` stored. One deployment per environment at a time. A crash marks the
+  deployment `interrupted` instead of retrying.
+- Protection rules: allowed roles for manual deploys and rollbacks; environments that require
+  approvals only take pipeline deploys.
+- Release history with filters and "current release" per environment; one-click rollback of the
+  current release to the one before it (Idempotency-Key); live status and log over SSE.
+- Pipelines: a job's `deploy:` block (new `version`, default `${DEPLOY_VERSION}`, `${VAR}`
+  expansion) is performed by OpsHub when the job becomes ready, including after approvals;
+  runners never claim deploy jobs; new rule `deploy_with_steps`; job reasons `deploy_failed`,
+  `target_not_found`, `deploy_invalid`.
+- Shared `internal/dockerapi` (the runner's Engine client, extended) and `safehttp` dialer for
+  non-HTTP connections. `golang.org/x/crypto/ssh` comes from an existing dependency.
+- Migration `000006_deployments`; 11 endpoints; 9 error codes (EN + KM); OpenAPI 0.7.0; demo
+  seed: `demo-k8s` (unreachable on purpose) and a release history.
+
+**Frontend**
+- Organization → Deploy targets: list with last test result, per-kind create/edit form
+  (write-only credentials), Test connection with "Trust this key", delete.
+- Project → Deployments tab: live release per environment, filterable history, Deploy dialog
+  (image validation, blue/green only for Kubernetes); deployment page with facts, health
+  checks, live log (download) and a confirmed Roll back.
+- New `deploy` translation namespace (EN + KM); generalized log viewer and SSE refresh that
+  can't be outrun by a deployment finishing before the page loads.
+
+### Quality
+
+- Go: config and kubeconfig validation, an in-process SSH server (pinning, commands, revert),
+  a fake Kubernetes API (rolling, stalled rollouts, blue/green switch and switch back), real
+  Docker (replace, failed release restored, redeploy), and service tests for targets, deploys,
+  protection, rollback, interruption and pipeline deploy jobs (incl. after approval). Tenant
+  isolation over all 11 routes with a coverage guard, an idempotent deploy and the SSE stream
+  over HTTP. Deploy 74.8 %; service coverage 76.0 %.
+- Web: 82 Vitest tests (+10 target form); 41 Playwright tests (+5: history and a manual deploy,
+  protected environment, rollback, viewer read-only, target management, Khmer layout).
+- golangci-lint, gosec, govulncheck, ESLint, TypeScript, i18n check clean; Trivy 0
+  HIGH/CRITICAL; migrations up/down/up; sqlc and orval deterministic; OpenAPI ↔ routes test.
+
+### Next — Module 7: Infrastructure
+
+Asset inventory, agent heartbeats, metrics charts and SSL certificate expiry tracking.
+
 ## Module 5 — Runner agent
 
 ### Built

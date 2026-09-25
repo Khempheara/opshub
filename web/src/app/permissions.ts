@@ -14,6 +14,8 @@ export const OrgAction = {
   projectCreate: 'project.create',
   runnerView: 'runner.view',
   runnerManage: 'runner.manage',
+  targetView: 'target.view',
+  targetManage: 'target.manage',
 } as const;
 
 /**

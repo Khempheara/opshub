@@ -36,8 +36,15 @@ function segClass(s: AnsiSegment): string | undefined {
   return c || undefined;
 }
 
-/** Terminal-style log with ANSI colors, line numbers and follow mode. */
-export function LogViewer({ chunks, jobId, fileName, emptyText }: { chunks: LogLine[]; jobId: string; fileName: string; emptyText: string }) {
+// Strips ANSI escape sequences for plain-text downloads.
+// eslint-disable-next-line no-control-regex
+const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
+
+/**
+ * Terminal-style log with ANSI colors, line numbers and follow mode. With a jobId the
+ * download fetches the job's full log from the server; otherwise it saves what's shown.
+ */
+export function LogViewer({ chunks, jobId, fileName, emptyText }: { chunks: LogLine[]; jobId?: string; fileName: string; emptyText: string }) {
   const { t } = useTranslation('pipeline');
   const [follow, setFollow] = useState(true);
   const box = useRef<HTMLDivElement>(null);
@@ -54,6 +61,16 @@ export function LogViewer({ chunks, jobId, fileName, emptyText }: { chunks: LogL
   }, [lines, follow]);
 
   const download = async () => {
+    if (!jobId) {
+      const text = chunks.map((c) => c.content).join('').replace(ANSI, '');
+      const href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(href);
+      return;
+    }
     try {
       await downloadFile(getGetJobLogsUrl(jobId), fileName, 'text/plain');
     } catch (err) {

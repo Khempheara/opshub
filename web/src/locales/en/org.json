@@ -4,7 +4,8 @@
     "teams": "Teams",
     "settings": "Organization settings",
     "group": "Organization",
-    "runners": "Runners"
+    "runners": "Runners",
+    "deployTargets": "Deploy targets"
   },
   "roleDescriptions": {
     "owner": "Full control, including deleting the organization and managing owners.",

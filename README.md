@@ -156,8 +156,17 @@ and approval gates. Jobs execute on runners ([runner guide](docs/runners.md)): r
 local development, paste the registration token into `.env` as
 `OPSHUB_RUNNER_REGISTRATION_TOKEN` and run `make runner` (it uses this machine's Docker socket).
 
+## Deployments
+
+Add a deploy target in **Organization → Deploy targets** (an SSH host, a Docker host or a
+Kubernetes cluster), run **Test connection** and trust its host key, then deploy an image from a
+project's **Deployments** tab or from a pipeline job's `deploy:` block. Unhealthy releases are
+reverted automatically; the current release rolls back in one click
+([deployment guide](docs/deployments.md)). The demo data includes `demo-k8s`, a cluster that
+doesn't exist: deployments to it fail safely as "target unreachable".
+
 ## Roadmap
 
 1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. ✅ CI/CD pipelines · 5. ✅ Runner agent ·
-6. Deployments · 7. Infrastructure · 8. Secrets · 9. Monitoring & alerts · 10. Logs ·
+6. ✅ Deployments · 7. Infrastructure · 8. Secrets · 9. Monitoring & alerts · 10. Logs ·
 11. Audit log · 12. Dashboard & DORA metrics

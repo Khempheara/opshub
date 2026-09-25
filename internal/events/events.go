@@ -28,18 +28,32 @@ type Execer interface {
 }
 
 type message struct {
-	Run uuid.UUID `json:"r,omitempty"`
-	Job uuid.UUID `json:"j,omitempty"`
+	Run        uuid.UUID `json:"r,omitempty"`
+	Job        uuid.UUID `json:"j,omitempty"`
+	Deployment uuid.UUID `json:"d,omitempty"`
 }
 
 // RunKey and JobKey name subscription topics.
 func RunKey(id uuid.UUID) string { return "run:" + id.String() }
 func JobKey(id uuid.UUID) string { return "job:" + id.String() }
 
+// DeploymentKey names a deployment's topic.
+func DeploymentKey(id uuid.UUID) string { return "deployment:" + id.String() }
+
 // Notify signals that a run (and optionally one of its jobs) changed. Call it inside the
 // transaction that made the change.
 func Notify(ctx context.Context, db Execer, runID, jobID uuid.UUID) error {
 	b, err := json.Marshal(message{Run: runID, Job: jobID})
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(ctx, "SELECT pg_notify($1, $2)", Channel, string(b))
+	return err
+}
+
+// NotifyDeployment signals that a deployment (status or logs) changed.
+func NotifyDeployment(ctx context.Context, db Execer, deploymentID uuid.UUID) error {
+	b, err := json.Marshal(message{Deployment: deploymentID})
 	if err != nil {
 		return err
 	}
@@ -102,6 +116,9 @@ func (h *Hub) Dispatch(payload string) {
 	}
 	if m.Job != uuid.Nil {
 		h.publish(JobKey(m.Job))
+	}
+	if m.Deployment != uuid.Nil {
+		h.publish(DeploymentKey(m.Deployment))
 	}
 }
 

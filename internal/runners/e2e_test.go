@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/opshub/opshub/internal/dockerapi"
 	"github.com/opshub/opshub/internal/runner"
 	"github.com/opshub/opshub/internal/store"
 )
@@ -78,7 +79,7 @@ func TestEndToEndWithDocker(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	docker, err := runner.NewDocker(ctx, socket)
+	docker, err := dockerapi.NewUnix(ctx, socket)
 	require.NoError(t, err)
 
 	rt, err := e.svc.CreateRegistrationToken(e.admin.ctx, e.orgID, RegistrationInput{})
@@ -163,7 +164,7 @@ jobs:
 	a := newAPI(t, e)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	docker, err := runner.NewDocker(ctx, socket)
+	docker, err := dockerapi.NewUnix(ctx, socket)
 	require.NoError(t, err)
 	rt, err := e.svc.CreateRegistrationToken(e.admin.ctx, e.orgID, RegistrationInput{})
 	require.NoError(t, err)

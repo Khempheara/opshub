@@ -83,7 +83,7 @@ func TestCreateAndVisibility(t *testing.T) {
 	got, err := e.svc.Get(e.viewer.ctx, p.ID)
 	require.NoError(t, err)
 	assert.Equal(t, authz.Viewer, got.Role)
-	assert.Equal(t, []authz.Action{authz.ProjectView, authz.RunView}, got.Actions)
+	assert.Equal(t, []authz.Action{authz.DeploymentView, authz.ProjectView, authz.RunView}, got.Actions)
 }
 
 func TestUpdateAndDelete(t *testing.T) {

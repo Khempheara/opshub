@@ -34,11 +34,28 @@ const DefinitionPath = ".opshub.yml"
 
 // Service implements pipelines.
 type Service struct {
-	pool     *pgxpool.Pool
-	projects *project.Service
-	logger   *slog.Logger
-	now      func() time.Time
+	pool          *pgxpool.Pool
+	projects      *project.Service
+	logger        *slog.Logger
+	now           func() time.Time
+	deployStarter DeployStarter
 }
+
+// DeployStart is what OpsHub needs to perform a ready job's `deploy:` block.
+type DeployStart struct {
+	Run       store.PipelineRun
+	Job       store.PipelineJob
+	Deploy    spec.Deploy
+	Variables map[string]string
+}
+
+// DeployStarter starts the deployment of a ready deploy job inside the transaction that made
+// it ready. It must move the job out of "queued": to running (deployment enqueued) or failed.
+type DeployStarter func(ctx context.Context, tx pgx.Tx, q *store.Queries, d DeployStart) error
+
+// SetDeployStarter installs the deployments module's starter (Module 6). Without one, deploy
+// jobs stay queued (runners never claim them) until the queue timeout fails them.
+func (s *Service) SetDeployStarter(f DeployStarter) { s.deployStarter = f }
 
 func NewService(pool *pgxpool.Pool, projects *project.Service, logger *slog.Logger) *Service {
 	return &Service{pool: pool, projects: projects, logger: logger, now: time.Now}
@@ -328,7 +345,14 @@ func (s *Service) advance(ctx context.Context, tx pgx.Tx, q *store.Queries, runI
 		}
 		ts := decide(toNodes(jobs))
 		if len(ts) == 0 {
-			break
+			started, err := s.startDeploys(ctx, tx, q, run, jobs)
+			if err != nil {
+				return err
+			}
+			if started == 0 {
+				break
+			}
+			continue // a deploy job may have failed at once: settle its dependents
 		}
 		for _, t := range ts {
 			job := findJob(jobs, t.Name)
@@ -367,6 +391,35 @@ func (s *Service) advance(ctx context.Context, tx pgx.Tx, q *store.Queries, runI
 		}
 	}
 	return events.Notify(ctx, tx, runID, uuid.Nil)
+}
+
+// startDeploys hands queued deploy jobs to the deploy starter and returns how many it started.
+func (s *Service) startDeploys(ctx context.Context, tx pgx.Tx, q *store.Queries, run store.PipelineRun, jobs []store.PipelineJob) (int, error) {
+	if s.deployStarter == nil {
+		return 0, nil
+	}
+	n := 0
+	for _, j := range jobs {
+		if j.Status != store.JobStatusQueued {
+			continue
+		}
+		var js spec.Job
+		if err := json.Unmarshal(j.Spec, &js); err != nil {
+			return n, err
+		}
+		if js.Deploy == nil {
+			continue
+		}
+		vars, err := s.jobVariables(ctx, q, run, j, js)
+		if err != nil {
+			return n, err
+		}
+		if err := s.deployStarter(ctx, tx, q, DeployStart{Run: run, Job: j, Deploy: *js.Deploy, Variables: vars}); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }
 
 // gate moves a ready job to waiting_approval or queued, or fails it when its environment is

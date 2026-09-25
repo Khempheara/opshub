@@ -34,6 +34,7 @@ import (
 	"github.com/opshub/opshub/internal/config"
 	"github.com/opshub/opshub/internal/crypto"
 	"github.com/opshub/opshub/internal/database"
+	"github.com/opshub/opshub/internal/deploy"
 	"github.com/opshub/opshub/internal/events"
 	"github.com/opshub/opshub/internal/gitprovider"
 	"github.com/opshub/opshub/internal/i18n"
@@ -145,6 +146,10 @@ func serve() error {
 		CacheQuotaBytes: cfg.CacheQuotaBytes, SourceMaxBytes: cfg.SourceMaxBytes,
 	}, logger)
 
+	deploySvc := deploy.NewService(pool, keyRing, pipelineSvc, inserter, deploy.Config{
+		OutboundAllowedCIDRs: outboundCIDRs, AllowLocalDocker: cfg.DeployLocalDocker,
+	}, logger)
+
 	river, err := jobs.NewClient(jobs.Deps{
 		Pool: pool, Logger: logger,
 		Renderer: &mail.Renderer{Bundle: bundle},
@@ -152,6 +157,7 @@ func serve() error {
 		Register: func(w *riverpkg.Workers) {
 			pipelineSvc.Register(w)
 			runnerSvc.Register(w)
+			deploySvc.Register(w)
 		},
 		Periodic: append(pipeline.Periodic(), runners.Periodic()...),
 	})
@@ -191,6 +197,7 @@ func serve() error {
 				project.NewHandler(projectSvc, idempotency.Middleware(pool)),
 				pipeline.NewHandler(pipelineSvc, hub, idempotency.Middleware(pool)),
 				runners.NewHandler(runnerSvc),
+				deploy.NewHandler(deploySvc, hub, idempotency.Middleware(pool)),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -321,10 +328,16 @@ func seedCmd() error {
 		return err
 	}
 	defer pool.Close()
+	masterKeys, _ := config.ParseKeyRing(cfg.MasterKeys) // validated by config.Load
+	keys, err := crypto.NewKeyRing(masterKeys)
+	if err != nil {
+		return err
+	}
 	return seed.Run(ctx, pool, seed.Options{
 		Password: os.Getenv("OPSHUB_SEED_PASSWORD"),
 		Hasher:   authn.NewHasher(authn.DefaultArgon2Params),
 		Out:      os.Stdout,
+		Keys:     keys,
 	})
 }
 

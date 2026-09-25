@@ -134,12 +134,15 @@ Tokens are stored as SHA-256 hashes only. Blobs live under `OPSHUB_BLOB_DIR`
 (`artifacts/<project>/<job>-<random>.tar.gz`, `cache/<project>/<random>`); a replaced cache
 entry's old blob is deleted after the new one is recorded.
 
-### 6. Deployments
+### 6. Deployments **(✓ 000006)**
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `deploy_targets` | `organization_id`, `name`, `kind (ssh\|docker\|kubernetes)`, `config jsonb`, `credentials_enc` | kubeconfig / SSH key encrypted |
-| `deployments` | `environment_id`, `target_id`, `run_id`, `version`, `strategy (rolling\|blue_green)`, `status`, `health_check jsonb`, `rollback_of_id`, `created_by`, `started_at`, `finished_at` | Full release history; rollback = new deployment pointing at a previous one |
+| `deploy_targets` | `organization_id`, `name` (`UNIQUE` per org), `kind (ssh\|docker\|kubernetes)`, `description`, `config jsonb`, `credentials_enc`, `last_test_at`, `last_test_ok`, `version` | Credentials: AES-GCM with the master key ring, the row id as associated data; never returned |
+| `deployments` | `project_id`, `environment_id`, `number` (`UNIQUE` per project), `target_id` (`SET NULL`), `target_name`, `target_kind`, `version`, `previous_version`, `strategy (rolling\|blue_green)`, `status (pending\|running\|succeeded\|failed)`, `failure_reason`, `reverted`, `health jsonb`, `run_id`, `job_id`, `rollback_of_id`, `created_by`, timings | Full release history; one active deployment per environment (partial unique index); a rollback is a new row pointing at the one it replaces |
+| `deployment_log_chunks` | `(deployment_id, seq)`, `content` | ≤ 5 MiB per deployment |
+| `environments.current_deployment_id` | | The release the environment runs now |
+| `projects.last_deployment_number` | | Numbers deployments per project |
 
 ### 7. Infrastructure inventory
 

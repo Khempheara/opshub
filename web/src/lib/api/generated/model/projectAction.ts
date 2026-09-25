@@ -25,7 +25,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.6.0
+ * OpenAPI spec version: 0.7.0
  */
 
 export type ProjectAction = typeof ProjectAction[keyof typeof ProjectAction];
@@ -42,4 +42,7 @@ export const ProjectAction = {
   pipelinetrigger: 'pipeline.trigger',
   runcancel: 'run.cancel',
   approvaldecide: 'approval.decide',
+  deploymentview: 'deployment.view',
+  deploymentcreate: 'deployment.create',
+  deploymentrollback: 'deployment.rollback',
 } as const;

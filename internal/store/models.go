@@ -55,6 +55,135 @@ func (ns NullApprovalDecision) Value() (driver.Value, error) {
 	return string(ns.ApprovalDecision), nil
 }
 
+type DeployStrategy string
+
+const (
+	DeployStrategyRolling   DeployStrategy = "rolling"
+	DeployStrategyBlueGreen DeployStrategy = "blue_green"
+)
+
+func (e *DeployStrategy) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DeployStrategy(s)
+	case string:
+		*e = DeployStrategy(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DeployStrategy: %T", src)
+	}
+	return nil
+}
+
+type NullDeployStrategy struct {
+	DeployStrategy DeployStrategy `json:"deploy_strategy"`
+	Valid          bool           `json:"valid"` // Valid is true if DeployStrategy is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDeployStrategy) Scan(value interface{}) error {
+	if value == nil {
+		ns.DeployStrategy, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DeployStrategy.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDeployStrategy) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DeployStrategy), nil
+}
+
+type DeployTargetKind string
+
+const (
+	DeployTargetKindSsh        DeployTargetKind = "ssh"
+	DeployTargetKindDocker     DeployTargetKind = "docker"
+	DeployTargetKindKubernetes DeployTargetKind = "kubernetes"
+)
+
+func (e *DeployTargetKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DeployTargetKind(s)
+	case string:
+		*e = DeployTargetKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DeployTargetKind: %T", src)
+	}
+	return nil
+}
+
+type NullDeployTargetKind struct {
+	DeployTargetKind DeployTargetKind `json:"deploy_target_kind"`
+	Valid            bool             `json:"valid"` // Valid is true if DeployTargetKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDeployTargetKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.DeployTargetKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DeployTargetKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDeployTargetKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DeployTargetKind), nil
+}
+
+type DeploymentStatus string
+
+const (
+	DeploymentStatusPending   DeploymentStatus = "pending"
+	DeploymentStatusRunning   DeploymentStatus = "running"
+	DeploymentStatusSucceeded DeploymentStatus = "succeeded"
+	DeploymentStatusFailed    DeploymentStatus = "failed"
+)
+
+func (e *DeploymentStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DeploymentStatus(s)
+	case string:
+		*e = DeploymentStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DeploymentStatus: %T", src)
+	}
+	return nil
+}
+
+type NullDeploymentStatus struct {
+	DeploymentStatus DeploymentStatus `json:"deployment_status"`
+	Valid            bool             `json:"valid"` // Valid is true if DeploymentStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDeploymentStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.DeploymentStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DeploymentStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDeploymentStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DeploymentStatus), nil
+}
+
 type EmailTokenPurpose string
 
 const (
@@ -507,6 +636,56 @@ type CacheEntry struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type DeployTarget struct {
+	ID             uuid.UUID        `json:"id"`
+	OrganizationID uuid.UUID        `json:"organization_id"`
+	Name           string           `json:"name"`
+	Kind           DeployTargetKind `json:"kind"`
+	Description    string           `json:"description"`
+	Config         []byte           `json:"config"`
+	CredentialsEnc []byte           `json:"credentials_enc"`
+	LastTestAt     *time.Time       `json:"last_test_at"`
+	LastTestOk     *bool            `json:"last_test_ok"`
+	CreatedBy      *uuid.UUID       `json:"created_by"`
+	Version        int32            `json:"version"`
+	CreatedAt      time.Time        `json:"created_at"`
+	UpdatedAt      time.Time        `json:"updated_at"`
+}
+
+type Deployment struct {
+	ID              uuid.UUID        `json:"id"`
+	OrganizationID  uuid.UUID        `json:"organization_id"`
+	ProjectID       uuid.UUID        `json:"project_id"`
+	EnvironmentID   uuid.UUID        `json:"environment_id"`
+	Number          int32            `json:"number"`
+	TargetID        *uuid.UUID       `json:"target_id"`
+	TargetName      string           `json:"target_name"`
+	TargetKind      DeployTargetKind `json:"target_kind"`
+	Version         string           `json:"version"`
+	PreviousVersion string           `json:"previous_version"`
+	Strategy        DeployStrategy   `json:"strategy"`
+	Status          DeploymentStatus `json:"status"`
+	FailureReason   *string          `json:"failure_reason"`
+	Reverted        bool             `json:"reverted"`
+	Health          []byte           `json:"health"`
+	RunID           *uuid.UUID       `json:"run_id"`
+	JobID           *uuid.UUID       `json:"job_id"`
+	RollbackOfID    *uuid.UUID       `json:"rollback_of_id"`
+	CreatedBy       *uuid.UUID       `json:"created_by"`
+	LogBytes        int64            `json:"log_bytes"`
+	StartedAt       *time.Time       `json:"started_at"`
+	FinishedAt      *time.Time       `json:"finished_at"`
+	CreatedAt       time.Time        `json:"created_at"`
+	UpdatedAt       time.Time        `json:"updated_at"`
+}
+
+type DeploymentLogChunk struct {
+	DeploymentID uuid.UUID `json:"deployment_id"`
+	Seq          int32     `json:"seq"`
+	Content      string    `json:"content"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 type EmailToken struct {
 	ID        uuid.UUID         `json:"id"`
 	UserID    uuid.UUID         `json:"user_id"`
@@ -518,15 +697,16 @@ type EmailToken struct {
 }
 
 type Environment struct {
-	ID        uuid.UUID       `json:"id"`
-	ProjectID uuid.UUID       `json:"project_id"`
-	Name      string          `json:"name"`
-	Kind      EnvironmentKind `json:"kind"`
-	Variables []byte          `json:"variables"`
-	Version   int32           `json:"version"`
-	CreatedAt time.Time       `json:"created_at"`
-	UpdatedAt time.Time       `json:"updated_at"`
-	DeletedAt *time.Time      `json:"deleted_at"`
+	ID                  uuid.UUID       `json:"id"`
+	ProjectID           uuid.UUID       `json:"project_id"`
+	Name                string          `json:"name"`
+	Kind                EnvironmentKind `json:"kind"`
+	Variables           []byte          `json:"variables"`
+	Version             int32           `json:"version"`
+	CreatedAt           time.Time       `json:"created_at"`
+	UpdatedAt           time.Time       `json:"updated_at"`
+	DeletedAt           *time.Time      `json:"deleted_at"`
+	CurrentDeploymentID *uuid.UUID      `json:"current_deployment_id"`
 }
 
 type IdempotencyKey struct {
@@ -678,18 +858,19 @@ type PipelineSchedule struct {
 }
 
 type Project struct {
-	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
-	Slug           string     `json:"slug"`
-	Name           string     `json:"name"`
-	Description    string     `json:"description"`
-	DefaultBranch  string     `json:"default_branch"`
-	Version        int32      `json:"version"`
-	CreatedBy      *uuid.UUID `json:"created_by"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	DeletedAt      *time.Time `json:"deleted_at"`
-	LastRunNumber  int32      `json:"last_run_number"`
+	ID                   uuid.UUID  `json:"id"`
+	OrganizationID       uuid.UUID  `json:"organization_id"`
+	Slug                 string     `json:"slug"`
+	Name                 string     `json:"name"`
+	Description          string     `json:"description"`
+	DefaultBranch        string     `json:"default_branch"`
+	Version              int32      `json:"version"`
+	CreatedBy            *uuid.UUID `json:"created_by"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+	DeletedAt            *time.Time `json:"deleted_at"`
+	LastRunNumber        int32      `json:"last_run_number"`
+	LastDeploymentNumber int32      `json:"last_deployment_number"`
 }
 
 type ProjectMember struct {
