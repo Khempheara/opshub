@@ -25,7 +25,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.5.0
+ * OpenAPI spec version: 0.6.0
  */
 import type { JobCondition } from './jobCondition';
 import type { JobStatus } from './jobStatus';
@@ -46,7 +46,7 @@ export interface Job {
   status: JobStatus;
   attempt: number;
   /**
-     * upstream_failed, not_needed, rejected, branch_not_allowed, environment_not_found, timeout, no_runner, step_failed, runner_error
+     * upstream_failed, not_needed, rejected, branch_not_allowed, environment_not_found, timeout, no_runner, step_failed, runner_error, runner_lost
      * @nullable
      */
   failure_reason: string | null;

@@ -1,5 +1,68 @@
 # Changelog
 
+## Module 5 — Runner agent
+
+### Built
+
+**Backend**
+- Runners (`internal/runners`): one-time registration tokens (`ohr_reg_…`, 1 h, optional extra
+  labels) exchanged for runner tokens (`ohr_…`); list with online/offline/disabled status and
+  running jobs; rename, relabel, max concurrency and disable with If-Match; delete (revokes the
+  token, fails running jobs as `runner_lost`). Tokens are stored as SHA-256 hashes; every
+  management action is audited.
+- Runner API: heartbeat (every 10 s; answers which jobs to stop), long-poll job request (≤ 30 s)
+  that respects labels and `max_concurrency` under concurrent requests (per-runner row lock), and
+  per-job tokens (`ohj_…`) issued in the claim transaction and valid only while the job runs.
+  Step reports, results, idempotent log chunks, source tarball proxied through OpsHub (Git
+  credentials stay on the server), artifact upload, dependency artifacts from `needs` jobs,
+  project-scoped cache get/put.
+- Local blob store (`internal/blob`, `OPSHUB_BLOB_DIR`) for artifacts and caches with size limits;
+  housekeeping every 30 s fails jobs of silent runners, removes expired artifacts and evicts caches
+  beyond the project quota (LRU). Jobs a runner stops reporting also fail as `runner_lost`.
+- GitHub/GitLab archive download follows redirects without forwarding the token to other hosts.
+- Machine tokens pass through user authentication as anonymous and get their own rate-limit
+  bucket.
+- Migration `000005_runners`; 15 new endpoints (6 for people, 9 for runners); 7 new error codes
+  (EN + KM); OpenAPI 0.6.0 (runner endpoints are excluded from the web client).
+
+**Agent** (`cmd/runner`, `internal/runner` — no server imports, no Docker SDK)
+- `opshub-runner register` / `run` (or self-registration from `OPSHUB_REGISTRATION_TOKEN`);
+  config file mode 0600.
+- Docker executor over the Engine API: image pull, a volume per job, one container per step
+  (`/bin/sh -ec`), never privileged, `no-new-privileges`, CPU/memory/PID limits; checkout,
+  dependency artifacts and cache restore; artifact and cache upload; timeouts and server-side
+  cancel kill the container; crash leftovers are cleaned up on start.
+- Log shipping batched per second / 64 KiB at line ends, masked, NUL-safe; graceful shutdown
+  keeps heartbeats going while running jobs finish.
+- Distroless non-root image (8.7 MB); compose profile `runner` and `make runner` for local
+  development using the host Docker socket.
+
+**Frontend**
+- Organization → Runners (Developers and up): status, labels, capacity, version, last seen
+  (refreshes every 10 s); register dialog showing the token once with ready-to-copy binary and
+  Docker commands; edit, disable/enable and delete for Owners and Admins.
+- Job panel: artifacts with size, expiry and download. Shared authenticated file download
+  (also used for log downloads).
+- New `runner` translation namespace (EN + KM).
+
+### Quality
+
+- Go: registration, auth, capacity under concurrent claims, long-poll, heartbeats (cancel list,
+  orphaned jobs), deletion, housekeeping, artifacts, dependencies, cache and quota; tenant
+  isolation and token checks over every new route with a route-coverage guard; end-to-end tests
+  that run real jobs in Docker through the HTTP API with the agent's executor (checkout, steps,
+  artifacts, cache, failing step, cancel). Runners 80.8 %, blob 80.0 %; service coverage 79.3 %.
+- Web: 72 Vitest tests (+10 runner form rules); 36 Playwright tests (+1: register, online,
+  edit, disable, delete, Khmer layout on phone and desktop).
+- golangci-lint, gosec, govulncheck, ESLint, TypeScript, i18n check clean; Trivy 0
+  HIGH/CRITICAL on the runner image; migrations up/down/up; sqlc and orval deterministic;
+  OpenAPI ↔ routes drift test.
+
+### Next — Module 6: Deployments
+
+SSH, Docker and Kubernetes targets, rolling and blue/green strategies, health checks, rollback
+and release history, driven by the pipeline's `deploy` blocks.
+
 ## Module 4 — CI/CD pipelines
 
 ### Built

@@ -2,7 +2,7 @@ import { Download } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { getAccessToken } from '@/auth/session';
+import { downloadFile } from '@/lib/api/fetcher';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { parseAnsi, type AnsiSegment } from '@/lib/ansi';
@@ -55,18 +55,7 @@ export function LogViewer({ chunks, jobId, fileName, emptyText }: { chunks: LogL
 
   const download = async () => {
     try {
-      const token = getAccessToken();
-      const res = await fetch(getGetJobLogsUrl(jobId), {
-        headers: { Accept: 'text/plain', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        credentials: 'same-origin',
-      });
-      if (!res.ok) throw new Error(res.statusText);
-      const url = URL.createObjectURL(await res.blob());
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(url);
+      await downloadFile(getGetJobLogsUrl(jobId), fileName, 'text/plain');
     } catch (err) {
       toast.error(errorMessage(err));
     }

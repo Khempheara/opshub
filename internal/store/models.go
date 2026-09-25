@@ -467,6 +467,19 @@ type ApiToken struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
+type Artifact struct {
+	ID             uuid.UUID `json:"id"`
+	JobID          uuid.UUID `json:"job_id"`
+	ProjectID      uuid.UUID `json:"project_id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	Name           string    `json:"name"`
+	SizeBytes      int64     `json:"size_bytes"`
+	Sha256         []byte    `json:"sha256"`
+	StorageKey     string    `json:"storage_key"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
 type AuditLog struct {
 	ID             uuid.UUID   `json:"id"`
 	OrganizationID *uuid.UUID  `json:"organization_id"`
@@ -481,6 +494,17 @@ type AuditLog struct {
 	After          []byte      `json:"after"`
 	Metadata       []byte      `json:"metadata"`
 	CreatedAt      time.Time   `json:"created_at"`
+}
+
+type CacheEntry struct {
+	ID         uuid.UUID `json:"id"`
+	ProjectID  uuid.UUID `json:"project_id"`
+	Key        string    `json:"key"`
+	StorageKey string    `json:"storage_key"`
+	SizeBytes  int64     `json:"size_bytes"`
+	Sha256     []byte    `json:"sha256"`
+	LastUsedAt time.Time `json:"last_used_at"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type EmailToken struct {
@@ -555,6 +579,12 @@ type JobStep struct {
 	ExitCode   *int32     `json:"exit_code"`
 	StartedAt  *time.Time `json:"started_at"`
 	FinishedAt *time.Time `json:"finished_at"`
+}
+
+type JobToken struct {
+	JobID     uuid.UUID `json:"job_id"`
+	TokenHash []byte    `json:"token_hash"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 type MfaChallenge struct {
@@ -709,6 +739,37 @@ type Repository struct {
 	LastDeliveryAt   *time.Time  `json:"last_delivery_at"`
 	CreatedAt        time.Time   `json:"created_at"`
 	UpdatedAt        time.Time   `json:"updated_at"`
+}
+
+type Runner struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Name           string     `json:"name"`
+	Labels         []string   `json:"labels"`
+	TokenHash      []byte     `json:"token_hash"`
+	TokenPrefix    string     `json:"token_prefix"`
+	Version        string     `json:"version"`
+	Os             string     `json:"os"`
+	Arch           string     `json:"arch"`
+	MaxConcurrency int32      `json:"max_concurrency"`
+	LastSeenAt     *time.Time `json:"last_seen_at"`
+	DisabledAt     *time.Time `json:"disabled_at"`
+	CreatedBy      *uuid.UUID `json:"created_by"`
+	RowVersion     int32      `json:"row_version"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+type RunnerRegistrationToken struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	TokenHash      []byte     `json:"token_hash"`
+	Labels         []string   `json:"labels"`
+	CreatedBy      *uuid.UUID `json:"created_by"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	UsedAt         *time.Time `json:"used_at"`
+	RunnerID       *uuid.UUID `json:"runner_id"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 type Session struct {

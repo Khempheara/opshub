@@ -116,23 +116,33 @@ Pipeline syntax and behavior: [pipelines.md](pipelines.md).
 | POST | `/jobs/{jobId}/approvals` | JWT | `approval.decide` | `{decision, comment}`; protection rules enforced; approver ≠ run starter; `APPROVAL_NOT_ALLOWED` with `details.reason` |
 
 Webhook pushes, tag pushes and pull requests start runs through a background job after the
-delivery is recorded (see §3). Artifact upload/download endpoints arrive with runners (§5).
+delivery is recorded (see §3). Artifacts are listed and downloaded through §5.
 
-## 5. Runners
+## 5. Runners **(✓ Module 5)**
+
+Runner agents and their API; see [runners.md](runners.md). Runner and job tokens are not
+sessions: other endpoints treat them as anonymous.
 
 | Method | Path | Auth | Action | Description |
 |---|---|---|---|---|
-| GET | `/orgs/{orgId}/runners` | JWT | `runner.view` | Status, labels, version, last seen, current jobs |
-| POST | `/orgs/{orgId}/runner-registration-tokens` | JWT | `runner.manage` | One-time token (shown once, 1 h TTL) |
-| PATCH / DELETE | `/runners/{runnerId}` | JWT | `runner.manage` | Labels, disable, delete **(IM)** |
-| POST | `/runner/register` | registration token | | → runner ID + runner token |
-| POST | `/runner/heartbeat` | Runner | | Liveness, capacity; response carries cancel requests |
-| POST | `/runner/jobs/request` | Runner | | Long-poll (≤ 30 s) → job spec + Job token + secrets |
-| PATCH | `/runner/jobs/{jobId}` | Job | | Job/step status, exit codes |
-| POST | `/runner/jobs/{jobId}/logs` | Job | | Append masked log chunk {seq, content} (256 KiB max) |
-| POST | `/runner/jobs/{jobId}/artifacts` | Job | | Upload (multipart/stream, size limit per org) |
-| GET | `/runner/jobs/{jobId}/dependencies/{artifactId}` | Job | | Download artifacts from `needs` jobs |
-| GET / PUT | `/runner/cache/{key}` | Job | | Pipeline cache blobs scoped to project |
+| GET | `/orgs/{orgId}/runners` | JWT | `runner.view` | Status (online < 30 s since heartbeat / offline / disabled), labels, version, running jobs |
+| POST | `/orgs/{orgId}/runner-registration-tokens` | JWT | `runner.manage` | One-time token `ohr_reg_…` (shown once, 1 h) with optional extra labels |
+| PATCH | `/runners/{runnerId}` | JWT | `runner.manage` | Name, labels, max concurrency, disabled **(IM)** |
+| DELETE | `/runners/{runnerId}` | JWT | `runner.manage` | Revokes the token; its running jobs fail `runner_lost` |
+| GET | `/jobs/{jobId}/artifacts` | JWT | `run.view` | A job's unexpired artifact archives |
+| GET | `/artifacts/{artifactId}/download` | JWT | `run.view` | gzip-compressed tar; `X-Content-SHA256` |
+| POST | `/runner/register` | registration token (body) | | → runner id + runner token `ohr_…` (shown once); 10/min per IP |
+| POST | `/runner/heartbeat` | runner token | | Every 10 s; reports running jobs → `cancel_job_ids`. Assigned jobs it doesn't report fail `runner_lost` after 30 s |
+| POST | `/runner/jobs/request` | runner token | | Long-poll ≤ 30 s → job, spec, variables, job token `ohj_…` (204 when none or at capacity) |
+| PATCH | `/runner/jobs/{jobId}` | job token | | `{step: {index, status, exit_code}}` or `{complete: {success, exit_code, reason}}` |
+| POST | `/runner/jobs/{jobId}/logs` | job token | | `{seq, content}` ≤ 256 KiB; re-sent seqs are ignored |
+| GET | `/runner/jobs/{jobId}/source` | job token | | Tarball of the run's commit through OpsHub (404 `REPOSITORY_NOT_FOUND` → empty workspace) |
+| POST | `/runner/jobs/{jobId}/artifacts` | job token | | One gzip tar per job (`OPSHUB_ARTIFACT_MAX_BYTES`, default 100 MiB) |
+| GET | `/runner/jobs/{jobId}/dependencies[/{artifactId}]` | job token | | Artifacts of the jobs in `needs` (latest successful attempt) |
+| GET / PUT | `/runner/jobs/{jobId}/cache/{key}` | job token | | Project-scoped cache archives; LRU eviction beyond the project quota |
+
+Job tokens are valid only while their job runs (at most its timeout + 10 minutes); calls for
+a finished or canceled job answer `409 JOB_NOT_RUNNING`, which tells the runner to stop.
 
 ## 6. Deployments
 
@@ -226,5 +236,7 @@ Module-specific examples: `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED`, `EMAIL_NOT_VE
 `GIT_PROVIDER_UNREACHABLE`, `IDEMPOTENCY_KEY_IN_PROGRESS`,
 `PIPELINE_INVALID`, `PIPELINE_NOT_FOUND`, `RUN_NOT_CANCELABLE`, `APPROVAL_NOT_ALLOWED`,
 `ENVIRONMENT_PROTECTED`, `DEPLOYMENT_NOT_FOUND`, `NOTHING_TO_ROLL_BACK`, `TARGET_UNREACHABLE`,
-`SECRET_NOT_FOUND`, `SECRET_NAME_TAKEN`, `RUNNER_TOKEN_INVALID`, `SSRF_BLOCKED`.
+`SECRET_NOT_FOUND`, `SECRET_NAME_TAKEN`, `SSRF_BLOCKED`, `JOB_NOT_RUNNING`,
+`RUNNER_NOT_FOUND`, `RUNNER_TOKEN_INVALID`, `REGISTRATION_TOKEN_INVALID`, `RUNNER_DISABLED`,
+`JOB_TOKEN_INVALID`, `ARTIFACT_NOT_FOUND`, `CACHE_NOT_FOUND`.
 Each has EN + KM entries in `web/src/locales/*/errors.json` (enforced by a Go test).

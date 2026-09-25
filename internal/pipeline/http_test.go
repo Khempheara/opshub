@@ -280,7 +280,7 @@ func TestServerSentEvents(t *testing.T) {
 	assert.Equal(t, "update", first[0]["event"], "an update on connect")
 
 	// A runner works the job: both streams hear about it.
-	c, err := e.svc.Claim(context.Background(), e.orgID, e.runnerID, nil)
+	c, err := e.svc.Claim(context.Background(), e.orgID, e.runnerID, nil, nil)
 	require.NoError(t, err)
 	require.NoError(t, e.svc.AppendLog(context.Background(), c.Job.ID, 0, "building…\n", nil))
 	require.NoError(t, e.svc.AppendLog(context.Background(), c.Job.ID, 1, "done\n", nil))

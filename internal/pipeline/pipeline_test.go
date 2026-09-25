@@ -65,11 +65,11 @@ func TestManualRunLifecycle(t *testing.T) {
 	assert.Len(t, jobByName(t, r, "test").Steps, 2)
 
 	// No runner with the required label: nothing to claim.
-	none, err := e.svc.Claim(context.Background(), e.orgID, e.runnerID, []string{"windows"})
+	none, err := e.svc.Claim(context.Background(), e.orgID, e.runnerID, []string{"windows"}, nil)
 	require.NoError(t, err)
 	assert.Nil(t, none)
 	// Another organization's runners never see these jobs.
-	other, err := e.svc.Claim(context.Background(), uuid.New(), e.runnerID, []string{"linux"})
+	other, err := e.svc.Claim(context.Background(), uuid.New(), e.runnerID, []string{"linux"}, nil)
 	require.NoError(t, err)
 	assert.Nil(t, other)
 
@@ -117,7 +117,7 @@ func TestLogsMaskingAndLimits(t *testing.T) {
 	e := newEnv(t)
 	e.git.set("main", "bbbbbbb1", "version: 1\nstages: [a]\njobs:\n  only:\n    stage: a\n    image: alpine\n    steps: [echo]\n")
 	e.run(t, e.dev, "main")
-	c, err := e.svc.Claim(context.Background(), e.orgID, e.runnerID, nil)
+	c, err := e.svc.Claim(context.Background(), e.orgID, e.runnerID, nil, nil)
 	require.NoError(t, err)
 	ctx := context.Background()
 	mask := Masker{"s3cr3t-value", "abc"} // too-short values aren't masked
@@ -403,7 +403,7 @@ func TestTickSchedulesAndReaper(t *testing.T) {
 	assert.Empty(t, schedules)
 
 	// Timeouts and jobs nobody picked up.
-	c, err := e.svc.Claim(ctx, e.orgID, e.runnerID, []string{"linux"})
+	c, err := e.svc.Claim(ctx, e.orgID, e.runnerID, []string{"linux"}, nil)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE pipeline_jobs SET started_at = now() - interval '2 hours' WHERE id = $1", c.Job.ID)
 	require.NoError(t, err)

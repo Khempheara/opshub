@@ -25,9 +25,12 @@ import (
 	"time"
 	_ "time/tzdata" // distroless images ship without a zoneinfo database
 
+	riverpkg "github.com/riverqueue/river"
+
 	"github.com/opshub/opshub/internal/auth"
 	"github.com/opshub/opshub/internal/auth/sso"
 	"github.com/opshub/opshub/internal/authn"
+	"github.com/opshub/opshub/internal/blob"
 	"github.com/opshub/opshub/internal/config"
 	"github.com/opshub/opshub/internal/crypto"
 	"github.com/opshub/opshub/internal/database"
@@ -41,6 +44,7 @@ import (
 	"github.com/opshub/opshub/internal/org"
 	"github.com/opshub/opshub/internal/pipeline"
 	"github.com/opshub/opshub/internal/project"
+	"github.com/opshub/opshub/internal/runners"
 	"github.com/opshub/opshub/internal/safehttp"
 	"github.com/opshub/opshub/internal/seed"
 	"github.com/opshub/opshub/internal/server"
@@ -132,13 +136,24 @@ func serve() error {
 	gitFactory := gitprovider.Factory{HTTP: safehttp.NewClient(safehttp.Options{AllowedCIDRs: outboundCIDRs})}
 	projectSvc := project.NewService(pool, keyRing, gitFactory, inserter, project.Config{PublicURL: cfg.PublicURL}, logger)
 	pipelineSvc := pipeline.NewService(pool, projectSvc, logger)
+	blobs, err := blob.NewLocal(cfg.BlobDir)
+	if err != nil {
+		return err
+	}
+	runnerSvc := runners.NewService(pool, pipelineSvc, projectSvc, blobs, runners.Config{
+		ArtifactMaxBytes: cfg.ArtifactMaxBytes, CacheMaxBytes: cfg.CacheMaxBytes,
+		CacheQuotaBytes: cfg.CacheQuotaBytes, SourceMaxBytes: cfg.SourceMaxBytes,
+	}, logger)
 
 	river, err := jobs.NewClient(jobs.Deps{
 		Pool: pool, Logger: logger,
 		Renderer: &mail.Renderer{Bundle: bundle},
 		Sender:   &mail.SMTPSender{Config: cfg.SMTP},
-		Register: pipelineSvc.Register,
-		Periodic: pipeline.Periodic(),
+		Register: func(w *riverpkg.Workers) {
+			pipelineSvc.Register(w)
+			runnerSvc.Register(w)
+		},
+		Periodic: append(pipeline.Periodic(), runners.Periodic()...),
 	})
 	if err != nil {
 		return err
@@ -175,6 +190,7 @@ func serve() error {
 				org.NewHandler(org.NewService(pool, river, org.Config{PublicURL: cfg.PublicURL})),
 				project.NewHandler(projectSvc, idempotency.Middleware(pool)),
 				pipeline.NewHandler(pipelineSvc, hub, idempotency.Middleware(pool)),
+				runners.NewHandler(runnerSvc),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

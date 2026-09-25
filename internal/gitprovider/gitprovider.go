@@ -61,6 +61,9 @@ type Client interface {
 	File(ctx context.Context, path, sha string) ([]byte, error)
 	// Commit resolves a branch, tag or SHA to a commit (ErrNotFound when unknown).
 	Commit(ctx context.Context, ref string) (Commit, error)
+	// Archive streams a gzip-compressed tarball of the repository at a commit. Entries sit
+	// under one top-level directory (as GitHub and GitLab produce them).
+	Archive(ctx context.Context, sha string) (io.ReadCloser, error)
 }
 
 // Commit is a resolved ref.
@@ -241,6 +244,64 @@ func (c apiClient) raw(ctx context.Context, path, accept string) ([]byte, error)
 		return nil, ErrFileTooLarge
 	}
 	return b, nil
+}
+
+// stream opens a GET that may redirect (archives redirect to a signed download URL). It
+// follows up to 3 redirects itself: the SSRF-safe client refuses to, the dial-time address
+// check still applies to every hop, and credentials are only sent to the API host.
+func (c apiClient) stream(ctx context.Context, path, accept string) (io.ReadCloser, error) {
+	target := c.base + path
+	// Never let the client follow redirects on its own: Go would forward credentials to the
+	// same hostname on another port.
+	hc := *c.http
+	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	apiHost := ""
+	if u, err := url.Parse(c.base); err == nil {
+		apiHost = u.Host
+	}
+	for hop := 0; hop <= 3; hop++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrInvalidInput, err)
+		}
+		req.Header.Set("User-Agent", "OpsHub")
+		req.Header.Set("Accept", accept)
+		if req.URL.Host == apiHost {
+			c.auth(req.Header, c.token)
+			req.Header.Set("Accept", accept)
+		}
+		resp, err := hc.Do(req)
+		if err != nil {
+			if safehttp.IsBlocked(err) {
+				return nil, err
+			}
+			return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
+		}
+		switch {
+		case resp.StatusCode >= 300 && resp.StatusCode < 400:
+			loc, lerr := resp.Location()
+			_ = resp.Body.Close()
+			if lerr != nil || (loc.Scheme != "https" && loc.Scheme != req.URL.Scheme) {
+				return nil, fmt.Errorf("%w: bad redirect", ErrUnavailable)
+			}
+			target = loc.String()
+			continue
+		case resp.StatusCode == http.StatusUnauthorized:
+			_ = resp.Body.Close()
+			return nil, ErrUnauthorized
+		case resp.StatusCode == http.StatusForbidden:
+			_ = resp.Body.Close()
+			return nil, ErrForbidden
+		case resp.StatusCode == http.StatusNotFound:
+			_ = resp.Body.Close()
+			return nil, ErrNotFound
+		case resp.StatusCode >= 300:
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("%w: status %d", ErrUnavailable, resp.StatusCode)
+		}
+		return resp.Body, nil
+	}
+	return nil, fmt.Errorf("%w: too many redirects", ErrUnavailable)
 }
 
 // ErrFileTooLarge is returned by File for files over MaxFileSize.

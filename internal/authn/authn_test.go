@@ -237,6 +237,12 @@ func TestAuthenticatorMiddleware(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, call(http.MethodGet, "Bearer "+readToken))
 	assert.Equal(t, KindAPIToken, got.Kind)
 	assert.Equal(t, http.StatusForbidden, call(http.MethodPost, "Bearer "+readToken), "api:read cannot write")
+
+	// Runner and job tokens are left to the runner API: anonymous to everyone else.
+	for _, tok := range []string{"ohr_abc_secret", "ohr_reg_secret", "ohj_secret"} {
+		assert.Equal(t, http.StatusNoContent, call(http.MethodPost, "Bearer "+tok))
+		assert.False(t, authed, tok)
+	}
 }
 
 func TestRequireSessionAndAuth(t *testing.T) {

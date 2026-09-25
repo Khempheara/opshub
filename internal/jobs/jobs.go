@@ -128,6 +128,11 @@ type PipelineTickArgs struct{}
 
 func (PipelineTickArgs) Kind() string { return "pipeline_tick" }
 
+// RunnerHousekeepingArgs runs every 30 seconds: lost runners, expired artifacts, cache quota.
+type RunnerHousekeepingArgs struct{}
+
+func (RunnerHousekeepingArgs) Kind() string { return "runner_housekeeping" }
+
 const (
 	QueuePipelines = "pipelines"
 	QueueDefault   = river.QueueDefault

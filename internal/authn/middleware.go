@@ -42,6 +42,12 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 			httpx.Error(w, r, apperr.Unauthenticated())
 			return
 		}
+		if IsMachineToken(cred) {
+			// Runner and job tokens are verified by the runner API itself; to every other
+			// route the request is anonymous.
+			next.ServeHTTP(w, r)
+			return
+		}
 		var p Principal
 		if strings.HasPrefix(cred, APITokenPrefix) {
 			userID, tokenID, scopes, err := a.Tokens.LookupAPIToken(r.Context(), crypto.HashToken(cred))
@@ -64,6 +70,18 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), p)))
 	})
+}
+
+// Token prefixes for machine credentials (runners, jobs).
+const (
+	RunnerTokenPrefix       = "ohr_"
+	RegistrationTokenPrefix = "ohr_reg_" // #nosec G101 -- a token prefix, not a credential
+	JobTokenPrefix          = "ohj_"
+)
+
+// IsMachineToken reports whether a bearer credential belongs to a runner or a job.
+func IsMachineToken(cred string) bool {
+	return strings.HasPrefix(cred, RunnerTokenPrefix) || strings.HasPrefix(cred, JobTokenPrefix)
 }
 
 // RequireAuth rejects anonymous requests with 401.

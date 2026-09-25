@@ -6,7 +6,8 @@
 #   prometheus  http://localhost:${OPSHUB_PROMETHEUS_PORT:-9090}
 #   grafana     http://localhost:${OPSHUB_GRAFANA_PORT:-3001}   "OpsHub API" dashboard
 #
-# The runner agent joins this file with Module 5.
+# Runner (opt-in): `make runner` runs pipeline jobs on this machine's Docker. It mounts the
+# host Docker socket, which is root-equivalent on the host — use it for local development.
 name: opshub
 
 x-api-env: &api-env
@@ -28,6 +29,7 @@ x-api-env: &api-env
   OPSHUB_SMTP_TLS: none
   # Trust X-Forwarded-For only from the web container (pinned IP below).
   OPSHUB_TRUSTED_PROXIES: 172.28.0.10/32
+  OPSHUB_BLOB_DIR: /data/blobs
 
 services:
   postgres:
@@ -63,6 +65,8 @@ services:
       postgres: { condition: service_healthy }
       mailpit: { condition: service_started }
     ports: ["${OPSHUB_API_PORT:-8080}:8080"]
+    volumes:
+      - blobs:/data
     healthcheck:
       test: ["CMD", "/opshub-api", "healthcheck"]
       interval: 5s
@@ -76,6 +80,27 @@ services:
     ports: ["${OPSHUB_WEB_PORT:-3000}:8080"]
     networks:
       default: { ipv4_address: 172.28.0.10 }
+
+  runner:
+    profiles: [runner]
+    build:
+      context: .
+      dockerfile: deploy/docker/runner.Dockerfile
+      args: { VERSION: "${OPSHUB_VERSION:-dev}" }
+    environment:
+      OPSHUB_URL: http://api:8080
+      # Used on first start only; afterwards the runner token lives in the runner-state volume.
+      OPSHUB_REGISTRATION_TOKEN: ${OPSHUB_RUNNER_REGISTRATION_TOKEN:-}
+      OPSHUB_RUNNER_NAME: ${OPSHUB_RUNNER_NAME:-local-docker}
+      OPSHUB_RUNNER_LABELS: ${OPSHUB_RUNNER_LABELS:-linux,docker}
+    # The socket's group (often 0 on Docker Desktop, the "docker" group's id on Linux).
+    group_add: ["${OPSHUB_DOCKER_GID:-0}"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner-state:/var/lib/opshub-runner
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:v3.14.0
@@ -104,3 +129,5 @@ networks:
 
 volumes:
   pgdata:
+  blobs:
+  runner-state:

@@ -140,6 +140,9 @@ Details: [architecture](docs/architecture.md) · [API endpoints](docs/api.md) ·
 - Create the roles as in `deploy/compose/postgres/init-roles.sql` (with real passwords).
 - Set `OPSHUB_TRUSTED_PROXIES` to your ingress range, and configure real SMTP with TLS.
 - Keep `/metrics` on an internal network (the bundled nginx doesn't expose it).
+- Put `OPSHUB_BLOB_DIR` (artifacts and caches) on persistent storage writable by the API user
+  and include it in backups if artifacts matter to you.
+- Run runners on machines dedicated to CI: the agent controls that machine's Docker.
 - Git webhooks are delivered to `OPSHUB_PUBLIC_URL/api/v1/webhooks/…`, so the Git host must be
   able to reach it. If OpsHub can't install a webhook itself, the Repository tab shows the URL and
   secret to add by hand.
@@ -148,11 +151,13 @@ Details: [architecture](docs/architecture.md) · [API endpoints](docs/api.md) ·
 
 Add a `.opshub.yml` to the connected repository ([pipeline reference](docs/pipelines.md)). Pushes,
 tags, pull requests and schedules start runs; the Pipelines tab shows the job graph, live logs
-and approval gates. Jobs execute on runners, which arrive with Module 5 — until then runs wait
-for a runner.
+and approval gates. Jobs execute on runners ([runner guide](docs/runners.md)): register one in
+**Organization → Runners**, then start the `opshub-runner` agent on a machine with Docker. For
+local development, paste the registration token into `.env` as
+`OPSHUB_RUNNER_REGISTRATION_TOKEN` and run `make runner` (it uses this machine's Docker socket).
 
 ## Roadmap
 
-1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. ✅ CI/CD pipelines · 5. Runner agent ·
+1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. ✅ CI/CD pipelines · 5. ✅ Runner agent ·
 6. Deployments · 7. Infrastructure · 8. Secrets · 9. Monitoring & alerts · 10. Logs ·
 11. Audit log · 12. Dashboard & DORA metrics

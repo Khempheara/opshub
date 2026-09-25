@@ -15,6 +15,7 @@ import { ProjectAction, type ApprovalState, type JobDetail } from '@/lib/api/gen
 import { decideJob, getGetJobQueryKey, getGetRunQueryKey, retryJob, useGetJob } from '@/lib/api/generated/pipelines/pipelines';
 import { idempotencyHeaders, newIdempotencyKey } from '@/lib/api/idempotency';
 import { cn } from '@/lib/utils';
+import { ArtifactList } from './ArtifactList';
 import { useLogStream } from './live';
 import { LogViewer } from './LogViewer';
 import { useElapsed } from './elapsed';
@@ -222,6 +223,8 @@ export function JobPanel({ jobId, onSelect, onClose }: { jobId: string; onSelect
             </ol>
           </div>
         )}
+
+        <ArtifactList jobId={j.id} finished={j.finished_at !== null} />
 
         <div className="space-y-2">
           <p className="text-sm font-medium">{t('job.logs')}</p>

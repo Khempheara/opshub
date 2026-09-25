@@ -5,6 +5,7 @@ import type home from '@/locales/en/home.json';
 import type org from '@/locales/en/org.json';
 import type pipeline from '@/locales/en/pipeline.json';
 import type project from '@/locales/en/project.json';
+import type runner from '@/locales/en/runner.json';
 import type settings from '@/locales/en/settings.json';
 
 // English is the source of truth for keys: t('missing.key') is a type error.
@@ -20,6 +21,7 @@ declare module 'i18next' {
       org: typeof org;
       pipeline: typeof pipeline;
       project: typeof project;
+      runner: typeof runner;
       settings: typeof settings;
     };
   }

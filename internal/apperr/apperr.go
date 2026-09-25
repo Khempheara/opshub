@@ -108,6 +108,17 @@ const (
 	CodeJobNotRunning        Code = "JOB_NOT_RUNNING"
 )
 
+// Module 5: runners, artifacts, cache.
+const (
+	CodeRunnerNotFound           Code = "RUNNER_NOT_FOUND"
+	CodeRunnerTokenInvalid       Code = "RUNNER_TOKEN_INVALID"       // #nosec G101 -- an error code, not a credential
+	CodeRegistrationTokenInvalid Code = "REGISTRATION_TOKEN_INVALID" // #nosec G101 -- an error code, not a credential
+	CodeRunnerDisabled           Code = "RUNNER_DISABLED"
+	CodeJobTokenInvalid          Code = "JOB_TOKEN_INVALID" // #nosec G101 -- an error code, not a credential
+	CodeArtifactNotFound         Code = "ARTIFACT_NOT_FOUND"
+	CodeCacheNotFound            Code = "CACHE_NOT_FOUND"
+)
+
 // AllCodes lists every code; append new codes here as modules add them.
 var AllCodes = []Code{
 	CodeInternal, CodeBadRequest, CodeValidation, CodeUnauthenticated, CodeForbidden,
@@ -132,6 +143,9 @@ var AllCodes = []Code{
 
 	CodeRunNotFound, CodeJobNotFound, CodePipelineInvalid, CodePipelineFileNotFound, CodeRefNotFound,
 	CodeRunNotCancelable, CodeJobNotRetryable, CodeApprovalNotAllowed, CodeJobNotRunning,
+
+	CodeRunnerNotFound, CodeRunnerTokenInvalid, CodeRegistrationTokenInvalid, CodeRunnerDisabled,
+	CodeJobTokenInvalid, CodeArtifactNotFound, CodeCacheNotFound,
 }
 
 // Error is an application error carrying its HTTP status and client-facing code.
