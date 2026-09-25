@@ -55,7 +55,7 @@ export function ProjectLayout() {
           </div>
           {p.description && <p className="text-muted-foreground break-words">{p.description}</p>}
         </div>
-        <nav aria-label={t('detail.tabs.label')} className="-mx-1 overflow-x-auto border-b">
+        <nav aria-label={t('detail.tabs.label')} className="-mx-1 overflow-x-auto overflow-y-hidden border-b">
           <ul className="flex min-w-max gap-1 px-1">
             {tabs.map((tab) => (
               <li key={tab.to}>

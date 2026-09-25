@@ -49,6 +49,9 @@ export const routes: RouteObject[] = [
               { path: 'settings', ...page(() => import('@/features/org/OrgSettingsPage'), 'OrgSettingsPage') },
               { path: 'runners', ...page(() => import('@/features/runner/RunnersRoute'), 'RunnersRoute') },
               { path: 'deploy-targets', ...page(() => import('@/features/deploy/TargetsPage'), 'TargetsPage') },
+              { path: 'infrastructure', ...page(() => import('@/features/infra/AssetsPage'), 'AssetsPage') },
+              { path: 'infrastructure/certificates', ...page(() => import('@/features/infra/CertificatesPage'), 'CertificatesPage') },
+              { path: 'infrastructure/:assetId', ...page(() => import('@/features/infra/AssetPage'), 'AssetPage') },
               { path: 'projects', ...page(() => import('@/features/project/ProjectsPage'), 'ProjectsPage') },
               {
                 path: 'projects/:projectId',

@@ -25,9 +25,12 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.7.0
+ * OpenAPI spec version: 0.8.0
  */
 
+export * from './agentHeartbeat';
+export * from './agentHeartbeat200';
+export * from './agentToken';
 export * from './aPIScope';
 export * from './aPIToken';
 export * from './aPITokenPage';
@@ -39,6 +42,19 @@ export * from './approvalState';
 export * from './approvalStateDeniedReason';
 export * from './artifact';
 export * from './artifactList';
+export * from './asset';
+export * from './assetAgent';
+export * from './assetKind';
+export * from './assetList';
+export * from './assetMetadata';
+export * from './assetMetrics';
+export * from './assetRequest';
+export * from './assetRequestMetadata';
+export * from './assetStatus';
+export * from './certificate';
+export * from './certificateList';
+export * from './certificateStatus';
+export * from './certificateSummary';
 export * from './changePasswordRequest';
 export * from './codeRequest';
 export * from './connectRepositoryRequest';
@@ -82,6 +98,8 @@ export * from './errorError';
 export * from './errorErrorDetails';
 export * from './errorResponse';
 export * from './fieldError';
+export * from './getAssetCertificate200';
+export * from './getAssetMetricsParams';
 export * from './getJobLogsParams';
 export * from './gitProvider';
 export * from './grantRequest';
@@ -103,6 +121,8 @@ export * from './jobStatus';
 export * from './kubernetesTargetConfig';
 export * from './limitParameter';
 export * from './listApiTokensParams';
+export * from './listAssetsParams';
+export * from './listCertificatesParams';
 export * from './listDeploymentsParams';
 export * from './listEnvironments200';
 export * from './listIdentities200';
@@ -126,6 +146,9 @@ export * from './member';
 export * from './memberPage';
 export * from './meta';
 export * from './metaSsoProvidersItem';
+export * from './metricPoint';
+export * from './metricSeries';
+export * from './metricSeriesSource';
 export * from './mFAChallenge';
 export * from './organization';
 export * from './organizationPage';

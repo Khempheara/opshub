@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"syscall"
 	"time"
@@ -39,6 +40,7 @@ import (
 	"github.com/opshub/opshub/internal/gitprovider"
 	"github.com/opshub/opshub/internal/i18n"
 	"github.com/opshub/opshub/internal/idempotency"
+	"github.com/opshub/opshub/internal/infra"
 	"github.com/opshub/opshub/internal/jobs"
 	"github.com/opshub/opshub/internal/logging"
 	"github.com/opshub/opshub/internal/mail"
@@ -150,6 +152,8 @@ func serve() error {
 		OutboundAllowedCIDRs: outboundCIDRs, AllowLocalDocker: cfg.DeployLocalDocker,
 	}, logger)
 
+	infraSvc := infra.NewService(pool, infra.Config{OutboundAllowedCIDRs: outboundCIDRs}, logger)
+
 	river, err := jobs.NewClient(jobs.Deps{
 		Pool: pool, Logger: logger,
 		Renderer: &mail.Renderer{Bundle: bundle},
@@ -158,8 +162,9 @@ func serve() error {
 			pipelineSvc.Register(w)
 			runnerSvc.Register(w)
 			deploySvc.Register(w)
+			infraSvc.Register(w)
 		},
-		Periodic: append(pipeline.Periodic(), runners.Periodic()...),
+		Periodic: slices.Concat(pipeline.Periodic(), runners.Periodic(), infra.Periodic()),
 	})
 	if err != nil {
 		return err
@@ -198,6 +203,7 @@ func serve() error {
 				pipeline.NewHandler(pipelineSvc, hub, idempotency.Middleware(pool)),
 				runners.NewHandler(runnerSvc),
 				deploy.NewHandler(deploySvc, hub, idempotency.Middleware(pool)),
+				infra.NewHandler(infraSvc),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

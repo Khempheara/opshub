@@ -5,7 +5,8 @@
     "settings": "ការកំណត់អង្គភាព",
     "group": "អង្គភាព",
     "runners": "Runner",
-    "deployTargets": "គោលដៅដាក់ឱ្យដំណើរការ"
+    "deployTargets": "គោលដៅដាក់ឱ្យដំណើរការ",
+    "infrastructure": "ហេដ្ឋារចនាសម្ព័ន្ធ"
   },
   "roleDescriptions": {
     "owner": "គ្រប់គ្រងទាំងស្រុង រួមទាំងការលុបអង្គភាព និងការគ្រប់គ្រង Owner។",

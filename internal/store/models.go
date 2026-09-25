@@ -55,6 +55,50 @@ func (ns NullApprovalDecision) Value() (driver.Value, error) {
 	return string(ns.ApprovalDecision), nil
 }
 
+type AssetKind string
+
+const (
+	AssetKindServer   AssetKind = "server"
+	AssetKindCluster  AssetKind = "cluster"
+	AssetKindDatabase AssetKind = "database"
+	AssetKindDomain   AssetKind = "domain"
+)
+
+func (e *AssetKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AssetKind(s)
+	case string:
+		*e = AssetKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AssetKind: %T", src)
+	}
+	return nil
+}
+
+type NullAssetKind struct {
+	AssetKind AssetKind `json:"asset_kind"`
+	Valid     bool      `json:"valid"` // Valid is true if AssetKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAssetKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.AssetKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AssetKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAssetKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AssetKind), nil
+}
+
 type DeployStrategy string
 
 const (
@@ -609,6 +653,27 @@ type Artifact struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+type AssetMetric struct {
+	AssetID uuid.UUID `json:"asset_id"`
+	Ts      time.Time `json:"ts"`
+	CpuPct  *float32  `json:"cpu_pct"`
+	MemPct  *float32  `json:"mem_pct"`
+	DiskPct *float32  `json:"disk_pct"`
+	Load1   *float32  `json:"load1"`
+}
+
+type AssetMetricsHourly struct {
+	AssetID uuid.UUID `json:"asset_id"`
+	Hour    time.Time `json:"hour"`
+	CpuAvg  *float32  `json:"cpu_avg"`
+	CpuMax  *float32  `json:"cpu_max"`
+	MemAvg  *float32  `json:"mem_avg"`
+	MemMax  *float32  `json:"mem_max"`
+	DiskAvg *float32  `json:"disk_avg"`
+	DiskMax *float32  `json:"disk_max"`
+	Samples int32     `json:"samples"`
+}
+
 type AuditLog struct {
 	ID             uuid.UUID   `json:"id"`
 	OrganizationID *uuid.UUID  `json:"organization_id"`
@@ -718,6 +783,30 @@ type IdempotencyKey struct {
 	ResponseBody   []byte    `json:"response_body"`
 	CreatedAt      time.Time `json:"created_at"`
 	ExpiresAt      time.Time `json:"expires_at"`
+}
+
+type InfraAsset struct {
+	ID               uuid.UUID  `json:"id"`
+	OrganizationID   uuid.UUID  `json:"organization_id"`
+	Kind             AssetKind  `json:"kind"`
+	Name             string     `json:"name"`
+	Address          string     `json:"address"`
+	Description      string     `json:"description"`
+	Tags             []string   `json:"tags"`
+	Metadata         []byte     `json:"metadata"`
+	TlsPort          int32      `json:"tls_port"`
+	AgentTokenHash   []byte     `json:"agent_token_hash"`
+	AgentTokenPrefix string     `json:"agent_token_prefix"`
+	AgentVersion     string     `json:"agent_version"`
+	AgentHostname    string     `json:"agent_hostname"`
+	AgentOs          string     `json:"agent_os"`
+	AgentArch        string     `json:"agent_arch"`
+	LastHeartbeatAt  *time.Time `json:"last_heartbeat_at"`
+	LastMetrics      []byte     `json:"last_metrics"`
+	CreatedBy        *uuid.UUID `json:"created_by"`
+	Version          int32      `json:"version"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type Invitation struct {
@@ -964,6 +1053,22 @@ type Session struct {
 	RevokedAt    *time.Time  `json:"revoked_at"`
 	RevokeReason *string     `json:"revoke_reason"`
 	CreatedAt    time.Time   `json:"created_at"`
+}
+
+type SslCertificate struct {
+	AssetID       uuid.UUID  `json:"asset_id"`
+	Host          string     `json:"host"`
+	Port          int32      `json:"port"`
+	Subject       string     `json:"subject"`
+	Issuer        string     `json:"issuer"`
+	DnsNames      []string   `json:"dns_names"`
+	Serial        string     `json:"serial"`
+	Fingerprint   string     `json:"fingerprint"`
+	NotBefore     *time.Time `json:"not_before"`
+	NotAfter      *time.Time `json:"not_after"`
+	Error         string     `json:"error"`
+	LastCheckedAt time.Time  `json:"last_checked_at"`
+	NextCheckAt   time.Time  `json:"next_check_at"`
 }
 
 type Team struct {

@@ -145,6 +145,16 @@ func (DeploymentArgs) InsertOpts() river.InsertOpts {
 	return river.InsertOpts{Queue: QueueDeploys, MaxAttempts: 2, UniqueOpts: river.UniqueOpts{ByArgs: true}}
 }
 
+// InfraMaintenanceArgs runs hourly: metric rollups, retention and partitions.
+type InfraMaintenanceArgs struct{}
+
+func (InfraMaintenanceArgs) Kind() string { return "infra_maintenance" }
+
+// CertificateChecksArgs probes the TLS certificates of domain assets that are due.
+type CertificateChecksArgs struct{}
+
+func (CertificateChecksArgs) Kind() string { return "certificate_checks" }
+
 const (
 	QueueDeploys   = "deploys"
 	QueuePipelines = "pipelines"

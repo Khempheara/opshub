@@ -1,4 +1,4 @@
-import { Building2, FolderGit2, KeyRound, LayoutDashboard, Rocket, Server, Settings, ShieldCheck, UserRound, Users, UsersRound, type LucideIcon } from 'lucide-react';
+import { Boxes, Building2, FolderGit2, KeyRound, LayoutDashboard, Rocket, Server, Settings, ShieldCheck, UserRound, Users, UsersRound, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router';
 import { hasRole, lastOrg } from '@/app/org';
@@ -36,6 +36,7 @@ function useNavGroups(): { label?: string; items: Item[] }[] {
         // runner.view is Developer and up (the page itself also guards).
         ...(routeOrg && hasRole(routeOrg.role, 'developer') ? [{ to: `${base}/runners`, label: t('org:nav.runners'), icon: Server }] : []),
         { to: `${base}/deploy-targets`, label: t('org:nav.deployTargets'), icon: Rocket },
+        { to: `${base}/infrastructure`, label: t('org:nav.infrastructure'), icon: Boxes },
         { to: `${base}/settings`, label: t('org:nav.settings'), icon: Settings },
       ],
     });

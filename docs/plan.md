@@ -95,3 +95,8 @@ recorded; zero HIGH/CRITICAL findings; short changelog.
 | M6-6 | 6 | Manual deploys to environments that require approvals are refused (use a pipeline, which has the approval gate); allowed roles still apply. Rollback needs an allowed role but no approvals |
 | M6-7 | 6 | SSH host keys (SSH targets and Docker over SSH) are pinned after "Test connection"; unpinned or changed keys are refused before any credentials are sent |
 | M6-8 | 6 | Docker targets on the API host's own socket only when the operator sets `OPSHUB_DEPLOY_LOCAL_DOCKER=true` |
+| M7-1 | 7 | The infrastructure agent is a mode of the runner binary (`opshub-runner agent`) with its own token type (`ohi_…`, one per server, rotation revokes); it reports metrics on Linux only |
+| M7-2 | 7 | OpsHub probes domain certificates itself (daily, hourly after a failure, "Check now"), through the SSRF guard; there is no agent-side certificate discovery |
+| M7-3 | 7 | Module 7 shows metrics and certificate expiry in the UI only; thresholds and notifications arrive with monitoring & alerts in Module 9 |
+| M7-4 | 7 | Metric partitions are managed by a `SECURITY DEFINER` function owned by the migration role, so the application role stays DML-only |
+| M7-5 | 7 | Retention: raw samples for the current and previous month (charts read them up to 30 days back), hourly average/peak rollups for 400 days; heartbeat timestamps are the server's |

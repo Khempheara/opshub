@@ -90,7 +90,11 @@
     "NOTHING_TO_ROLL_BACK": "There is no earlier release to roll back to.",
     "ENVIRONMENT_PROTECTED": "This environment is protected: you can't deploy to it from here.",
     "STRATEGY_NOT_SUPPORTED": "This target doesn't support that strategy (blue/green needs a Kubernetes target with a service).",
-    "DEPLOY_NOT_ALLOWED": "You can't deploy here."
+    "DEPLOY_NOT_ALLOWED": "You can't deploy here.",
+    "ASSET_NOT_FOUND": "Asset not found.",
+    "ASSET_NAME_TAKEN": "An asset with this name already exists.",
+    "AGENT_TOKEN_INVALID": "The agent token is invalid or was rotated.",
+    "AGENT_NOT_SUPPORTED": "Only servers run the infrastructure agent."
   },
   "rules": {
     "required": "This field is required.",
@@ -124,6 +128,10 @@
     "required_with": "This field is required with {{param}}.",
     "datetime": "Enter a date and time.",
     "uuid": "Invalid identifier.",
-    "type": "This value has the wrong type."
+    "type": "This value has the wrong type.",
+    "domain": "Enter a domain name, e.g. shop.example.com.",
+    "before": "Must be before {{param}}.",
+    "max_range": "The range can be at most {{param}}.",
+    "duration": "Enter a duration, e.g. 5m or 1h."
   }
 }

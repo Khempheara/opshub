@@ -16,6 +16,7 @@ import (
 	"github.com/opshub/opshub/api"
 	"github.com/opshub/opshub/internal/auth"
 	"github.com/opshub/opshub/internal/deploy"
+	"github.com/opshub/opshub/internal/infra"
 	"github.com/opshub/opshub/internal/org"
 	"github.com/opshub/opshub/internal/pipeline"
 	"github.com/opshub/opshub/internal/project"
@@ -52,6 +53,7 @@ func TestOpenAPIMatchesRoutes(t *testing.T) {
 		pipeline.NewHandler(nil, nil, func(h http.Handler) http.Handler { return h }),
 		runners.NewHandler(nil),
 		deploy.NewHandler(nil, nil, func(h http.Handler) http.Handler { return h }),
+		infra.NewHandler(nil),
 	} {
 		m.Mount(r)
 	}

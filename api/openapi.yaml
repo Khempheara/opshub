@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpsHub API
-  version: 0.7.0
+  version: 0.8.0
   summary: All-in-One DevOps Platform
   description: |
     REST API for OpsHub. All resource endpoints are versioned under `/api/v1`.
@@ -71,6 +71,11 @@ tags:
       Deploy targets (SSH hosts, Docker hosts, Kubernetes clusters) and deployments of a
       container image to an environment: health checks, automatic revert, release history and
       one-click rollback (docs/deployments.md). Credentials are write-only.
+  - name: infrastructure
+    description: |
+      The organization's asset inventory (servers, clusters, databases, domains), metrics from
+      infra agents and TLS certificates probed on domains (docs/infrastructure.md). Assets the
+      caller can't see answer 404 ASSET_NOT_FOUND.
   - name: runner-api
     description: |
       Used by the `opshub-runner` agent, not by people. `/runner/heartbeat` and
@@ -1935,6 +1940,226 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
 
+  /api/v1/orgs/{orgId}/assets:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [infrastructure]
+      operationId: listAssets
+      summary: The organization's assets (infra.view)
+      parameters:
+        - { name: kind, in: query, schema: { $ref: "#/components/schemas/AssetKind" } }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: q, in: query, description: Name or address contains., schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/AssetStatus" } }
+      responses:
+        "200":
+          description: Assets (at most 1000).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetList" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [infrastructure]
+      operationId: createAsset
+      summary: Add an asset (infra.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetRequest" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Asset" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/certificates:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [infrastructure]
+      operationId: listCertificates
+      summary: Domain certificates, soonest expiry first (infra.view)
+      parameters:
+        - name: expiring_within
+          in: query
+          description: Only certificates expiring within this time (e.g. 30d, 72h) or failing their check.
+          schema: { type: string, examples: ["30d"] }
+      responses:
+        "200":
+          description: Certificates.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CertificateList" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/assets/{assetId}:
+    parameters:
+      - $ref: "#/components/parameters/AssetID"
+    get:
+      tags: [infrastructure]
+      operationId: getAsset
+      summary: One asset (infra.view)
+      responses:
+        "200":
+          description: Asset.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Asset" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [infrastructure]
+      operationId: updateAsset
+      summary: Replace an asset's name, address, description, tags, metadata and TLS port (infra.manage)
+      description: The kind can't change. A domain whose address or port changes is checked again.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetRequest" }
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Asset" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "428": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [infrastructure]
+      operationId: deleteAsset
+      summary: Delete an asset with its metrics and certificate (infra.manage)
+      responses:
+        "204": { description: Deleted. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/assets/{assetId}/metrics:
+    parameters:
+      - $ref: "#/components/parameters/AssetID"
+    get:
+      tags: [infrastructure]
+      operationId: getAssetMetrics
+      summary: CPU, memory and disk series (infra.view)
+      description: |
+        Averages and maxima per step. Defaults: the last hour and a step giving at most ~300
+        points. Ranges older than 30 days come from hourly rollups (step ≥ 1 h). At most 1000
+        points and 400 days.
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: step, in: query, description: "Seconds or a duration: 60, 5m, 1h, 1d.", schema: { type: string } }
+      responses:
+        "200":
+          description: Series.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetricSeries" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/assets/{assetId}/agent-token:
+    parameters:
+      - $ref: "#/components/parameters/AssetID"
+    post:
+      tags: [infrastructure]
+      operationId: issueAgentToken
+      summary: Issue or rotate a server's infra agent token (infra.manage)
+      description: Shown once. Rotating revokes the previous token. Servers only (`AGENT_NOT_SUPPORTED`).
+      responses:
+        "201":
+          description: Token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentToken" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/assets/{assetId}/certificate:
+    parameters:
+      - $ref: "#/components/parameters/AssetID"
+    get:
+      tags: [infrastructure]
+      operationId: getAssetCertificate
+      summary: A domain's last certificate check (infra.view)
+      responses:
+        "200":
+          description: The certificate, or null when never checked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [certificate]
+                properties:
+                  certificate:
+                    oneOf:
+                      - $ref: "#/components/schemas/Certificate"
+                      - type: "null"
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/assets/{assetId}/certificate/check:
+    parameters:
+      - $ref: "#/components/parameters/AssetID"
+    post:
+      tags: [infrastructure]
+      operationId: checkAssetCertificate
+      summary: Probe a domain's certificate now (infra.manage)
+      responses:
+        "200":
+          description: Result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Certificate" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/agent/heartbeat:
+    post:
+      tags: [infrastructure]
+      operationId: agentHeartbeat
+      summary: An infra agent's sample (agent token)
+      description: Sent by `opshub-runner agent` every `interval_seconds`. Omitted metrics are unknown.
+      security:
+        - agentToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentHeartbeat" }
+      responses:
+        "200":
+          description: Recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [interval_seconds]
+                properties:
+                  interval_seconds: { type: integer }
+        "401": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /api/v1/runner/register:
     post:
       tags: [runner-api]
@@ -2184,6 +2409,10 @@ components:
       type: http
       scheme: bearer
       description: Runner token (`ohr_…`) from registration.
+    agentToken:
+      type: http
+      scheme: bearer
+      description: Infra agent token (`ohi_…`) issued for a server asset.
     jobToken:
       type: http
       scheme: bearer
@@ -2251,6 +2480,11 @@ components:
       schema: { type: string, format: uuid }
     JobID:
       name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AssetID:
+      name: assetId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -3552,6 +3786,169 @@ components:
         target_id: { type: string, format: uuid }
         version: { type: string, maxLength: 255, examples: ["ghcr.io/acme/api:3f2a9c1"] }
         strategy: { $ref: "#/components/schemas/DeployStrategy" }
+
+    AssetKind:
+      type: string
+      enum: [server, cluster, database, domain]
+    AssetStatus:
+      type: string
+      description: "Servers: online, offline, pending (no heartbeat yet), no_agent. Domains: valid, expiring (< 30 days), expired, error, unchecked. Others: inventory."
+      enum: [online, offline, pending, no_agent, valid, expiring, expired, error, unchecked, inventory]
+
+    AssetMetrics:
+      type: object
+      required: [cpu_pct, mem_pct, disk_pct, load1]
+      properties:
+        cpu_pct: { type: [number, "null"] }
+        mem_pct: { type: [number, "null"] }
+        disk_pct: { type: [number, "null"] }
+        load1: { type: [number, "null"] }
+
+    AssetAgent:
+      type: object
+      description: Present for servers. Version, hostname, os and arch come from the latest heartbeat.
+      required: [installed, token_prefix, version, hostname, os, arch, last_heartbeat_at]
+      properties:
+        installed: { type: boolean, description: "An agent token exists. Whether an agent reports with it shows in last_heartbeat_at." }
+        token_prefix: { type: string }
+        version: { type: string }
+        hostname: { type: string }
+        os: { type: string }
+        arch: { type: string }
+        last_heartbeat_at: { type: [string, "null"], format: date-time }
+
+    CertificateSummary:
+      type: object
+      required: [not_after, error, checked_at]
+      properties:
+        not_after: { type: [string, "null"], format: date-time }
+        error: { type: string }
+        checked_at: { type: [string, "null"], format: date-time }
+
+    Asset:
+      type: object
+      required: [id, kind, name, address, description, tags, metadata, tls_port, status, agent, metrics, certificate, version, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/AssetKind" }
+        name: { type: string }
+        address: { type: string }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        metadata: { type: object, additionalProperties: { type: string } }
+        tls_port: { type: integer }
+        status: { $ref: "#/components/schemas/AssetStatus" }
+        agent:
+          oneOf:
+            - $ref: "#/components/schemas/AssetAgent"
+            - type: "null"
+        metrics:
+          oneOf:
+            - $ref: "#/components/schemas/AssetMetrics"
+            - type: "null"
+        certificate:
+          oneOf:
+            - $ref: "#/components/schemas/CertificateSummary"
+            - type: "null"
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AssetList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Asset" }
+
+    AssetRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        kind: { $ref: "#/components/schemas/AssetKind" }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        address: { type: string, maxLength: 255, description: "Host or IP (server), URL or host (cluster), host[:port] (database), domain name (domain, required)." }
+        description: { type: string, maxLength: 500 }
+        tags: { type: array, maxItems: 20, items: { type: string, pattern: "^[a-z0-9][a-z0-9._:-]{0,62}$" } }
+        metadata: { type: object, maxProperties: 50, additionalProperties: { type: string, maxLength: 500 } }
+        tls_port: { type: integer, minimum: 1, maximum: 65535, default: 443 }
+
+    AgentToken:
+      type: object
+      required: [asset_id, token, token_prefix]
+      properties:
+        asset_id: { type: string, format: uuid }
+        token: { type: string, description: "`ohi_…`, shown once." }
+        token_prefix: { type: string }
+
+    AgentHeartbeat:
+      type: object
+      additionalProperties: false
+      properties:
+        version: { type: string, maxLength: 50 }
+        hostname: { type: string, maxLength: 255 }
+        os: { type: string, maxLength: 50 }
+        arch: { type: string, maxLength: 50 }
+        uptime_seconds: { type: integer, minimum: 0 }
+        cpu_pct: { type: [number, "null"], minimum: 0, maximum: 100 }
+        mem_pct: { type: [number, "null"], minimum: 0, maximum: 100 }
+        disk_pct: { type: [number, "null"], minimum: 0, maximum: 100 }
+        load1: { type: [number, "null"], minimum: 0 }
+
+    MetricPoint:
+      type: object
+      required: [t, cpu_pct, cpu_max, mem_pct, mem_max, disk_pct, disk_max]
+      properties:
+        t: { type: string, format: date-time }
+        cpu_pct: { type: [number, "null"] }
+        cpu_max: { type: [number, "null"] }
+        mem_pct: { type: [number, "null"] }
+        mem_max: { type: [number, "null"] }
+        disk_pct: { type: [number, "null"] }
+        disk_max: { type: [number, "null"] }
+
+    MetricSeries:
+      type: object
+      required: [from, to, step_seconds, source, points]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        step_seconds: { type: integer }
+        source: { type: string, enum: [raw, hourly] }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/MetricPoint" }
+
+    Certificate:
+      type: object
+      required: [asset_id, asset_name, asset_tags, host, port, subject, issuer, dns_names, serial, fingerprint, not_before, not_after, days_left, status, error, last_checked_at]
+      properties:
+        asset_id: { type: string, format: uuid }
+        asset_name: { type: string }
+        asset_tags: { type: array, items: { type: string } }
+        host: { type: string }
+        port: { type: integer }
+        subject: { type: string }
+        issuer: { type: string }
+        dns_names: { type: array, items: { type: string } }
+        serial: { type: string }
+        fingerprint: { type: string, description: SHA-256 of the leaf certificate, hex. }
+        not_before: { type: [string, "null"], format: date-time }
+        not_after: { type: [string, "null"], format: date-time }
+        days_left: { type: [integer, "null"] }
+        status: { type: string, enum: [valid, expiring, expired, error] }
+        error: { type: string, description: Empty when valid and trusted for the host. }
+        last_checked_at: { type: string, format: date-time }
+
+    CertificateList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Certificate" }
 
     ErrorCode:
       type: string

@@ -2,6 +2,7 @@ export * from './account/account';
 export * from './auth/auth';
 export * from './deployments/deployments';
 export * from './environments/environments';
+export * from './infrastructure/infrastructure';
 export * from './members/members';
 export * from './organizations/organizations';
 export * from './pipelines/pipelines';

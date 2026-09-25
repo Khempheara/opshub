@@ -1,5 +1,62 @@
 # Changelog
 
+## Module 7 — Infrastructure
+
+### Built
+
+**Backend** (`internal/infra`)
+- Asset inventory per organization: servers, clusters, databases and domains with per-kind
+  address validation, tags, metadata and a TLS port for domains. Filters by kind, tag, status
+  and text; If-Match edits; audited create/update/delete/token issue.
+- Agent tokens (`ohi_…`, servers only, stored hashed; rotation revokes) and
+  `POST /agent/heartbeat` (every 30 s): agent version, host, platform and a CPU/memory/disk/load
+  sample. Status online/offline/waiting/no agent from the last heartbeat (90 s).
+- Metrics in a month-partitioned `asset_metrics` table (server timestamps) plus hourly
+  average/peak rollups. The API picks raw or hourly data and a step for ≤ 300 points
+  (`step` settable, ≤ 1000). An hourly River job rolls up, creates partitions and applies
+  retention: raw for the current and previous month, rollups for 400 days.
+- Partition DDL through one `SECURITY DEFINER` function owned by the migration role, so
+  `opshub_app` stays DML-only.
+- TLS certificate checks of domains by OpsHub, through the SSRF guard: subject, issuer, names,
+  validity, fingerprint and stable failure reasons. Checked every 15 min when due (daily, hourly
+  after a failure) and on demand. Organization-wide list with an expiring-within filter.
+- `opshub-runner agent`: Linux metrics from `/proc` and `statfs`, container mode with
+  `--proc`/`--disk`/`--hostname`, token file permission check, stops on a revoked token.
+- Migration `000007_infrastructure`; 11 endpoints; 4 error codes (EN + KM); OpenAPI 0.8.0.
+  Demo seed: 5 assets, `web-1` with a day of sample metrics, `example.com`.
+
+**Frontend**
+- Organization → Infrastructure: asset table with status, usage bars and certificate expiry,
+  filters, and an add/edit dialog.
+- Asset page: details, agent card (token shown once with binary and Docker commands; rotate),
+  CPU/memory/disk charts (1 h–90 d, average and peak, hover readout) and a certificate card
+  with Check now.
+- Certificates tab with expiry windows.
+- New `infra` translation namespace (EN + KM). Fixed a stray scrollbar under the project tabs.
+
+### Quality
+
+- Go:
+  - Validation, assets, agent tokens and heartbeats (which don't count as edits), metric
+    series from raw and hourly data, partition maintenance and retention.
+  - Certificate probes against a test CA: valid, expiring, expired, wrong name, untrusted,
+    unreachable.
+  - Tenant isolation over all 11 routes with a coverage guard, an HTTP flow, and `/proc`
+    parsers for the agent.
+  - Infra 85.3 %; service coverage 76.8 %.
+- Web: 88 Vitest tests (+6 asset form); 43 Playwright tests (+2). They cover inventory CRUD,
+  an agent token with a heartbeat and chart, rotation, a failing certificate check, filters,
+  Khmer layout at phone and desktop widths, and viewer read-only.
+- Checked by hand: the real agent in a Linux container reporting to the dev stack.
+- golangci-lint, gosec, govulncheck, ESLint, TypeScript and the i18n check are clean. Trivy
+  finds 0 HIGH/CRITICAL in the api, web and runner images. Migrations pass up/down/up
+  (including the grant to `opshub_app`); sqlc and orval are deterministic; the OpenAPI ↔ routes
+  test passes.
+
+### Next — Module 8: Secrets
+
+Envelope-encrypted secrets with versions and rotation, audited reads and a KEK rotation CLI.
+
 ## Module 6 — Deployments
 
 ### Built
@@ -55,10 +112,6 @@
   protected environment, rollback, viewer read-only, target management, Khmer layout).
 - golangci-lint, gosec, govulncheck, ESLint, TypeScript, i18n check clean; Trivy 0
   HIGH/CRITICAL; migrations up/down/up; sqlc and orval deterministic; OpenAPI ↔ routes test.
-
-### Next — Module 7: Infrastructure
-
-Asset inventory, agent heartbeats, metrics charts and SSL certificate expiry tracking.
 
 ## Module 5 — Runner agent
 
