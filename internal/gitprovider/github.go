@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 )
 
 type github struct {
@@ -70,4 +72,40 @@ func (g *github) DeleteHook(ctx context.Context, id string) error {
 		return nil // already gone
 	}
 	return err
+}
+
+func (g *github) File(ctx context.Context, path, sha string) ([]byte, error) {
+	if !validRef(sha) || !validRef(path) {
+		return nil, ErrInvalidInput
+	}
+	// The raw media type returns the file body instead of base64 JSON.
+	return g.client().raw(ctx, "/repos/"+g.fullName+"/contents/"+escapePath(path)+"?ref="+url.QueryEscape(sha), "application/vnd.github.raw+json")
+}
+
+func (g *github) Commit(ctx context.Context, ref string) (Commit, error) {
+	if !validRef(ref) {
+		return Commit{}, ErrInvalidInput
+	}
+	var out struct {
+		SHA    string `json:"sha"`
+		Commit struct {
+			Message string `json:"message"`
+		} `json:"commit"`
+	}
+	if err := g.client().do(ctx, http.MethodGet, "/repos/"+g.fullName+"/commits/"+url.PathEscape(ref), nil, &out); err != nil {
+		if errors.Is(err, ErrForbidden) {
+			return Commit{}, ErrNotFound // 422 "No commit found for SHA" maps to ErrForbidden in do()
+		}
+		return Commit{}, err
+	}
+	return Commit{SHA: out.SHA, Message: out.Commit.Message}, nil
+}
+
+// escapePath escapes each segment of a repository path.
+func escapePath(p string) string {
+	parts := strings.Split(p, "/")
+	for i, s := range parts {
+		parts[i] = url.PathEscape(s)
+	}
+	return strings.Join(parts, "/")
 }

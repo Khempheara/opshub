@@ -95,6 +95,19 @@ const (
 	CodeIdempotencyKeyInProgress Code = "IDEMPOTENCY_KEY_IN_PROGRESS"
 )
 
+// Module 4: pipelines.
+const (
+	CodeRunNotFound          Code = "RUN_NOT_FOUND"
+	CodeJobNotFound          Code = "JOB_NOT_FOUND"
+	CodePipelineInvalid      Code = "PIPELINE_INVALID"
+	CodePipelineFileNotFound Code = "PIPELINE_FILE_NOT_FOUND"
+	CodeRefNotFound          Code = "REF_NOT_FOUND"
+	CodeRunNotCancelable     Code = "RUN_NOT_CANCELABLE"
+	CodeJobNotRetryable      Code = "JOB_NOT_RETRYABLE"
+	CodeApprovalNotAllowed   Code = "APPROVAL_NOT_ALLOWED"
+	CodeJobNotRunning        Code = "JOB_NOT_RUNNING"
+)
+
 // AllCodes lists every code; append new codes here as modules add them.
 var AllCodes = []Code{
 	CodeInternal, CodeBadRequest, CodeValidation, CodeUnauthenticated, CodeForbidden,
@@ -116,6 +129,9 @@ var AllCodes = []Code{
 	CodeProjectNotFound, CodeEnvironmentNotFound, CodeEnvironmentNameTaken, CodeEnvironmentLimit,
 	CodeRepositoryNotFound, CodeGitRepoNotFound, CodeGitAccessDenied, CodeGitProviderUnreachable,
 	CodeSSRFBlocked, CodeWebhookSignatureInvalid, CodeIdempotencyKeyReused, CodeIdempotencyKeyInProgress,
+
+	CodeRunNotFound, CodeJobNotFound, CodePipelineInvalid, CodePipelineFileNotFound, CodeRefNotFound,
+	CodeRunNotCancelable, CodeJobNotRetryable, CodeApprovalNotAllowed, CodeJobNotRunning,
 }
 
 // Error is an application error carrying its HTTP status and client-facing code.

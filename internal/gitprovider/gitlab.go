@@ -77,3 +77,24 @@ func (g *gitlab) DeleteHook(ctx context.Context, id string) error {
 	}
 	return err
 }
+
+func (g *gitlab) File(ctx context.Context, path, sha string) ([]byte, error) {
+	if !validRef(sha) || !validRef(path) {
+		return nil, ErrInvalidInput
+	}
+	return g.client().raw(ctx, g.project()+"/repository/files/"+url.PathEscape(path)+"/raw?ref="+url.QueryEscape(sha), "*/*")
+}
+
+func (g *gitlab) Commit(ctx context.Context, ref string) (Commit, error) {
+	if !validRef(ref) {
+		return Commit{}, ErrInvalidInput
+	}
+	var out struct {
+		ID      string `json:"id"`
+		Message string `json:"message"`
+	}
+	if err := g.client().do(ctx, http.MethodGet, g.project()+"/repository/commits/"+url.PathEscape(ref), nil, &out); err != nil {
+		return Commit{}, err
+	}
+	return Commit{SHA: out.ID, Message: out.Message}, nil
+}

@@ -78,6 +78,7 @@ test('an org Viewer sees the demo project read-only', async ({ page }) => {
   await page.goto('/o/angkor-tech/projects');
   await expect(page.getByRole('button', { name: 'New project' })).toHaveCount(0);
   await page.getByTestId('project-list').getByRole('link').first().click();
+  await tab(page, 'Settings').click();
   await expect(page.getByText('Only project Admins can change these settings.')).toBeVisible();
   await expect(page.getByLabel('Project name')).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Delete project' })).toHaveCount(0);
@@ -100,7 +101,7 @@ test('Khmer layout of the project pages on mobile and desktop', async ({ page })
   await page.getByRole('button', { name: 'ខ្មែរ' }).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'km');
   const project = (await page.getByTestId('project-list').getByRole('link').first().getAttribute('href')) ?? '';
-  const pages = ['/o/angkor-tech/projects', project, `${project}/environments`, `${project}/repository`, `${project}/access`];
+  const pages = ['/o/angkor-tech/projects', `${project}/settings`, `${project}/environments`, `${project}/repository`, `${project}/access`];
   for (const viewport of [
     { width: 375, height: 812 },
     { width: 1280, height: 800 },

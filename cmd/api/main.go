@@ -31,6 +31,7 @@ import (
 	"github.com/opshub/opshub/internal/config"
 	"github.com/opshub/opshub/internal/crypto"
 	"github.com/opshub/opshub/internal/database"
+	"github.com/opshub/opshub/internal/events"
 	"github.com/opshub/opshub/internal/gitprovider"
 	"github.com/opshub/opshub/internal/i18n"
 	"github.com/opshub/opshub/internal/idempotency"
@@ -38,6 +39,7 @@ import (
 	"github.com/opshub/opshub/internal/logging"
 	"github.com/opshub/opshub/internal/mail"
 	"github.com/opshub/opshub/internal/org"
+	"github.com/opshub/opshub/internal/pipeline"
 	"github.com/opshub/opshub/internal/project"
 	"github.com/opshub/opshub/internal/safehttp"
 	"github.com/opshub/opshub/internal/seed"
@@ -123,27 +125,36 @@ func serve() error {
 	if err != nil {
 		return err
 	}
+	// Services that enqueue jobs get a deferred inserter; the River client is created once
+	// their workers can be registered.
+	inserter := &jobs.Deferred{}
+	outboundCIDRs, _ := safehttp.ParseCIDRs(cfg.OutboundAllowedCIDRs) // validated by config.Load
+	gitFactory := gitprovider.Factory{HTTP: safehttp.NewClient(safehttp.Options{AllowedCIDRs: outboundCIDRs})}
+	projectSvc := project.NewService(pool, keyRing, gitFactory, inserter, project.Config{PublicURL: cfg.PublicURL}, logger)
+	pipelineSvc := pipeline.NewService(pool, projectSvc, logger)
+
 	river, err := jobs.NewClient(jobs.Deps{
 		Pool: pool, Logger: logger,
 		Renderer: &mail.Renderer{Bundle: bundle},
 		Sender:   &mail.SMTPSender{Config: cfg.SMTP},
+		Register: pipelineSvc.Register,
+		Periodic: pipeline.Periodic(),
 	})
 	if err != nil {
 		return err
 	}
+	inserter.Bind(river)
 	if err := river.Start(ctx); err != nil {
 		return fmt.Errorf("start workers: %w", err)
 	}
+	hub := events.NewHub(pool, logger)
+	go hub.Run(ctx)
 
 	ssoRegistry := sso.NewRegistry(cfg.SSO, cfg.PublicURL, nil)
 	authSvc := auth.NewService(pool, auth.Config{
 		PublicURL: cfg.PublicURL, AllowSignup: cfg.AllowSignup, BootstrapAdminEmail: cfg.BootstrapAdminEmail,
 		DefaultLocale: cfg.DefaultLocale, DefaultTimezone: cfg.DefaultTimezone,
 	}, authn.NewHasher(authn.DefaultArgon2Params), signer, keyRing, river, logger)
-
-	outboundCIDRs, _ := safehttp.ParseCIDRs(cfg.OutboundAllowedCIDRs) // validated by config.Load
-	gitFactory := gitprovider.Factory{HTTP: safehttp.NewClient(safehttp.Options{AllowedCIDRs: outboundCIDRs})}
-	projectSvc := project.NewService(pool, keyRing, gitFactory, project.Config{PublicURL: cfg.PublicURL}, logger)
 
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
@@ -163,6 +174,7 @@ func serve() error {
 				}, logger),
 				org.NewHandler(org.NewService(pool, river, org.Config{PublicURL: cfg.PublicURL})),
 				project.NewHandler(projectSvc, idempotency.Middleware(pool)),
+				pipeline.NewHandler(pipelineSvc, hub, idempotency.Middleware(pool)),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

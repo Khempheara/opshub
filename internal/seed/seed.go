@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +16,8 @@ import (
 	"github.com/opshub/opshub/internal/authn"
 	"github.com/opshub/opshub/internal/crypto"
 	"github.com/opshub/opshub/internal/database"
+	"github.com/opshub/opshub/internal/pipeline"
+	"github.com/opshub/opshub/internal/pipeline/spec"
 	"github.com/opshub/opshub/internal/store"
 )
 
@@ -60,7 +63,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 	if err != nil {
 		return err
 	}
-	return database.InTx(ctx, pool, func(tx pgx.Tx) error {
+	if err := database.InTx(ctx, pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
 		// Check first: a failed INSERT would abort the transaction, so "skip" couldn't commit.
 		var exists bool
@@ -116,7 +119,10 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 		}
 		_, _ = fmt.Fprintf(opts.Out, "  password (all demo users): %s\n", password)
 		return seedProject(ctx, q, tx, opts.Out)
-	})
+	}); err != nil {
+		return err
+	}
+	return seedRuns(ctx, pool, opts.Out)
 }
 
 // DemoProjectSlug is the seeded project in the demo organization.
@@ -139,7 +145,12 @@ func seedProject(ctx context.Context, q *store.Queries, tx pgx.Tx, out io.Writer
 	}
 	if exists {
 		_, _ = fmt.Fprintf(out, "seed: project %q already exists; skipping\n", DemoProjectSlug)
-		return nil
+		var projectID uuid.UUID
+		if err := tx.QueryRow(ctx, "SELECT id FROM projects WHERE organization_id = $1 AND slug = $2 AND deleted_at IS NULL",
+			orgID, DemoProjectSlug).Scan(&projectID); err != nil {
+			return err
+		}
+		return seedAccess(ctx, q, tx, orgID, projectID)
 	}
 	p, err := q.CreateProject(ctx, store.CreateProjectParams{
 		OrganizationID: orgID, Slug: DemoProjectSlug, Name: "Payments API · API ទូទាត់ប្រាក់",
@@ -172,16 +183,206 @@ func seedProject(ctx context.Context, q *store.Queries, tx pgx.Tx, out io.Writer
 			}
 		}
 	}
-	var teamID uuid.UUID
-	err = tx.QueryRow(ctx, "SELECT id FROM teams WHERE organization_id = $1 AND slug = 'platform' AND deleted_at IS NULL", orgID).Scan(&teamID)
-	switch {
-	case err == nil:
-		if err := q.UpsertProjectTeamGrant(ctx, store.UpsertProjectTeamGrantParams{ProjectID: p.ID, TeamID: teamID, Role: store.MemberRoleDeveloper}); err != nil {
-			return err
-		}
-	case !database.IsNoRows(err):
+	if err := seedAccess(ctx, q, tx, orgID, p.ID); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintf(out, "seed: created project %q with development, staging and protected production\n", DemoProjectSlug)
+	return nil
+}
+
+// seedAccess gives the demo Developer access to the demo project: through the Platform team
+// when it exists (fresh databases), otherwise directly (databases seeded before teams).
+func seedAccess(ctx context.Context, q *store.Queries, tx pgx.Tx, orgID, projectID uuid.UUID) error {
+	var teamID uuid.UUID
+	err := tx.QueryRow(ctx, "SELECT id FROM teams WHERE organization_id = $1 AND slug = 'platform' AND deleted_at IS NULL", orgID).Scan(&teamID)
+	switch {
+	case err == nil:
+		return q.UpsertProjectTeamGrant(ctx, store.UpsertProjectTeamGrantParams{ProjectID: projectID, TeamID: teamID, Role: store.MemberRoleDeveloper})
+	case !database.IsNoRows(err):
+		return err
+	}
+	for _, du := range DemoUsers {
+		if du.Role != store.MemberRoleDeveloper {
+			continue
+		}
+		var userID uuid.UUID
+		if err := tx.QueryRow(ctx, "SELECT id FROM users WHERE email = $1", du.Email).Scan(&userID); err != nil {
+			return err
+		}
+		if err := q.UpsertProjectUserGrant(ctx, store.UpsertProjectUserGrantParams{ProjectID: projectID, UserID: userID, Role: store.MemberRoleDeveloper}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DemoPipeline is the demo project's .opshub.yml.
+const DemoPipeline = `version: 1
+on:
+  push:
+    branches: [main, "feature/*"]
+  pull_request:
+    branches: [main]
+stages: [test, build, deploy]
+jobs:
+  test:
+    stage: test
+    image: golang:1.23
+    steps:
+      - go vet ./...
+      - go test -race ./...
+  build:
+    stage: build
+    needs: [test]
+    image: docker:27
+    steps:
+      - docker build -t payments-api:${OPSHUB_COMMIT_SHA} .
+    artifacts: [dist/]
+  deploy-production:
+    stage: deploy
+    needs: [build]
+    environment: production
+    when: manual
+    image: alpine:3
+    steps:
+      - ./scripts/deploy.sh production
+`
+
+const (
+	esc    = "\x1b"
+	green  = esc + "[32m"
+	red    = esc + "[31;1m"
+	yellow = esc + "[33m"
+	dim    = esc + "[2m"
+	reset  = esc + "[0m"
+)
+
+var demoLogs = map[string]string{
+	"test": dim + "$ go vet ./..." + reset + "\n" + dim + "$ go test -race ./..." + reset + "\n" +
+		"ok  \tpayments/api/internal/khqr\t0.412s\n" +
+		"ok  \tpayments/api/internal/cards\t1.087s\n" +
+		green + "PASS" + reset + " 214 tests, 0 failures\n",
+	"test-failed": dim + "$ go test -race ./..." + reset + "\n" +
+		"--- " + red + "FAIL" + reset + ": TestRefundRounding (0.00s)\n" +
+		"    refund_test.go:42: expected 1250 riel, got 1249\n" +
+		red + "FAIL" + reset + "\tpayments/api/internal/refunds\t0.311s\n",
+	"build": dim + "$ docker build ." + reset + "\n" +
+		"#1 [internal] load build definition from Dockerfile\n" +
+		"#7 [builder 4/4] RUN go build -o /out/api ./cmd/api\n" +
+		yellow + "#9 exporting to image" + reset + "\n" +
+		green + "Successfully built payments-api" + reset + "\n",
+	"deploy-production": dim + "$ ./scripts/deploy.sh production" + reset + "\n" +
+		"Rolling out 3 replicas…\n" + green + "Deployment healthy" + reset + "\n",
+}
+
+// seedRuns adds demo pipeline runs to the demo project when it has none: a green run with
+// an approved production deploy, a failed feature branch, a run waiting for approval and a
+// queued manual run. Jobs are "executed" through the runner-side service calls.
+func seedRuns(ctx context.Context, pool *pgxpool.Pool, out io.Writer) error {
+	var projectID, orgID uuid.UUID
+	err := pool.QueryRow(ctx, `SELECT p.id, p.organization_id FROM projects p JOIN organizations o ON o.id = p.organization_id
+		WHERE o.slug = $1 AND p.slug = $2 AND p.deleted_at IS NULL`, DemoOrgSlug, DemoProjectSlug).Scan(&projectID, &orgID)
+	if database.IsNoRows(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var runs int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM pipeline_runs WHERE project_id = $1", projectID).Scan(&runs); err != nil {
+		return err
+	}
+	if runs > 0 {
+		_, _ = fmt.Fprintf(out, "seed: project %q already has runs; skipping\n", DemoProjectSlug)
+		return nil
+	}
+	users := map[string]uuid.UUID{}
+	for _, du := range DemoUsers {
+		var id uuid.UUID
+		if err := pool.QueryRow(ctx, "SELECT id FROM users WHERE email = $1", du.Email).Scan(&id); err != nil {
+			return err
+		}
+		users[string(du.Role)] = id
+	}
+	def, err := spec.Parse([]byte(DemoPipeline))
+	if err != nil {
+		return err
+	}
+	svc := pipeline.NewService(pool, nil, slog.New(slog.DiscardHandler))
+	runner := uuid.New()
+
+	// work runs every queued job; failing names fail with the "test-failed" log.
+	work := func(fail bool) error {
+		for {
+			c, err := svc.Claim(ctx, orgID, runner, nil)
+			if err != nil || c == nil {
+				return err
+			}
+			failing := fail && c.Job.Name == "test"
+			log := demoLogs[c.Job.Name]
+			if failing {
+				log = demoLogs["test-failed"]
+			}
+			for i := range c.Job.Steps {
+				if err := svc.ReportStep(ctx, c.Job.ID, int32(i), store.StepStatusRunning, nil); err != nil { // #nosec G115 -- few steps
+					return err
+				}
+			}
+			if err := svc.AppendLog(ctx, c.Job.ID, 0, log, nil); err != nil {
+				return err
+			}
+			var code *int32
+			if failing {
+				one := int32(1)
+				code = &one
+			}
+			if err := svc.Complete(ctx, c.Job.ID, !failing, code, ""); err != nil {
+				return err
+			}
+		}
+	}
+	approve := func(runID uuid.UUID, as uuid.UUID) error {
+		var jobID uuid.UUID
+		if err := pool.QueryRow(ctx, "SELECT id FROM pipeline_jobs WHERE run_id = $1 AND status = 'waiting_approval'", runID).Scan(&jobID); err != nil {
+			return err
+		}
+		actx := authn.WithPrincipal(ctx, authn.Principal{Kind: authn.KindSession, UserID: as, SessionID: uuid.New()})
+		_, err := svc.Decide(actx, jobID, pipeline.DecideInput{Decision: store.ApprovalDecisionApproved, Comment: "Looks good · ល្អ"})
+		return err
+	}
+
+	r1, err := svc.CreateRunFromDefinition(ctx, projectID, def, store.RunTriggerPush, "refs/heads/main", "4f9c2d1a7b3e", "Add KHQR refunds", "sokha-chan", nil)
+	if err != nil {
+		return err
+	}
+	if err := work(false); err != nil {
+		return err
+	}
+	if err := approve(r1, users[string(store.MemberRoleAdmin)]); err != nil {
+		return err
+	}
+	if err := work(false); err != nil {
+		return err
+	}
+	if _, err := svc.CreateRunFromDefinition(ctx, projectID, def, store.RunTriggerPush, "refs/heads/feature/refund-rounding", "b81e0c55d2a9",
+		"Round refunds to the nearest riel", "vicheka-sok", nil); err != nil {
+		return err
+	}
+	if err := work(true); err != nil {
+		return err
+	}
+	if _, err := svc.CreateRunFromDefinition(ctx, projectID, def, store.RunTriggerPush, "refs/heads/main", "c3d4e5f60718",
+		"Bump card processor SDK", "dara-kim", nil); err != nil {
+		return err
+	}
+	if err := work(false); err != nil {
+		return err
+	}
+	dev := users[string(store.MemberRoleDeveloper)]
+	if _, err := svc.CreateRunFromDefinition(ctx, projectID, def, store.RunTriggerManual, "refs/heads/main", "c3d4e5f60718",
+		"Bump card processor SDK", "", &dev); err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(out, "seed: created 4 demo pipeline runs (succeeded, failed, waiting for approval, queued)\n")
 	return nil
 }

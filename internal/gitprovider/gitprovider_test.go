@@ -6,7 +6,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -246,4 +248,100 @@ func TestParseEvents(t *testing.T) {
 	assert.Contains(t, ev.DeliveryID, "sha256:")
 	again, _ := ParseGitLab(g, []byte(`{"ref":"refs/tags/v2","after":"123"}`))
 	assert.Equal(t, ev.DeliveryID, again.DeliveryID)
+}
+
+func TestFileAndCommit(t *testing.T) {
+	f := &fakeHost{t: t}
+	f.handle = func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.EscapedPath() {
+		case "GET /repos/acme/api/contents/.opshub.yml":
+			assert.Equal(t, "abc123", r.URL.Query().Get("ref"))
+			assert.Equal(t, "application/vnd.github.raw+json", r.Header.Get("Accept"))
+			_, _ = w.Write([]byte("version: 1\n"))
+		case "GET /repos/acme/api/contents/big.yml":
+			_, _ = w.Write(make([]byte, MaxFileSize+1))
+		case "GET /repos/acme/api/commits/main":
+			writeJSON(w, http.StatusOK, map[string]any{"sha": "abc123", "commit": map[string]string{"message": "Fix it\n\nbody"}})
+		case "GET /repos/acme/api/commits/nope":
+			w.WriteHeader(http.StatusUnprocessableEntity)
+		case "GET /api/v4/projects/grp%2Fapp/repository/files/.opshub.yml/raw":
+			assert.Equal(t, "def456", r.URL.Query().Get("ref"))
+			_, _ = w.Write([]byte("version: 1\n# gitlab\n"))
+		case "GET /api/v4/projects/grp%2Fapp/repository/commits/release%2F1.0":
+			writeJSON(w, http.StatusOK, map[string]any{"id": "def456", "message": "Release"})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}
+	srv := f.server()
+	fac := Factory{HTTP: srv.Client(), GitHubAPIURL: srv.URL, GitLabURL: srv.URL}
+	ctx := context.Background()
+
+	gh, _ := fac.Client(GitHub, "", "acme/api", "t")
+	b, err := gh.File(ctx, ".opshub.yml", "abc123")
+	require.NoError(t, err)
+	assert.Equal(t, "version: 1\n", string(b))
+	_, err = gh.File(ctx, "missing.yml", "abc123")
+	assert.ErrorIs(t, err, ErrNotFound)
+	_, err = gh.File(ctx, "big.yml", "abc123")
+	assert.ErrorIs(t, err, ErrFileTooLarge)
+	_, err = gh.File(ctx, ".opshub.yml", "../x")
+	assert.ErrorIs(t, err, ErrInvalidInput)
+	c, err := gh.Commit(ctx, "main")
+	require.NoError(t, err)
+	assert.Equal(t, Commit{SHA: "abc123", Message: "Fix it\n\nbody"}, c)
+	_, err = gh.Commit(ctx, "nope")
+	assert.ErrorIs(t, err, ErrNotFound)
+
+	gl, _ := fac.Client(GitLab, "", "grp/app", "t")
+	b, err = gl.File(ctx, ".opshub.yml", "def456")
+	require.NoError(t, err)
+	assert.Contains(t, string(b), "gitlab")
+	c, err = gl.Commit(ctx, "release/1.0")
+	require.NoError(t, err)
+	assert.Equal(t, "def456", c.SHA)
+}
+
+func TestEventDetails(t *testing.T) {
+	h := http.Header{}
+	h.Set("X-GitHub-Event", "push")
+	ev, _ := ParseGitHub(h, []byte(`{"ref":"refs/heads/main","after":"abc","head_commit":{"message":"Add login\n\nlong body"},"sender":{"login":"dara"}}`))
+	assert.Equal(t, "Add login", ev.Title)
+	assert.Equal(t, "dara", ev.Actor)
+	assert.True(t, ev.Buildable())
+
+	ev, _ = ParseGitHub(h, []byte(`{"ref":"refs/heads/old","after":"0000000000000000000000000000000000000000","deleted":true}`))
+	assert.True(t, ev.Deleted)
+	assert.False(t, ev.Buildable(), "branch deletions don't build")
+
+	h.Set("X-GitHub-Event", "pull_request")
+	ev, _ = ParseGitHub(h, []byte(`{"action":"synchronize","pull_request":{"title":"Faster","head":{"ref":"perf","sha":"f00"},"base":{"ref":"main"}}}`))
+	assert.Equal(t, Event{DeliveryID: ev.DeliveryID, Kind: "pull_request", Ref: "refs/heads/perf", CommitSHA: "f00", Action: "synchronize", BaseRef: "main", Title: "Faster"}, ev)
+	assert.True(t, ev.Buildable())
+	ev, _ = ParseGitHub(h, []byte(`{"action":"closed","pull_request":{"head":{"ref":"perf","sha":"f00"},"base":{"ref":"main"}}}`))
+	assert.False(t, ev.Buildable())
+
+	g := http.Header{}
+	g.Set("X-Gitlab-Event", "Merge Request Hook")
+	ev, _ = ParseGitLab(g, []byte(`{"user":{"username":"vicheka"},"object_attributes":{"action":"update","oldrev":"a1","source_branch":"fix","target_branch":"main","title":"Fix","last_commit":{"id":"c0"}}}`))
+	assert.Equal(t, "synchronize", ev.Action, "an update with new commits")
+	assert.Equal(t, "vicheka", ev.Actor)
+	assert.Equal(t, "main", ev.BaseRef)
+	ev, _ = ParseGitLab(g, []byte(`{"object_attributes":{"action":"update","source_branch":"fix","target_branch":"main","last_commit":{"id":"c0"}}}`))
+	assert.Equal(t, "edited", ev.Action, "a title edit doesn't build")
+	assert.False(t, ev.Buildable())
+
+	g.Set("X-Gitlab-Event", "Push Hook")
+	ev, _ = ParseGitLab(g, []byte(`{"ref":"refs/heads/main","checkout_sha":"b2","user_username":"sokha","commits":[{"id":"a1","message":"first"},{"id":"b2","message":"second\nmore"}]}`))
+	assert.Equal(t, "second", ev.Title)
+	assert.Equal(t, "sokha", ev.Actor)
+	ev, _ = ParseGitLab(g, []byte(`{"ref":"refs/heads/gone","after":"0000000000000000000000000000000000000000","checkout_sha":null}`))
+	assert.False(t, ev.Buildable())
+
+	// Titles are cut without breaking UTF-8 (Khmer is 3 bytes per character).
+	long := strings.Repeat("ក", 100)
+	h.Set("X-GitHub-Event", "push")
+	ev, _ = ParseGitHub(h, []byte(`{"ref":"refs/heads/main","after":"abc","head_commit":{"message":"`+long+`"}}`))
+	assert.True(t, utf8.ValidString(ev.Title))
+	assert.LessOrEqual(t, len(ev.Title), 200)
 }

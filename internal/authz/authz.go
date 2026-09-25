@@ -127,7 +127,7 @@ func Allowed(role Role) []Action {
 	return out
 }
 
-// Project-scope actions (Module 3). Later modules add runs, deployments and secrets.
+// Project-scope actions. Later modules add deployments and secrets.
 const (
 	ProjectView          Action = "project.view"
 	ProjectUpdate        Action = "project.update"
@@ -135,6 +135,10 @@ const (
 	ProjectManageMembers Action = "project.manage_members"
 	RepoConnect          Action = "repo.connect"
 	EnvironmentManage    Action = "environment.manage"
+	RunView              Action = "run.view"
+	PipelineTrigger      Action = "pipeline.trigger" // trigger, re-run, retry
+	RunCancel            Action = "run.cancel"
+	ApprovalDecide       Action = "approval.decide" // further limited by environment protection rules
 )
 
 // projectMatrix is the minimum effective project role for each project-scope action.
@@ -145,6 +149,10 @@ var projectMatrix = map[Action]Role{
 	ProjectManageMembers: Admin,
 	RepoConnect:          Admin,
 	EnvironmentManage:    Admin,
+	RunView:              Viewer,
+	PipelineTrigger:      Developer,
+	RunCancel:            Developer,
+	ApprovalDecide:       Developer,
 }
 
 // ProjectActions lists every project-scope action (stable order).

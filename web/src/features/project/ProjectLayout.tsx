@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Link, NavLink, Outlet, useParams } from 'react-router';
+import { Link, NavLink, Outlet, useLocation, useParams } from 'react-router';
 import { useCurrentOrg } from '@/app/org';
 import { ErrorState, LoadingState } from '@/components/common/States';
 import { RoleBadge } from '@/features/org/roles';
@@ -12,8 +12,9 @@ import { ProjectContext } from './context';
 
 /** Loads the project for /o/:orgSlug/projects/:projectId/* and renders its header and tabs. */
 export function ProjectLayout() {
-  const { t } = useTranslation('project');
+  const { t } = useTranslation(['project', 'pipeline']);
   const { projectId = '' } = useParams();
+  const { pathname } = useLocation();
   const org = useCurrentOrg();
   const project = useGetProject(projectId, { query: { retry: (n, err) => !hasCode(err, 'PROJECT_NOT_FOUND') && n < 2 } });
 
@@ -28,10 +29,12 @@ export function ProjectLayout() {
 
   const base = `/o/${org.slug}/projects/${p.id}`;
   const tabs = [
-    { to: base, label: t('detail.tabs.settings'), end: true },
+    // The Pipelines tab covers the run list (index) and run pages.
+    { to: base, label: t('pipeline:tab'), end: !pathname.startsWith(`${base}/runs/`) },
     { to: `${base}/environments`, label: t('detail.tabs.environments') },
     { to: `${base}/repository`, label: t('detail.tabs.repository') },
     { to: `${base}/access`, label: t('detail.tabs.access') },
+    { to: `${base}/settings`, label: t('detail.tabs.settings') },
   ];
 
   return (

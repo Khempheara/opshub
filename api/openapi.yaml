@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpsHub API
-  version: 0.4.0
+  version: 0.5.0
   summary: All-in-One DevOps Platform
   description: |
     REST API for OpsHub. All resource endpoints are versioned under `/api/v1`.
@@ -57,6 +57,10 @@ tags:
     description: Environments with non-secret variables and protection rules.
   - name: webhooks
     description: Git host webhook receivers, authenticated by signature instead of a session.
+  - name: pipelines
+    description: |
+      Pipeline runs from `.opshub.yml` (docs/pipelines.md): runs, jobs, logs, approvals and
+      live updates over Server-Sent Events. Jobs execute on runners (Module 5).
 
 security:
   - bearerAuth: []
@@ -1324,6 +1328,260 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
 
+  /api/v1/projects/{projectId}/pipeline/validate:
+    parameters:
+      - $ref: "#/components/parameters/ProjectID"
+    post:
+      tags: [pipelines]
+      operationId: validatePipeline
+      summary: Check a .opshub.yml without running it (project.view)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ValidatePipelineRequest" }
+      responses:
+        "200":
+          description: Validation result, with line/column problems.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidatePipelineResult" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{projectId}/runs:
+    parameters:
+      - $ref: "#/components/parameters/ProjectID"
+    get:
+      tags: [pipelines]
+      operationId: listRuns
+      summary: Pipeline runs, newest first (run.view)
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/RunStatus" } }
+        - { name: trigger, in: query, schema: { $ref: "#/components/schemas/RunTrigger" } }
+        - { name: ref, in: query, description: Branch name or full ref., schema: { type: string } }
+      responses:
+        "200":
+          description: Runs.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunPage" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [pipelines]
+      operationId: triggerRun
+      summary: Run the pipeline for a branch, tag or commit (pipeline.trigger)
+      description: |
+        Reads `.opshub.yml` at the resolved commit from the Git host. Errors: `REF_NOT_FOUND`,
+        `PIPELINE_FILE_NOT_FOUND`, `PIPELINE_INVALID` (details.problems), `REPOSITORY_NOT_FOUND`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TriggerRunRequest" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunDetail" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    get:
+      tags: [pipelines]
+      operationId: getRun
+      summary: A run with the current attempt of every job (run.view)
+      responses:
+        "200":
+          description: Run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runs/{runId}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    post:
+      tags: [pipelines]
+      operationId: cancelRun
+      summary: Cancel every unfinished job (run.cancel)
+      responses:
+        "200":
+          description: Canceled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunDetail" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runs/{runId}/rerun:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    post:
+      tags: [pipelines]
+      operationId: rerunRun
+      summary: Re-run (pipeline.trigger)
+      description: |
+        `failed_only: true` retries the finished run's failed and canceled jobs in place (200);
+        otherwise a new run is created from the same definition snapshot and commit (201).
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RerunRequest" }
+      responses:
+        "200":
+          description: Failed jobs retried.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunDetail" }
+        "201":
+          description: New run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunDetail" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runs/{runId}/events:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    get:
+      tags: [pipelines]
+      operationId: runEvents
+      summary: Server-Sent Events for run and job status changes (run.view)
+      description: |
+        Emits `event: update` (data `{"run_id"}`) on connect and whenever the run or one of its
+        jobs changes; re-read the run. Comments (`: ping`) keep the connection alive. The stream
+        ends after 5 minutes; reconnect with a fresh access token.
+      responses:
+        "200":
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/jobs/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+    get:
+      tags: [pipelines]
+      operationId: getJob
+      summary: A job attempt with steps, attempts and approval gate (run.view)
+      responses:
+        "200":
+          description: Job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/jobs/{jobId}/retry:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+    post:
+      tags: [pipelines]
+      operationId: retryJob
+      summary: Retry a failed or canceled job with the jobs after it (pipeline.trigger)
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: New attempt.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/v1/jobs/{jobId}/logs:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+    get:
+      tags: [pipelines]
+      operationId: getJobLogs
+      summary: Log chunks after a sequence number (run.view)
+      description: "Send `Accept: text/plain` to download the whole log as a file."
+      parameters:
+        - { name: after_seq, in: query, schema: { type: integer, minimum: -1, default: -1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 500 } }
+      responses:
+        "200":
+          description: Log page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogPage" }
+            text/plain:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/jobs/{jobId}/logs/stream:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+    get:
+      tags: [pipelines]
+      operationId: streamJobLogs
+      summary: Server-Sent Events of live log output (run.view)
+      description: |
+        `event: log` with `id` = sequence number and data `{"seq","content"}`; `event: end` once
+        the job has finished and all output was sent. Resume with `Last-Event-ID` or `?after_seq`.
+      parameters:
+        - { name: after_seq, in: query, schema: { type: integer, minimum: -1 } }
+        - { name: Last-Event-ID, in: header, schema: { type: string } }
+      responses:
+        "200":
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/jobs/{jobId}/approvals:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+    post:
+      tags: [pipelines]
+      operationId: decideJob
+      summary: Approve or reject a job waiting for approval (approval.decide)
+      description: |
+        Environment protection rules apply: allowed roles ("this role or higher"), required
+        approvals, and the person who started the run can't approve it. Refusals are
+        `APPROVAL_NOT_ALLOWED` with `details.reason` = not_waiting | permission | role | self |
+        already_decided.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApprovalRequest" }
+      responses:
+        "200":
+          description: Recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobDetail" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1386,6 +1644,16 @@ components:
       required: true
       description: '`user:<uuid>` or `team:<uuid>`.'
       schema: { type: string, pattern: "^(user|team):[0-9a-fA-F-]{36}$" }
+    RunID:
+      name: runId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    JobID:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -1869,7 +2137,7 @@ components:
 
     ProjectAction:
       type: string
-      enum: [project.view, project.update, project.delete, project.manage_members, repo.connect, environment.manage]
+      enum: [project.view, project.update, project.delete, project.manage_members, repo.connect, environment.manage, run.view, pipeline.trigger, run.cancel, approval.decide]
 
     ProjectDetail:
       allOf:
@@ -2078,6 +2346,230 @@ components:
         protection:
           oneOf:
             - $ref: "#/components/schemas/Protection"
+            - type: "null"
+
+    RunStatus:
+      type: string
+      enum: [queued, running, waiting, succeeded, failed, canceled]
+    RunTrigger:
+      type: string
+      enum: [push, pull_request, tag, manual, schedule]
+    JobStatus:
+      type: string
+      enum: [created, waiting_approval, queued, running, succeeded, failed, canceled, skipped]
+    StepStatus:
+      type: string
+      enum: [pending, running, succeeded, failed, skipped, canceled]
+
+    PipelineProblem:
+      type: object
+      required: [line, column, path, rule]
+      properties:
+        line: { type: integer }
+        column: { type: integer }
+        path: { type: string, examples: ["jobs.build.needs[0]"] }
+        rule:
+          type: string
+          description: Stable code, translated by the UI (docs/pipelines.md lists them).
+          examples: [unknown_stage, cycle, required]
+        param: { type: string }
+
+    Run:
+      type: object
+      required: [id, project_id, number, status, trigger, ref, ref_name, commit_sha, title, actor_name, created_by, created_by_name, rerun_of, variables, problems, created_at, started_at, finished_at]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        number: { type: integer }
+        status: { $ref: "#/components/schemas/RunStatus" }
+        trigger: { $ref: "#/components/schemas/RunTrigger" }
+        ref: { type: string, examples: [refs/heads/main] }
+        ref_name: { type: string, examples: [main] }
+        commit_sha: { type: string }
+        title: { type: string, description: Commit message (first line) or pull request title. }
+        actor_name: { type: string, description: Git host username for webhook runs. }
+        created_by: { type: [string, "null"], format: uuid }
+        created_by_name: { type: string }
+        rerun_of: { type: [string, "null"], format: uuid }
+        variables: { type: object, additionalProperties: { type: string } }
+        problems:
+          type: array
+          items: { $ref: "#/components/schemas/PipelineProblem" }
+          description: Why the pipeline file was invalid (the run failed without jobs).
+        created_at: { type: string, format: date-time }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+
+    RunPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Run" }
+        next_cursor: { type: [string, "null"] }
+
+    Step:
+      type: object
+      required: [index, name, command, status, exit_code, started_at, finished_at]
+      properties:
+        index: { type: integer }
+        name: { type: string }
+        command: { type: string }
+        status: { $ref: "#/components/schemas/StepStatus" }
+        exit_code: { type: [integer, "null"] }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+
+    Job:
+      type: object
+      required: [id, run_id, name, stage, stage_index, needs, condition, environment, image, runs_on, status, attempt, failure_reason, exit_code, timeout_seconds, queued_at, started_at, finished_at, steps]
+      properties:
+        id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        name: { type: string }
+        stage: { type: string }
+        stage_index: { type: integer }
+        needs: { type: array, items: { type: string } }
+        condition: { type: string, enum: [on_success, on_failure, always, manual] }
+        environment: { type: [string, "null"] }
+        image: { type: string }
+        runs_on: { type: array, items: { type: string } }
+        status: { $ref: "#/components/schemas/JobStatus" }
+        attempt: { type: integer }
+        failure_reason:
+          type: [string, "null"]
+          description: upstream_failed, not_needed, rejected, branch_not_allowed, environment_not_found, timeout, no_runner, step_failed, runner_error
+        exit_code: { type: [integer, "null"] }
+        timeout_seconds: { type: integer }
+        queued_at: { type: [string, "null"], format: date-time }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/Step" }
+
+    RunDetail:
+      allOf:
+        - $ref: "#/components/schemas/Run"
+        - type: object
+          required: [stages, jobs]
+          properties:
+            stages: { type: array, items: { type: string } }
+            jobs:
+              type: array
+              items: { $ref: "#/components/schemas/Job" }
+
+    Approval:
+      type: object
+      required: [user_id, user_name, decision, comment, created_at]
+      properties:
+        user_id: { type: string, format: uuid }
+        user_name: { type: string }
+        decision: { type: string, enum: [approved, rejected] }
+        comment: { type: string }
+        created_at: { type: string, format: date-time }
+
+    ApprovalState:
+      type: object
+      required: [required, approved, protected, allowed_roles, allowed_branches, approvals, can_decide]
+      properties:
+        required: { type: integer }
+        approved: { type: integer }
+        protected: { type: boolean }
+        allowed_roles: { type: array, items: { $ref: "#/components/schemas/Role" } }
+        allowed_branches: { type: array, items: { type: string } }
+        approvals:
+          type: array
+          items: { $ref: "#/components/schemas/Approval" }
+        can_decide: { type: boolean }
+        denied_reason: { type: string, enum: [not_waiting, permission, role, self, already_decided] }
+
+    JobAttempt:
+      type: object
+      required: [id, attempt, status, started_at, finished_at]
+      properties:
+        id: { type: string, format: uuid }
+        attempt: { type: integer }
+        status: { $ref: "#/components/schemas/JobStatus" }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+
+    JobDetail:
+      allOf:
+        - $ref: "#/components/schemas/Job"
+        - type: object
+          required: [run_number, attempts, approval]
+          properties:
+            run_number: { type: integer }
+            attempts:
+              type: array
+              items: { $ref: "#/components/schemas/JobAttempt" }
+            approval:
+              oneOf:
+                - $ref: "#/components/schemas/ApprovalState"
+                - type: "null"
+
+    LogChunk:
+      type: object
+      required: [seq, content]
+      properties:
+        seq: { type: integer }
+        content: { type: string }
+
+    LogPage:
+      type: object
+      required: [items, next_seq, complete]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LogChunk" }
+        next_seq: { type: integer, description: Pass as after_seq for the next page. }
+        complete: { type: boolean, description: The job finished and every chunk was returned. }
+
+    TriggerRunRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        ref: { type: string, maxLength: 255, description: Branch, tag or commit; defaults to the default branch. }
+        variables:
+          type: object
+          maxProperties: 50
+          additionalProperties: { type: string, maxLength: 4096 }
+
+    RerunRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        failed_only: { type: boolean, default: false }
+
+    ApprovalRequest:
+      type: object
+      required: [decision]
+      additionalProperties: false
+      properties:
+        decision: { type: string, enum: [approved, rejected] }
+        comment: { type: string, maxLength: 500 }
+
+    ValidatePipelineRequest:
+      type: object
+      required: [content]
+      additionalProperties: false
+      properties:
+        content: { type: string, maxLength: 262144 }
+
+    ValidatePipelineResult:
+      type: object
+      required: [valid, problems, definition]
+      properties:
+        valid: { type: boolean }
+        problems:
+          type: array
+          items: { $ref: "#/components/schemas/PipelineProblem" }
+        definition:
+          description: The normalized definition (jobs with resolved needs) when valid.
+          oneOf:
+            - type: object
             - type: "null"
 
     ErrorCode:

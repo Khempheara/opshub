@@ -90,6 +90,10 @@ func TestProjectPermissionMatrix(t *testing.T) {
 		ProjectManageMembers: {true, true, false, false},
 		RepoConnect:          {true, true, false, false},
 		EnvironmentManage:    {true, true, false, false},
+		RunView:              {true, true, true, true},
+		PipelineTrigger:      {true, true, true, false},
+		RunCancel:            {true, true, true, false},
+		ApprovalDecide:       {true, true, true, false},
 	}
 	assert.ElementsMatch(t, ProjectActions(), func() []Action {
 		var out []Action
@@ -105,7 +109,7 @@ func TestProjectPermissionMatrix(t *testing.T) {
 		assert.Equal(t, r.viewer, CanProject(Viewer, a), "viewer %s", a)
 	}
 	assert.False(t, CanProject(Owner, OrgView), "org actions aren't project actions")
-	assert.Equal(t, []Action{ProjectView}, AllowedProject(Viewer))
+	assert.Equal(t, []Action{ProjectView, RunView}, AllowedProject(Viewer))
 }
 
 // Effective project role = max(inherited org role, direct grant, team grant); docs/rbac.md.

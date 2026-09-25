@@ -25,7 +25,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.4.0
+ * OpenAPI spec version: 0.5.0
  */
 
 export type APIScope = typeof APIScope[keyof typeof APIScope];

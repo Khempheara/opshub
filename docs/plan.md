@@ -78,3 +78,7 @@ recorded; zero HIGH/CRITICAL findings; short changelog.
 | M3-1 | 3 | Git hosts: github.com, gitlab.com, GitHub Enterprise and self-managed GitLab (https `base_url`); internal addresses need `OPSHUB_OUTBOUND_ALLOWED_CIDRS` |
 | M3-2 | 3 | Webhooks: OpsHub creates the hook with the access token; if it can't, the repository connects in manual mode and the UI shows the URL + secret once |
 | M3-3 | 3 | Until pipelines exist (Module 4), valid webhooks are verified, de-duplicated and recorded only |
+| M4-1 | 4 | Pipelines ship before runners: the runner-side job lifecycle is a service exercised by tests; Module 5 adds its HTTP endpoints and the runner binary |
+| M4-2 | 4 | Cron triggers use an in-house 5-field cron parser (no dependency) |
+| M4-3 | 4 | Artifacts and cache (blob store, upload/download) arrive with runners in Module 5; Module 4 validates and stores their definitions |
+| M4-4 | 4 | One pipeline per project (`.opshub.yml`); runs snapshot the definition. An invalid file on push creates a failed run listing the problems; a manual run with an invalid file is refused (`PIPELINE_INVALID`) |

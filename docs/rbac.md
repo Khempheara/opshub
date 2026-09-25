@@ -101,7 +101,7 @@ Owners or other Admins. They may change their own role or leave. Owners manage e
 | Reveal secret value | — | — | — | — |
 | Search service logs | ✅ | ✅ | ✅ | ✅ |
 
-² Only if the environment's protection rule lists `developer` in `allowed_roles`. Protection rules can
+² Only if the environment's protection rule allows `developer` (allowed roles mean "this role or higher"). Protection rules can
 additionally require N approvals from distinct users; the approver may not be the person who triggered the run.
 
 ³ Non-protected environments only.

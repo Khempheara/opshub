@@ -13,6 +13,48 @@ import (
 	"github.com/google/uuid"
 )
 
+type ApprovalDecision string
+
+const (
+	ApprovalDecisionApproved ApprovalDecision = "approved"
+	ApprovalDecisionRejected ApprovalDecision = "rejected"
+)
+
+func (e *ApprovalDecision) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ApprovalDecision(s)
+	case string:
+		*e = ApprovalDecision(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ApprovalDecision: %T", src)
+	}
+	return nil
+}
+
+type NullApprovalDecision struct {
+	ApprovalDecision ApprovalDecision `json:"approval_decision"`
+	Valid            bool             `json:"valid"` // Valid is true if ApprovalDecision is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullApprovalDecision) Scan(value interface{}) error {
+	if value == nil {
+		ns.ApprovalDecision, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ApprovalDecision.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullApprovalDecision) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ApprovalDecision), nil
+}
+
 type EmailTokenPurpose string
 
 const (
@@ -140,6 +182,54 @@ func (ns NullGitProvider) Value() (driver.Value, error) {
 	return string(ns.GitProvider), nil
 }
 
+type JobStatus string
+
+const (
+	JobStatusCreated         JobStatus = "created"
+	JobStatusWaitingApproval JobStatus = "waiting_approval"
+	JobStatusQueued          JobStatus = "queued"
+	JobStatusRunning         JobStatus = "running"
+	JobStatusSucceeded       JobStatus = "succeeded"
+	JobStatusFailed          JobStatus = "failed"
+	JobStatusCanceled        JobStatus = "canceled"
+	JobStatusSkipped         JobStatus = "skipped"
+)
+
+func (e *JobStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = JobStatus(s)
+	case string:
+		*e = JobStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for JobStatus: %T", src)
+	}
+	return nil
+}
+
+type NullJobStatus struct {
+	JobStatus JobStatus `json:"job_status"`
+	Valid     bool      `json:"valid"` // Valid is true if JobStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullJobStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.JobStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.JobStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullJobStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.JobStatus), nil
+}
+
 type MemberRole string
 
 const (
@@ -182,6 +272,143 @@ func (ns NullMemberRole) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.MemberRole), nil
+}
+
+type RunStatus string
+
+const (
+	RunStatusQueued    RunStatus = "queued"
+	RunStatusRunning   RunStatus = "running"
+	RunStatusWaiting   RunStatus = "waiting"
+	RunStatusSucceeded RunStatus = "succeeded"
+	RunStatusFailed    RunStatus = "failed"
+	RunStatusCanceled  RunStatus = "canceled"
+)
+
+func (e *RunStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RunStatus(s)
+	case string:
+		*e = RunStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RunStatus: %T", src)
+	}
+	return nil
+}
+
+type NullRunStatus struct {
+	RunStatus RunStatus `json:"run_status"`
+	Valid     bool      `json:"valid"` // Valid is true if RunStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRunStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.RunStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RunStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRunStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RunStatus), nil
+}
+
+type RunTrigger string
+
+const (
+	RunTriggerPush        RunTrigger = "push"
+	RunTriggerPullRequest RunTrigger = "pull_request"
+	RunTriggerTag         RunTrigger = "tag"
+	RunTriggerManual      RunTrigger = "manual"
+	RunTriggerSchedule    RunTrigger = "schedule"
+)
+
+func (e *RunTrigger) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RunTrigger(s)
+	case string:
+		*e = RunTrigger(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RunTrigger: %T", src)
+	}
+	return nil
+}
+
+type NullRunTrigger struct {
+	RunTrigger RunTrigger `json:"run_trigger"`
+	Valid      bool       `json:"valid"` // Valid is true if RunTrigger is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRunTrigger) Scan(value interface{}) error {
+	if value == nil {
+		ns.RunTrigger, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RunTrigger.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRunTrigger) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RunTrigger), nil
+}
+
+type StepStatus string
+
+const (
+	StepStatusPending   StepStatus = "pending"
+	StepStatusRunning   StepStatus = "running"
+	StepStatusSucceeded StepStatus = "succeeded"
+	StepStatusFailed    StepStatus = "failed"
+	StepStatusSkipped   StepStatus = "skipped"
+	StepStatusCanceled  StepStatus = "canceled"
+)
+
+func (e *StepStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = StepStatus(s)
+	case string:
+		*e = StepStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for StepStatus: %T", src)
+	}
+	return nil
+}
+
+type NullStepStatus struct {
+	StepStatus StepStatus `json:"step_status"`
+	Valid      bool       `json:"valid"` // Valid is true if StepStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullStepStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.StepStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.StepStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullStepStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.StepStatus), nil
 }
 
 type WebhookMode string
@@ -303,6 +530,33 @@ type Invitation struct {
 	CreatedAt      time.Time  `json:"created_at"`
 }
 
+type JobApproval struct {
+	ID        uuid.UUID        `json:"id"`
+	JobID     uuid.UUID        `json:"job_id"`
+	UserID    uuid.UUID        `json:"user_id"`
+	Decision  ApprovalDecision `json:"decision"`
+	Comment   string           `json:"comment"`
+	CreatedAt time.Time        `json:"created_at"`
+}
+
+type JobLogChunk struct {
+	JobID     uuid.UUID `json:"job_id"`
+	Seq       int32     `json:"seq"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type JobStep struct {
+	JobID      uuid.UUID  `json:"job_id"`
+	Index      int32      `json:"index"`
+	Name       string     `json:"name"`
+	Command    string     `json:"command"`
+	Status     StepStatus `json:"status"`
+	ExitCode   *int32     `json:"exit_code"`
+	StartedAt  *time.Time `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at"`
+}
+
 type MfaChallenge struct {
 	ID         uuid.UUID  `json:"id"`
 	UserID     uuid.UUID  `json:"user_id"`
@@ -333,6 +587,66 @@ type OrganizationMember struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
+type PipelineJob struct {
+	ID             uuid.UUID  `json:"id"`
+	RunID          uuid.UUID  `json:"run_id"`
+	ProjectID      uuid.UUID  `json:"project_id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Name           string     `json:"name"`
+	Stage          string     `json:"stage"`
+	StageIndex     int32      `json:"stage_index"`
+	Needs          []string   `json:"needs"`
+	Condition      string     `json:"condition"`
+	Environment    *string    `json:"environment"`
+	EnvironmentID  *uuid.UUID `json:"environment_id"`
+	RunsOn         []string   `json:"runs_on"`
+	Spec           []byte     `json:"spec"`
+	Status         JobStatus  `json:"status"`
+	Attempt        int32      `json:"attempt"`
+	RunnerID       *uuid.UUID `json:"runner_id"`
+	TimeoutSeconds int32      `json:"timeout_seconds"`
+	ExitCode       *int32     `json:"exit_code"`
+	FailureReason  *string    `json:"failure_reason"`
+	LogBytes       int64      `json:"log_bytes"`
+	QueuedAt       *time.Time `json:"queued_at"`
+	StartedAt      *time.Time `json:"started_at"`
+	FinishedAt     *time.Time `json:"finished_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+type PipelineRun struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	ProjectID      uuid.UUID  `json:"project_id"`
+	Number         int32      `json:"number"`
+	Status         RunStatus  `json:"status"`
+	Trigger        RunTrigger `json:"trigger"`
+	Ref            string     `json:"ref"`
+	CommitSha      string     `json:"commit_sha"`
+	Title          string     `json:"title"`
+	ActorName      string     `json:"actor_name"`
+	CreatedBy      *uuid.UUID `json:"created_by"`
+	RerunOf        *uuid.UUID `json:"rerun_of"`
+	Definition     []byte     `json:"definition"`
+	Problems       []byte     `json:"problems"`
+	Variables      []byte     `json:"variables"`
+	StartedAt      *time.Time `json:"started_at"`
+	FinishedAt     *time.Time `json:"finished_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+type PipelineSchedule struct {
+	ID        uuid.UUID  `json:"id"`
+	ProjectID uuid.UUID  `json:"project_id"`
+	Cron      string     `json:"cron"`
+	NextRunAt time.Time  `json:"next_run_at"`
+	LastRunAt *time.Time `json:"last_run_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
 type Project struct {
 	ID             uuid.UUID  `json:"id"`
 	OrganizationID uuid.UUID  `json:"organization_id"`
@@ -345,6 +659,7 @@ type Project struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	DeletedAt      *time.Time `json:"deleted_at"`
+	LastRunNumber  int32      `json:"last_run_number"`
 }
 
 type ProjectMember struct {
