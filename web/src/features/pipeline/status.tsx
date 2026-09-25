@@ -71,6 +71,7 @@ const RULES = new Set([
   'range',
   'path',
   'deploy_requires_environment',
+  'deploy_with_steps',
 ]);
 
 /** Pipeline file problems with line numbers, translated by rule code. */

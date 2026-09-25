@@ -119,6 +119,19 @@ const (
 	CodeCacheNotFound            Code = "CACHE_NOT_FOUND"
 )
 
+// Module 6: deploy targets and deployments.
+const (
+	CodeTargetNotFound       Code = "DEPLOY_TARGET_NOT_FOUND"
+	CodeTargetNameTaken      Code = "DEPLOY_TARGET_NAME_TAKEN"
+	CodeTargetInUse          Code = "DEPLOY_TARGET_IN_USE"
+	CodeDeploymentNotFound   Code = "DEPLOYMENT_NOT_FOUND"
+	CodeDeploymentInProgress Code = "DEPLOYMENT_IN_PROGRESS"
+	CodeNothingToRollBack    Code = "NOTHING_TO_ROLL_BACK"
+	CodeEnvironmentProtected Code = "ENVIRONMENT_PROTECTED"
+	CodeStrategyNotSupported Code = "STRATEGY_NOT_SUPPORTED"
+	CodeDeployNotAllowed     Code = "DEPLOY_NOT_ALLOWED"
+)
+
 // AllCodes lists every code; append new codes here as modules add them.
 var AllCodes = []Code{
 	CodeInternal, CodeBadRequest, CodeValidation, CodeUnauthenticated, CodeForbidden,
@@ -146,6 +159,8 @@ var AllCodes = []Code{
 
 	CodeRunnerNotFound, CodeRunnerTokenInvalid, CodeRegistrationTokenInvalid, CodeRunnerDisabled,
 	CodeJobTokenInvalid, CodeArtifactNotFound, CodeCacheNotFound,
+	CodeTargetNotFound, CodeTargetNameTaken, CodeTargetInUse, CodeDeploymentNotFound, CodeDeploymentInProgress,
+	CodeNothingToRollBack, CodeEnvironmentProtected, CodeStrategyNotSupported, CodeDeployNotAllowed,
 }
 
 // Error is an application error carrying its HTTP status and client-facing code.

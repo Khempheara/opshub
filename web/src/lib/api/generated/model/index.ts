@@ -25,7 +25,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.6.0
+ * OpenAPI spec version: 0.7.0
  */
 
 export * from './aPIScope';
@@ -48,13 +48,28 @@ export * from './connectRepositoryResultWebhookMode';
 export * from './connectRepositoryResultWebhookReason';
 export * from './createAPITokenRequest';
 export * from './createdAPIToken';
+export * from './createDeploymentRequest';
+export * from './createDeployTargetRequest';
 export * from './createOrganizationRequest';
 export * from './createProjectRequest';
 export * from './cSRFTokenParameter';
 export * from './cursorParameter';
 export * from './deleteOrganizationParams';
 export * from './deleteProjectParams';
+export * from './deployment';
+export * from './deploymentPage';
+export * from './deploymentStatus';
+export * from './deployStrategy';
+export * from './deployTarget';
+export * from './deployTargetConfig';
+export * from './deployTargetCredentials';
+export * from './deployTargetKind';
+export * from './deployTargetList';
 export * from './disableTwoFactorRequest';
+export * from './dockerTargetConfig';
+export * from './dockerTargetConfigConnection';
+export * from './dockerTargetConfigEnv';
+export * from './dockerTargetConfigRestart';
 export * from './emailRequest';
 export * from './environment';
 export * from './environmentKind';
@@ -71,6 +86,8 @@ export * from './getJobLogsParams';
 export * from './gitProvider';
 export * from './grantRequest';
 export * from './grantRequestRole';
+export * from './healthCheck';
+export * from './healthResult';
 export * from './idempotencyKeyParameter';
 export * from './identity';
 export * from './ifMatchParameter';
@@ -83,8 +100,10 @@ export * from './jobAttempt';
 export * from './jobCondition';
 export * from './jobDetail';
 export * from './jobStatus';
+export * from './kubernetesTargetConfig';
 export * from './limitParameter';
 export * from './listApiTokensParams';
+export * from './listDeploymentsParams';
 export * from './listEnvironments200';
 export * from './listIdentities200';
 export * from './listInvitationsParams';
@@ -148,12 +167,16 @@ export * from './runVariables';
 export * from './session';
 export * from './sessionAuthMethod';
 export * from './sessionPage';
+export * from './sSHTargetConfig';
+export * from './sSHTargetConfigHostKeys';
 export * from './ssoCallbackParams';
 export * from './ssoStartParams';
 export * from './status';
 export * from './step';
 export * from './stepStatus';
 export * from './streamJobLogsParams';
+export * from './targetCheck';
+export * from './targetTestResult';
 export * from './team';
 export * from './teamDetail';
 export * from './teamMember';
@@ -166,6 +189,7 @@ export * from './transferOwnershipRequest';
 export * from './triggerRunRequest';
 export * from './triggerRunRequestVariables';
 export * from './twoFactorStatus';
+export * from './updateDeployTargetRequest';
 export * from './updateMemberRoleRequest';
 export * from './updateOrganizationRequest';
 export * from './updateProfileRequest';

@@ -18,7 +18,10 @@ const (
 	ReasonNoRunner         = "no_runner"   // failed: queued for 24 h without a runner
 	ReasonStepFailed       = "step_failed" // failed: a step exited non-zero
 	ReasonRunnerError      = "runner_error"
-	ReasonRunnerLost       = "runner_lost" // the runner stopped sending heartbeats or was deleted
+	ReasonRunnerLost       = "runner_lost"      // the runner stopped sending heartbeats or was deleted
+	ReasonDeployFailed     = "deploy_failed"    // the job's deployment failed (Module 6)
+	ReasonTargetNotFound   = "target_not_found" // deploy.target names no deploy target
+	ReasonDeployInvalid    = "deploy_invalid"   // deploy.version didn't expand to an image reference
 )
 
 // node is the engine's view of a job's current attempt.

@@ -3,7 +3,7 @@
 # Service packages hold business rules; see docs/architecture.md §5.
 set -euo pipefail
 THRESHOLD="${COVERAGE_THRESHOLD:-70}"
-PACKAGES=(./internal/auth/... ./internal/org/... ./internal/project/... ./internal/authz/... ./internal/gitprovider/... ./internal/idempotency/... ./internal/safehttp/... ./internal/pipeline/... ./internal/events/... ./internal/runners/... ./internal/blob/...)
+PACKAGES=(./internal/auth/... ./internal/org/... ./internal/project/... ./internal/authz/... ./internal/gitprovider/... ./internal/idempotency/... ./internal/safehttp/... ./internal/pipeline/... ./internal/events/... ./internal/runners/... ./internal/blob/... ./internal/deploy/... ./internal/dockerapi/...)
 OUT="${COVERAGE_OUT:-coverage-services.out}"
 
 go test -count=1 -coverprofile="$OUT" "${PACKAGES[@]}" >/dev/null

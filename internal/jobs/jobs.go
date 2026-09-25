@@ -133,7 +133,20 @@ type RunnerHousekeepingArgs struct{}
 
 func (RunnerHousekeepingArgs) Kind() string { return "runner_housekeeping" }
 
+// DeploymentArgs performs one deployment. Deployments aren't idempotent, so a second
+// attempt (after a crash) only marks the deployment interrupted.
+type DeploymentArgs struct {
+	DeploymentID uuid.UUID `json:"deployment_id"`
+}
+
+func (DeploymentArgs) Kind() string { return "deployment" }
+
+func (DeploymentArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{Queue: QueueDeploys, MaxAttempts: 2, UniqueOpts: river.UniqueOpts{ByArgs: true}}
+}
+
 const (
+	QueueDeploys   = "deploys"
 	QueuePipelines = "pipelines"
 	QueueDefault   = river.QueueDefault
 	QueueEmail     = "email"
@@ -167,6 +180,7 @@ func NewClient(d Deps) (*river.Client[pgx.Tx], error) {
 			QueueDefault:   {MaxWorkers: 20},
 			QueueEmail:     {MaxWorkers: 5},
 			QueuePipelines: {MaxWorkers: 10},
+			QueueDeploys:   {MaxWorkers: 10},
 		},
 		Workers: workers,
 		PeriodicJobs: append([]*river.PeriodicJob{

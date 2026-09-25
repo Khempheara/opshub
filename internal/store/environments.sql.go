@@ -25,7 +25,7 @@ func (q *Queries) CountEnvironments(ctx context.Context, projectID uuid.UUID) (i
 const createEnvironment = `-- name: CreateEnvironment :one
 INSERT INTO environments (project_id, name, kind, variables)
 VALUES ($1, $2, $3, $4)
-RETURNING id, project_id, name, kind, variables, version, created_at, updated_at, deleted_at
+RETURNING id, project_id, name, kind, variables, version, created_at, updated_at, deleted_at, current_deployment_id
 `
 
 type CreateEnvironmentParams struct {
@@ -53,6 +53,7 @@ func (q *Queries) CreateEnvironment(ctx context.Context, arg CreateEnvironmentPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CurrentDeploymentID,
 	)
 	return i, err
 }
@@ -67,7 +68,7 @@ func (q *Queries) DeleteProtectionRule(ctx context.Context, environmentID uuid.U
 }
 
 const getEnvironment = `-- name: GetEnvironment :one
-SELECT e.id, e.project_id, e.name, e.kind, e.variables, e.version, e.created_at, e.updated_at, e.deleted_at,
+SELECT e.id, e.project_id, e.name, e.kind, e.variables, e.version, e.created_at, e.updated_at, e.deleted_at, e.current_deployment_id,
        (pr.environment_id IS NOT NULL)::boolean AS protected,
        coalesce(pr.required_approvals, 0)::integer AS required_approvals,
        coalesce(pr.allowed_branches, '{}')::text[] AS allowed_branches,
@@ -98,6 +99,7 @@ func (q *Queries) GetEnvironment(ctx context.Context, id uuid.UUID) (GetEnvironm
 		&i.Environment.CreatedAt,
 		&i.Environment.UpdatedAt,
 		&i.Environment.DeletedAt,
+		&i.Environment.CurrentDeploymentID,
 		&i.Protected,
 		&i.RequiredApprovals,
 		&i.AllowedBranches,
@@ -107,7 +109,7 @@ func (q *Queries) GetEnvironment(ctx context.Context, id uuid.UUID) (GetEnvironm
 }
 
 const listEnvironments = `-- name: ListEnvironments :many
-SELECT e.id, e.project_id, e.name, e.kind, e.variables, e.version, e.created_at, e.updated_at, e.deleted_at,
+SELECT e.id, e.project_id, e.name, e.kind, e.variables, e.version, e.created_at, e.updated_at, e.deleted_at, e.current_deployment_id,
        (pr.environment_id IS NOT NULL)::boolean AS protected,
        coalesce(pr.required_approvals, 0)::integer AS required_approvals,
        coalesce(pr.allowed_branches, '{}')::text[] AS allowed_branches,
@@ -146,6 +148,7 @@ func (q *Queries) ListEnvironments(ctx context.Context, projectID uuid.UUID) ([]
 			&i.Environment.CreatedAt,
 			&i.Environment.UpdatedAt,
 			&i.Environment.DeletedAt,
+			&i.Environment.CurrentDeploymentID,
 			&i.Protected,
 			&i.RequiredApprovals,
 			&i.AllowedBranches,
@@ -173,7 +176,7 @@ func (q *Queries) SoftDeleteEnvironment(ctx context.Context, id uuid.UUID) error
 const updateEnvironment = `-- name: UpdateEnvironment :one
 UPDATE environments SET kind = $1, variables = $2, version = version + 1
 WHERE id = $3 AND version = $4 AND deleted_at IS NULL
-RETURNING id, project_id, name, kind, variables, version, created_at, updated_at, deleted_at
+RETURNING id, project_id, name, kind, variables, version, created_at, updated_at, deleted_at, current_deployment_id
 `
 
 type UpdateEnvironmentParams struct {
@@ -201,6 +204,7 @@ func (q *Queries) UpdateEnvironment(ctx context.Context, arg UpdateEnvironmentPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CurrentDeploymentID,
 	)
 	return i, err
 }

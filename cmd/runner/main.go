@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/opshub/opshub/internal/dockerapi"
 	"github.com/opshub/opshub/internal/runner"
 )
 
@@ -144,7 +145,7 @@ func run(args []string, logger *slog.Logger) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	docker, err := runner.NewDocker(ctx, cfg.DockerSocket)
+	docker, err := dockerapi.NewUnix(ctx, cfg.DockerSocket)
 	if err != nil {
 		return err
 	}

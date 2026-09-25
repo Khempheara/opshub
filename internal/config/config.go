@@ -85,6 +85,10 @@ type Config struct {
 	CacheQuotaBytes  int64  `env:"OPSHUB_CACHE_PROJECT_QUOTA_BYTES" envDefault:"2147483648"` // 2 GiB per project
 	SourceMaxBytes   int64  `env:"OPSHUB_SOURCE_MAX_BYTES" envDefault:"524288000"`           // 500 MiB per checkout
 
+	// DeployLocalDocker allows Docker deploy targets that use the API host's own socket
+	// (root-equivalent on that host; for single-machine setups and development).
+	DeployLocalDocker bool `env:"OPSHUB_DEPLOY_LOCAL_DOCKER" envDefault:"false"`
+
 	SMTP SMTPConfig
 	SSO  SSOConfig
 }

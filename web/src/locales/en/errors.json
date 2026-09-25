@@ -81,7 +81,16 @@
     "RUNNER_DISABLED": "This runner is disabled.",
     "JOB_TOKEN_INVALID": "The job token is invalid or expired.",
     "ARTIFACT_NOT_FOUND": "Artifact not found (it may have expired).",
-    "CACHE_NOT_FOUND": "No cache for this key."
+    "CACHE_NOT_FOUND": "No cache for this key.",
+    "DEPLOY_TARGET_NOT_FOUND": "Deploy target not found.",
+    "DEPLOY_TARGET_NAME_TAKEN": "A deploy target with this name already exists.",
+    "DEPLOY_TARGET_IN_USE": "A deployment to this target is in progress. Try again when it has finished.",
+    "DEPLOYMENT_NOT_FOUND": "Deployment not found.",
+    "DEPLOYMENT_IN_PROGRESS": "A deployment to this environment is already in progress.",
+    "NOTHING_TO_ROLL_BACK": "There is no earlier release to roll back to.",
+    "ENVIRONMENT_PROTECTED": "This environment is protected: you can't deploy to it from here.",
+    "STRATEGY_NOT_SUPPORTED": "This target doesn't support that strategy (blue/green needs a Kubernetes target with a service).",
+    "DEPLOY_NOT_ALLOWED": "You can't deploy here."
   },
   "rules": {
     "required": "This field is required.",
@@ -99,6 +108,22 @@
     "branch": "Use letters, numbers, dots, dashes, underscores and slashes.",
     "variable_name": "Use letters, numbers and underscores; don't start with a number.",
     "repository": "Enter the repository as owner/name.",
-    "https_url": "Enter an https:// address."
+    "https_url": "Enter an https:// address.",
+    "host": "Enter a host name or address, optionally with :port.",
+    "fingerprint": "Use a SHA256 fingerprint as shown by Test connection.",
+    "private_key": "This isn't a valid private key (or the passphrase is wrong).",
+    "certificate": "This isn't a valid PEM certificate (or key).",
+    "kubeconfig": "This kubeconfig can't be used: {{param}}.",
+    "local_docker_disabled": "Docker on this server's own socket is disabled by the operator.",
+    "ports_need_one_replica": "Published ports need exactly one replica.",
+    "path": "Enter an absolute path.",
+    "port": "Use host:container or ip:host:container, e.g. 80:8080.",
+    "pattern": "This value has an invalid format.",
+    "image": "Enter an image reference, e.g. ghcr.io/acme/api:1.2.3.",
+    "exists": "This doesn't exist or isn't available to you.",
+    "required_with": "This field is required with {{param}}.",
+    "datetime": "Enter a date and time.",
+    "uuid": "Invalid identifier.",
+    "type": "This value has the wrong type."
   }
 }

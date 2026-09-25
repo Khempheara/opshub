@@ -45,6 +45,7 @@ func (q *Queries) AdvanceSchedule(ctx context.Context, arg AdvanceScheduleParams
 const claimJob = `-- name: ClaimJob :one
 SELECT id, run_id, project_id, organization_id, name, stage, stage_index, needs, condition, environment, environment_id, runs_on, spec, status, attempt, runner_id, timeout_seconds, exit_code, failure_reason, log_bytes, queued_at, started_at, finished_at, created_at, updated_at FROM pipeline_jobs
 WHERE organization_id = $1 AND status = 'queued' AND runs_on <@ $2::text[]
+  AND spec->'deploy' IS NULL -- deploy jobs are performed by OpsHub (Module 6), not runners
 ORDER BY queued_at, id
 LIMIT 1
 FOR UPDATE SKIP LOCKED
@@ -55,7 +56,7 @@ type ClaimJobParams struct {
 	Labels         []string  `json:"labels"`
 }
 
-// Oldest queued job of the organization whose required labels the runner has.
+// Oldest queued runner job of the organization whose required labels the runner has.
 func (q *Queries) ClaimJob(ctx context.Context, arg ClaimJobParams) (PipelineJob, error) {
 	row := q.db.QueryRow(ctx, claimJob, arg.OrganizationID, arg.Labels)
 	var i PipelineJob
@@ -245,7 +246,7 @@ func (q *Queries) FinishOpenSteps(ctx context.Context, arg FinishOpenStepsParams
 }
 
 const getEnvironmentByName = `-- name: GetEnvironmentByName :one
-SELECT e.id, e.project_id, e.name, e.kind, e.variables, e.version, e.created_at, e.updated_at, e.deleted_at,
+SELECT e.id, e.project_id, e.name, e.kind, e.variables, e.version, e.created_at, e.updated_at, e.deleted_at, e.current_deployment_id,
        (pr.environment_id IS NOT NULL)::boolean AS protected,
        coalesce(pr.required_approvals, 0)::integer AS required_approvals,
        coalesce(pr.allowed_branches, '{}')::text[] AS allowed_branches,
@@ -281,6 +282,7 @@ func (q *Queries) GetEnvironmentByName(ctx context.Context, arg GetEnvironmentBy
 		&i.Environment.CreatedAt,
 		&i.Environment.UpdatedAt,
 		&i.Environment.DeletedAt,
+		&i.Environment.CurrentDeploymentID,
 		&i.Protected,
 		&i.RequiredApprovals,
 		&i.AllowedBranches,
@@ -327,26 +329,27 @@ func (q *Queries) GetJob(ctx context.Context, id uuid.UUID) (PipelineJob, error)
 }
 
 const getProjectForPipeline = `-- name: GetProjectForPipeline :one
-SELECT p.id, p.organization_id, p.slug, p.name, p.description, p.default_branch, p.version, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.last_run_number, r.id AS repository_id
+SELECT p.id, p.organization_id, p.slug, p.name, p.description, p.default_branch, p.version, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.last_run_number, p.last_deployment_number, r.id AS repository_id
 FROM projects p
 LEFT JOIN repositories r ON r.project_id = p.id
 WHERE p.id = $1 AND p.deleted_at IS NULL
 `
 
 type GetProjectForPipelineRow struct {
-	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
-	Slug           string     `json:"slug"`
-	Name           string     `json:"name"`
-	Description    string     `json:"description"`
-	DefaultBranch  string     `json:"default_branch"`
-	Version        int32      `json:"version"`
-	CreatedBy      *uuid.UUID `json:"created_by"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	DeletedAt      *time.Time `json:"deleted_at"`
-	LastRunNumber  int32      `json:"last_run_number"`
-	RepositoryID   *uuid.UUID `json:"repository_id"`
+	ID                   uuid.UUID  `json:"id"`
+	OrganizationID       uuid.UUID  `json:"organization_id"`
+	Slug                 string     `json:"slug"`
+	Name                 string     `json:"name"`
+	Description          string     `json:"description"`
+	DefaultBranch        string     `json:"default_branch"`
+	Version              int32      `json:"version"`
+	CreatedBy            *uuid.UUID `json:"created_by"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+	DeletedAt            *time.Time `json:"deleted_at"`
+	LastRunNumber        int32      `json:"last_run_number"`
+	LastDeploymentNumber int32      `json:"last_deployment_number"`
+	RepositoryID         *uuid.UUID `json:"repository_id"`
 }
 
 func (q *Queries) GetProjectForPipeline(ctx context.Context, id uuid.UUID) (GetProjectForPipelineRow, error) {
@@ -365,6 +368,7 @@ func (q *Queries) GetProjectForPipeline(ctx context.Context, id uuid.UUID) (GetP
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.LastRunNumber,
+		&i.LastDeploymentNumber,
 		&i.RepositoryID,
 	)
 	return i, err

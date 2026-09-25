@@ -144,18 +144,21 @@ sessions: other endpoints treat them as anonymous.
 Job tokens are valid only while their job runs (at most its timeout + 10 minutes); calls for
 a finished or canceled job answer `409 JOB_NOT_RUNNING`, which tells the runner to stop.
 
-## 6. Deployments
+## 6. Deployments **(✓ Module 6)**
+
+See [deployments.md](deployments.md). Credentials are write-only: answers list only the names
+of the credential fields that are set.
 
 | Method | Path | Auth | Action | Description |
 |---|---|---|---|---|
-| GET / POST | `/orgs/{orgId}/deploy-targets` | JWT | `target.view` / `target.manage` | SSH / Docker / Kubernetes (credentials write-only) |
-| GET / PATCH / DELETE | `/deploy-targets/{targetId}` | JWT | `target.manage` | **(IM)** |
-| POST | `/deploy-targets/{targetId}/test` | JWT | `target.manage` | Connectivity check |
-| GET | `/projects/{projectId}/deployments` | JWT | `deployment.view` | Release history; filter env, status, from/to |
-| POST | `/environments/{envId}/deployments` | JWT | `deployment.create` | {version/artifact, target, strategy} **(IK)** |
-| GET | `/deployments/{deploymentId}` | JWT | `deployment.view` | Status, health check results, diff to previous |
-| GET | `/deployments/{deploymentId}/logs/stream` | JWT | `deployment.view` | **SSE** |
-| POST | `/deployments/{deploymentId}/rollback` | JWT | `deployment.rollback` | Redeploy previous successful release **(IK)** |
+| GET / POST | `/orgs/{orgId}/deploy-targets` | JWT | `target.view` / `target.manage` | SSH / Docker / Kubernetes targets; `config` and `credentials` by `kind` |
+| GET / PATCH / DELETE | `/deploy-targets/{targetId}` | JWT | `target.view` / `target.manage` | PATCH replaces description and config, and credentials when given **(IM)**; name and kind are fixed; DELETE refused while a deployment runs (`DEPLOY_TARGET_IN_USE`) |
+| POST | `/deploy-targets/{targetId}/test` | JWT | `target.manage` | Connectivity checks; SSH host key fingerprints to pin (no credentials sent to unpinned hosts) |
+| GET | `/projects/{projectId}/deployments` | JWT | `deployment.view` | Release history; filter `environment_id`, `status`, `from`, `to`, `current=true` |
+| POST | `/environments/{environmentId}/deployments` | JWT | `deployment.create` | `{target_id, version, strategy}` → 202 **(IK)**; protection: allowed roles, no approvals (`ENVIRONMENT_PROTECTED`); one at a time (`DEPLOYMENT_IN_PROGRESS`) |
+| GET | `/deployments/{deploymentId}` | JWT | `deployment.view` | Status, health checks, previous version, run/job link |
+| GET | `/deployments/{deploymentId}/logs/stream` | JWT | `deployment.view` | **SSE**: `status`, `log` (resumable), `end` |
+| POST | `/deployments/{deploymentId}/rollback` | JWT | `deployment.rollback` | The environment's current release → the one before it, 202 **(IK)** (`NOTHING_TO_ROLL_BACK`) |
 
 ## 7. Infrastructure
 
@@ -238,5 +241,7 @@ Module-specific examples: `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED`, `EMAIL_NOT_VE
 `ENVIRONMENT_PROTECTED`, `DEPLOYMENT_NOT_FOUND`, `NOTHING_TO_ROLL_BACK`, `TARGET_UNREACHABLE`,
 `SECRET_NOT_FOUND`, `SECRET_NAME_TAKEN`, `SSRF_BLOCKED`, `JOB_NOT_RUNNING`,
 `RUNNER_NOT_FOUND`, `RUNNER_TOKEN_INVALID`, `REGISTRATION_TOKEN_INVALID`, `RUNNER_DISABLED`,
-`JOB_TOKEN_INVALID`, `ARTIFACT_NOT_FOUND`, `CACHE_NOT_FOUND`.
+`JOB_TOKEN_INVALID`, `ARTIFACT_NOT_FOUND`, `CACHE_NOT_FOUND`, `DEPLOY_TARGET_NOT_FOUND`,
+`DEPLOY_TARGET_NAME_TAKEN`, `DEPLOY_TARGET_IN_USE`, `DEPLOYMENT_NOT_FOUND`, `DEPLOYMENT_IN_PROGRESS`,
+`STRATEGY_NOT_SUPPORTED`, `DEPLOY_NOT_ALLOWED`.
 Each has EN + KM entries in `web/src/locales/*/errors.json` (enforced by a Go test).

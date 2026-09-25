@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	AddDeploymentLogBytes(ctx context.Context, arg AddDeploymentLogBytesParams) error
 	AddLogBytes(ctx context.Context, arg AddLogBytesParams) (int64, error)
 	AddOrganizationMember(ctx context.Context, arg AddOrganizationMemberParams) error
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) error
@@ -20,11 +21,12 @@ type Querier interface {
 	// Inserts an in-flight record (or takes over an expired one); returns no row when a live
 	// record already exists for this user and key.
 	ClaimIdempotencyKey(ctx context.Context, arg ClaimIdempotencyKeyParams) (uuid.UUID, error)
-	// Oldest queued job of the organization whose required labels the runner has.
+	// Oldest queued runner job of the organization whose required labels the runner has.
 	ClaimJob(ctx context.Context, arg ClaimJobParams) (PipelineJob, error)
 	CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error
 	ConsumeEmailToken(ctx context.Context, arg ConsumeEmailTokenParams) (uuid.UUID, error)
 	ConsumeRecoveryCode(ctx context.Context, arg ConsumeRecoveryCodeParams) (uuid.UUID, error)
+	CountActiveTargetDeployments(ctx context.Context, targetID *uuid.UUID) (int64, error)
 	CountApprovals(ctx context.Context, jobID uuid.UUID) (int64, error)
 	CountEnvironments(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountIdentities(ctx context.Context, userID uuid.UUID) (int64, error)
@@ -32,6 +34,9 @@ type Querier interface {
 	CountRunningJobs(ctx context.Context, runnerID *uuid.UUID) (int64, error)
 	CountUnusedRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
+	// The id is chosen by the caller: it is the associated data of the credentials' encryption.
+	CreateDeployTargetWithID(ctx context.Context, arg CreateDeployTargetWithIDParams) (DeployTarget, error)
+	CreateDeployment(ctx context.Context, arg CreateDeploymentParams) (Deployment, error)
 	CreateEmailToken(ctx context.Context, arg CreateEmailTokenParams) error
 	CreateEnvironment(ctx context.Context, arg CreateEnvironmentParams) (Environment, error)
 	CreateIdentity(ctx context.Context, arg CreateIdentityParams) (UserIdentity, error)
@@ -47,6 +52,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// The latest attempt of every job in a run.
 	CurrentJobs(ctx context.Context, runID uuid.UUID) ([]PipelineJob, error)
+	DeleteDeployTarget(ctx context.Context, id uuid.UUID) (int64, error)
 	// Periodic cleanup. Sessions are kept 30 days after expiry/revocation for the security page history.
 	DeleteExpiredAuthRecords(ctx context.Context) error
 	// Periodic cleanup: expired idempotency keys and webhook deliveries older than 30 days.
@@ -66,6 +72,7 @@ type Querier interface {
 	DeleteSchedulesExcept(ctx context.Context, arg DeleteSchedulesExceptParams) error
 	// Artifacts of the latest successful attempt of each named job in a run.
 	DependencyArtifacts(ctx context.Context, arg DependencyArtifactsParams) ([]DependencyArtifactsRow, error)
+	DeploymentByJob(ctx context.Context, jobID *uuid.UUID) (Deployment, error)
 	DisableTOTP(ctx context.Context, id uuid.UUID) error
 	DueSchedules(ctx context.Context) ([]PipelineSchedule, error)
 	EnableTOTP(ctx context.Context, arg EnableTOTPParams) error
@@ -73,11 +80,17 @@ type Querier interface {
 	EvictCache(ctx context.Context, quotaBytes int64) ([]string, error)
 	ExpiredArtifacts(ctx context.Context) ([]string, error)
 	ExpiredRunningJobs(ctx context.Context) ([]ExpiredRunningJobsRow, error)
+	FinishDeployment(ctx context.Context, arg FinishDeploymentParams) (Deployment, error)
 	// Steps still pending or running when a job ends.
 	FinishOpenSteps(ctx context.Context, arg FinishOpenStepsParams) error
 	GetActiveAPITokenByHash(ctx context.Context, tokenHash []byte) (GetActiveAPITokenByHashRow, error)
 	GetArtifact(ctx context.Context, id uuid.UUID) (Artifact, error)
 	GetCacheEntry(ctx context.Context, arg GetCacheEntryParams) (CacheEntry, error)
+	GetCurrentDeployment(ctx context.Context, environmentID uuid.UUID) (Deployment, error)
+	GetDeployTarget(ctx context.Context, id uuid.UUID) (DeployTarget, error)
+	GetDeployTargetByName(ctx context.Context, arg GetDeployTargetByNameParams) (DeployTarget, error)
+	GetDeployment(ctx context.Context, id uuid.UUID) (Deployment, error)
+	GetDeploymentDetail(ctx context.Context, id uuid.UUID) (GetDeploymentDetailRow, error)
 	GetEnvironment(ctx context.Context, id uuid.UUID) (GetEnvironmentRow, error)
 	GetEnvironmentByName(ctx context.Context, arg GetEnvironmentByNameParams) (GetEnvironmentByNameRow, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
@@ -118,6 +131,7 @@ type Querier interface {
 	InsertApproval(ctx context.Context, arg InsertApprovalParams) (uuid.UUID, error)
 	InsertArtifact(ctx context.Context, arg InsertArtifactParams) (Artifact, error)
 	InsertAuditLog(ctx context.Context, arg InsertAuditLogParams) (AuditLog, error)
+	InsertDeploymentLog(ctx context.Context, arg InsertDeploymentLogParams) (int64, error)
 	InsertJob(ctx context.Context, arg InsertJobParams) (PipelineJob, error)
 	InsertLogChunk(ctx context.Context, arg InsertLogChunkParams) (int64, error)
 	InsertRecoveryCodes(ctx context.Context, arg []InsertRecoveryCodesParams) (int64, error)
@@ -134,6 +148,10 @@ type Querier interface {
 	ListApprovals(ctx context.Context, jobID uuid.UUID) ([]ListApprovalsRow, error)
 	// Keyset pagination on (created_at, id) newest first.
 	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
+	ListDeployTargets(ctx context.Context, organizationID uuid.UUID) ([]DeployTarget, error)
+	ListDeploymentLogs(ctx context.Context, arg ListDeploymentLogsParams) ([]ListDeploymentLogsRow, error)
+	// Newest first; keyset pagination on (created_at, id).
+	ListDeployments(ctx context.Context, arg ListDeploymentsParams) ([]ListDeploymentsRow, error)
 	// Ordered development, staging, production, then by name.
 	ListEnvironments(ctx context.Context, projectID uuid.UUID) ([]ListEnvironmentsRow, error)
 	ListIdentities(ctx context.Context, userID uuid.UUID) ([]UserIdentity, error)
@@ -167,15 +185,20 @@ type Querier interface {
 	LostRunnerJobs(ctx context.Context, staleSeconds int32) ([]uuid.UUID, error)
 	MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) error
 	MarkRefreshTokenUsed(ctx context.Context, id uuid.UUID) error
+	NextDeploymentNumber(ctx context.Context, id uuid.UUID) (int32, error)
+	NextJobLogSeq(ctx context.Context, jobID uuid.UUID) (int32, error)
 	// Serializes run creation per project (row lock on the project).
 	NextRunNumber(ctx context.Context, id uuid.UUID) (int32, error)
 	// Running jobs assigned to a runner that it no longer reports (the agent restarted, or
 	// never received the assignment). The grace period covers a claim racing a heartbeat.
 	OrphanedRunnerJobs(ctx context.Context, arg OrphanedRunnerJobsParams) ([]uuid.UUID, error)
+	// The latest successful deployment of the environment before the given time.
+	PreviousSuccessfulDeployment(ctx context.Context, arg PreviousSuccessfulDeploymentParams) (Deployment, error)
 	// Guards against creating a second run for the same event when a worker is retried.
 	RecentRunExists(ctx context.Context, arg RecentRunExistsParams) (bool, error)
 	RecordLoginFailure(ctx context.Context, arg RecordLoginFailureParams) error
 	RecordLoginSuccess(ctx context.Context, id uuid.UUID) error
+	RecordTargetTest(ctx context.Context, arg RecordTargetTestParams) error
 	// The request failed with a server error: forget the key so the client can retry.
 	ReleaseIdempotencyKey(ctx context.Context, id uuid.UUID) error
 	RemoveMember(ctx context.Context, arg RemoveMemberParams) error
@@ -188,6 +211,7 @@ type Querier interface {
 	// Revokes every session of a user, optionally keeping one (the caller's).
 	RevokeUserSessions(ctx context.Context, arg RevokeUserSessionsParams) error
 	RunningJobsForRunner(ctx context.Context, runnerID *uuid.UUID) ([]uuid.UUID, error)
+	SetCurrentDeployment(ctx context.Context, arg SetCurrentDeploymentParams) error
 	SetJobStatus(ctx context.Context, arg SetJobStatusParams) error
 	SetTOTPPending(ctx context.Context, arg SetTOTPPendingParams) error
 	SetUserEmailVerified(ctx context.Context, id uuid.UUID) error
@@ -197,12 +221,14 @@ type Querier interface {
 	SoftDeleteProject(ctx context.Context, id uuid.UUID) error
 	SoftDeleteTeam(ctx context.Context, id uuid.UUID) error
 	StaleQueuedJobs(ctx context.Context) ([]StaleQueuedJobsRow, error)
+	StartDeployment(ctx context.Context, id uuid.UUID) (Deployment, error)
 	StartJob(ctx context.Context, arg StartJobParams) error
 	// Throttled to one write per minute per token.
 	TouchAPIToken(ctx context.Context, id uuid.UUID) error
 	TouchRepositoryDelivery(ctx context.Context, id uuid.UUID) error
 	TouchRunner(ctx context.Context, arg TouchRunnerParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	UpdateDeployTarget(ctx context.Context, arg UpdateDeployTargetParams) (DeployTarget, error)
 	UpdateEnvironment(ctx context.Context, arg UpdateEnvironmentParams) (Environment, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error
 	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error)

@@ -122,11 +122,17 @@ type Cache struct {
 	Paths []string `json:"paths"`
 }
 
-// Deploy describes a deployment performed by the job (Module 6).
+// Deploy describes a deployment performed by OpsHub for the job (Module 6). Version is the
+// container image to deploy; ${VAR} references are expanded with the job's variables when
+// the job starts.
 type Deploy struct {
 	Target   string `json:"target"`
 	Strategy string `json:"strategy"`
+	Version  string `json:"version"`
 }
+
+// DefaultDeployVersion is used when a deploy block has no version.
+const DefaultDeployVersion = "${DEPLOY_VERSION}"
 
 // Problem is one validation error. Rule is a stable code (see docs/pipelines.md); Param
 // holds a rule parameter such as an allowed set or a limit.
@@ -573,6 +579,9 @@ func (p *parser) job(name string, n *yaml.Node, jp string, stages []string) (*Jo
 		if job.Environment == "" {
 			p.add(v[0], join(jp, "deploy"), "deploy_requires_environment", "")
 		}
+		if s, ok := m["steps"]; ok {
+			p.add(s[0], join(jp, "steps"), "deploy_with_steps", "")
+		}
 	}
 
 	if len(job.Steps) == 0 && job.Deploy == nil {
@@ -723,8 +732,16 @@ func (p *parser) cache(n *yaml.Node, path string) *Cache {
 }
 
 func (p *parser) deploy(n *yaml.Node, path string) *Deploy {
-	m := p.mapping(n, path, "target", "strategy")
-	d := &Deploy{Strategy: "rolling"}
+	m := p.mapping(n, path, "target", "strategy", "version")
+	d := &Deploy{Strategy: "rolling", Version: DefaultDeployVersion}
+	if v, ok := m["version"]; ok {
+		if s, ok := p.scalar(v[1], join(path, "version")); ok {
+			if s == "" || len(s) > 255 || strings.ContainsAny(s, " \t\n") {
+				p.add(v[1], join(path, "version"), "pattern", "")
+			}
+			d.Version = s
+		}
+	}
 	if v, ok := m["target"]; ok {
 		if s, ok := p.scalar(v[1], join(path, "target")); ok {
 			if !targetPattern.MatchString(s) {

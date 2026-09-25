@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/opshub/opshub/internal/dockerapi"
 )
 
 // Workspace is where the job's files live inside every step container.
@@ -45,13 +47,13 @@ type ExecConfig struct {
 
 // Executor runs jobs in Docker containers.
 type Executor struct {
-	docker *Docker
+	docker *dockerapi.Client
 	client *Client
 	cfg    ExecConfig
 	logger *slog.Logger
 }
 
-func NewExecutor(docker *Docker, client *Client, cfg ExecConfig, logger *slog.Logger) *Executor {
+func NewExecutor(docker *dockerapi.Client, client *Client, cfg ExecConfig, logger *slog.Logger) *Executor {
 	return &Executor{docker: docker, client: client, cfg: cfg, logger: logger}
 }
 
@@ -155,9 +157,9 @@ func (x *Executor) execute(ctx context.Context, j *Job, logs *LogShipper) (err e
 	}()
 
 	// A never-started helper container gives access to the volume for copying files in and out.
-	helper, err := x.docker.CreateContainer(ctx, ContainerSpec{
+	helper, err := x.docker.CreateContainer(ctx, dockerapi.ContainerSpec{
 		Name: "opshub-" + j.Job.ID + "-files", Image: image, Entrypoint: []string{"/bin/sh", "-c"}, Cmd: []string{"true"},
-		Labels: labels, Volume: volume, MountPath: Workspace,
+		Labels: labels, Binds: []string{volume + ":" + Workspace}, Init: true,
 	})
 	if err != nil {
 		return err
@@ -282,10 +284,10 @@ func (x *Executor) step(ctx context.Context, j *Job, i int, s Step, image string
 	}
 	_, _ = logs.Write([]byte("\x1b[36;1m$ " + firstLine(s.Run) + "\x1b[0m\n"))
 
-	id, err := x.docker.CreateContainer(ctx, ContainerSpec{
+	id, err := x.docker.CreateContainer(ctx, dockerapi.ContainerSpec{
 		Name: fmt.Sprintf("opshub-%s-step%d", j.Job.ID, i), Image: image,
 		Entrypoint: []string{"/bin/sh", "-ec"}, Cmd: []string{s.Run}, Env: env, WorkingDir: Workspace,
-		Labels: labels, Volume: volume, MountPath: Workspace,
+		Labels: labels, Binds: []string{volume + ":" + Workspace}, Init: true,
 		NanoCPUs: x.cfg.NanoCPUs, Memory: x.cfg.MemoryBytes, PidsLimit: x.cfg.PidsLimit, Network: x.cfg.Network,
 	})
 	if err != nil {
@@ -364,7 +366,7 @@ func (x *Executor) collect(ctx context.Context, helper string, paths []string, l
 			continue
 		}
 		rc, err := x.docker.GetArchive(ctx, helper, path.Join(Workspace, rel))
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, dockerapi.ErrNotFound) {
 			logs.Notice("Nothing at " + p + ".")
 			continue
 		}

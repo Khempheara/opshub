@@ -15,7 +15,7 @@ import (
 const createProject = `-- name: CreateProject :one
 INSERT INTO projects (organization_id, slug, name, description, default_branch, created_by)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, organization_id, slug, name, description, default_branch, version, created_by, created_at, updated_at, deleted_at, last_run_number
+RETURNING id, organization_id, slug, name, description, default_branch, version, created_by, created_at, updated_at, deleted_at, last_run_number, last_deployment_number
 `
 
 type CreateProjectParams struct {
@@ -50,6 +50,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.LastRunNumber,
+		&i.LastDeploymentNumber,
 	)
 	return i, err
 }
@@ -115,7 +116,7 @@ func (q *Queries) DeleteProjectUserGrant(ctx context.Context, arg DeleteProjectU
 }
 
 const getProjectAccess = `-- name: GetProjectAccess :one
-SELECT p.id, p.organization_id, p.slug, p.name, p.description, p.default_branch, p.version, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.last_run_number,
+SELECT p.id, p.organization_id, p.slug, p.name, p.description, p.default_branch, p.version, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.last_run_number, p.last_deployment_number,
        coalesce(om.role::text, '')::text AS org_role,
        coalesce((SELECT pm.role::text FROM project_members pm
                   WHERE pm.project_id = p.id AND pm.user_id = $1::uuid), '')::text AS direct_role,
@@ -159,6 +160,7 @@ func (q *Queries) GetProjectAccess(ctx context.Context, arg GetProjectAccessPara
 		&i.Project.UpdatedAt,
 		&i.Project.DeletedAt,
 		&i.Project.LastRunNumber,
+		&i.Project.LastDeploymentNumber,
 		&i.OrgRole,
 		&i.DirectRole,
 		&i.TeamRole,
@@ -353,7 +355,7 @@ func (q *Queries) ListProjectUserGrants(ctx context.Context, projectID uuid.UUID
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT p.id, p.organization_id, p.slug, p.name, p.description, p.default_branch, p.version, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.last_run_number FROM projects p
+SELECT p.id, p.organization_id, p.slug, p.name, p.description, p.default_branch, p.version, p.created_by, p.created_at, p.updated_at, p.deleted_at, p.last_run_number, p.last_deployment_number FROM projects p
 WHERE p.organization_id = $1 AND p.deleted_at IS NULL
   AND ($2::boolean
        OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.user_id = $3::uuid)
@@ -412,6 +414,7 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.LastRunNumber,
+			&i.LastDeploymentNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -436,7 +439,7 @@ const updateProject = `-- name: UpdateProject :one
 UPDATE projects SET name = $1, description = $2, default_branch = $3,
   version = version + 1
 WHERE id = $4 AND version = $5 AND deleted_at IS NULL
-RETURNING id, organization_id, slug, name, description, default_branch, version, created_by, created_at, updated_at, deleted_at, last_run_number
+RETURNING id, organization_id, slug, name, description, default_branch, version, created_by, created_at, updated_at, deleted_at, last_run_number, last_deployment_number
 `
 
 type UpdateProjectParams struct {
@@ -469,6 +472,7 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.LastRunNumber,
+		&i.LastDeploymentNumber,
 	)
 	return i, err
 }

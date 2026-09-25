@@ -74,15 +74,12 @@ func (o Options) Allowed(addr netip.Addr) bool {
 	return true
 }
 
-// NewClient returns an http.Client that enforces the options.
-func NewClient(o Options) *http.Client {
-	if o.Timeout == 0 {
-		o.Timeout = 15 * time.Second
-	}
-	dialer := &net.Dialer{
+// Dialer returns a net.Dialer that refuses addresses the options don't allow, checked after
+// DNS resolution for every address tried (for non-HTTP protocols such as SSH).
+func (o Options) Dialer() *net.Dialer {
+	return &net.Dialer{
 		Timeout:   5 * time.Second,
 		KeepAlive: 30 * time.Second,
-		// Control runs for every address the dialer tries, after DNS resolution.
 		Control: func(_, address string, _ syscall.RawConn) error {
 			ap, err := netip.ParseAddrPort(address)
 			if err != nil {
@@ -94,6 +91,14 @@ func NewClient(o Options) *http.Client {
 			return nil
 		},
 	}
+}
+
+// NewClient returns an http.Client that enforces the options.
+func NewClient(o Options) *http.Client {
+	if o.Timeout == 0 {
+		o.Timeout = 15 * time.Second
+	}
+	dialer := o.Dialer()
 	transport := &http.Transport{
 		Proxy:                 nil, // a proxy would hide the real destination from the check
 		DialContext:           dialer.DialContext,

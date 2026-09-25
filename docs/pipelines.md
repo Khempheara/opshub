@@ -47,9 +47,10 @@ jobs:
     needs: [build]
     environment: production
     when: manual             # waits for an approval
-    deploy:
-      target: k8s-prod       # Module 6
-      strategy: rolling      # rolling | blue_green
+    deploy:                  # performed by OpsHub, not a runner (docs/deployments.md)
+      target: k8s-prod
+      strategy: rolling      # rolling | blue_green (Kubernetes only)
+      version: ghcr.io/acme/app:${OPSHUB_COMMIT_SHA}
   notify:
     stage: deploy
     when: always
@@ -97,7 +98,7 @@ jobs:
 | `timeout` | `1m`–`6h`, default `60m`. |
 | `artifacts` | Paths (relative to the workspace) kept after a successful job as one archive; `expire_in: Nd` (1–90, default 7). Jobs that `need` it get the files in their workspace; people download them from the job panel. |
 | `cache` | `{key, paths}` restored before and saved after a successful job; shared by the project's jobs with the same key. Evicted least-recently-used beyond the project quota. |
-| `deploy` | `{target, strategy}`; requires `environment` (Module 6). |
+| `deploy` | `{target, strategy, version}`: OpsHub deploys the container image `version` (default `${DEPLOY_VERSION}`; `${VAR}` uses the job's variables) to the named [deploy target](deployments.md) for the job's `environment`, which is required. A deploy job has no `steps` and needs no runner; it succeeds or fails with its deployment. |
 
 A skipped dependency whose own condition wasn't met (for example an `on_failure` job after a
 green run) counts as success for jobs after it.
@@ -133,7 +134,8 @@ Variables aren't secret. Secrets (Module 8) are injected separately and masked i
   `succeeded`, `failed`, `canceled`, `skipped`.
 - Failure/skip reasons: `upstream_failed`, `not_needed`, `rejected`, `branch_not_allowed`,
   `environment_not_found`, `timeout`, `no_runner`, `step_failed`, `runner_error`, `runner_lost`
-  (the runner stopped sending heartbeats or was deleted).
+  (the runner stopped sending heartbeats or was deleted), `deploy_failed`, `target_not_found`,
+  `deploy_invalid` (the deploy block's version or strategy couldn't be used; see the job log).
 - **Cancel** stops every unfinished job. **Retry job** adds a new attempt of a failed or
   canceled job and re-opens the jobs after it. **Re-run failed jobs** does that for every failed
   job of a finished run. **Re-run** creates a new run from the same snapshot and commit.
@@ -151,7 +153,8 @@ Problems carry a line, column, path and one of these codes (translated in the UI
 `empty`, `file_too_large`, `type`, `unknown_field`, `duplicate`, `required`,
 `unsupported_version`, `oneof`, `pattern`, `max`, `schedule_needs_cron`, `invalid_cron`,
 `variable_name`, `reserved`, `job_name`, `unknown_stage`, `unknown_job`, `self_need`,
-`need_later_stage`, `cycle`, `duration`, `range`, `path`, `deploy_requires_environment`.
+`need_later_stage`, `cycle`, `duration`, `range`, `path`, `deploy_requires_environment`,
+`deploy_with_steps`.
 
 Use **Check pipeline file** on the Pipelines tab (or `POST /projects/{id}/pipeline/validate`)
 to lint a file before committing it.

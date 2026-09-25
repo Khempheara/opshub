@@ -87,9 +87,10 @@ UPDATE job_steps SET status = @status, finished_at = now()
 WHERE job_id = @job_id AND status IN ('pending', 'running');
 
 -- name: ClaimJob :one
--- Oldest queued job of the organization whose required labels the runner has.
+-- Oldest queued runner job of the organization whose required labels the runner has.
 SELECT * FROM pipeline_jobs
 WHERE organization_id = @organization_id AND status = 'queued' AND runs_on <@ @labels::text[]
+  AND spec->'deploy' IS NULL -- deploy jobs are performed by OpsHub (Module 6), not runners
 ORDER BY queued_at, id
 LIMIT 1
 FOR UPDATE SKIP LOCKED;

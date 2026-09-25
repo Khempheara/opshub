@@ -1,5 +1,6 @@
 import type auth from '@/locales/en/auth.json';
 import type common from '@/locales/en/common.json';
+import type deploy from '@/locales/en/deploy.json';
 import type errors from '@/locales/en/errors.json';
 import type home from '@/locales/en/home.json';
 import type org from '@/locales/en/org.json';
@@ -16,6 +17,7 @@ declare module 'i18next' {
     resources: {
       auth: typeof auth;
       common: typeof common;
+      deploy: typeof deploy;
       errors: typeof errors;
       home: typeof home;
       org: typeof org;
