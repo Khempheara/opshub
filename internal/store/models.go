@@ -854,6 +854,7 @@ type JobToken struct {
 	JobID     uuid.UUID `json:"job_id"`
 	TokenHash []byte    `json:"token_hash"`
 	ExpiresAt time.Time `json:"expires_at"`
+	MasksEnc  []byte    `json:"masks_enc"`
 }
 
 type MfaChallenge struct {
@@ -1040,6 +1041,32 @@ type RunnerRegistrationToken struct {
 	UsedAt         *time.Time `json:"used_at"`
 	RunnerID       *uuid.UUID `json:"runner_id"`
 	CreatedAt      time.Time  `json:"created_at"`
+}
+
+type Secret struct {
+	ID             uuid.UUID  `json:"id"`
+	ProjectID      uuid.UUID  `json:"project_id"`
+	EnvironmentID  *uuid.UUID `json:"environment_id"`
+	Name           string     `json:"name"`
+	Description    string     `json:"description"`
+	CurrentVersion int32      `json:"current_version"`
+	CreatedBy      *uuid.UUID `json:"created_by"`
+	Version        int32      `json:"version"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	DeletedAt      *time.Time `json:"deleted_at"`
+}
+
+type SecretVersion struct {
+	SecretID    uuid.UUID  `json:"secret_id"`
+	Version     int32      `json:"version"`
+	Ciphertext  []byte     `json:"ciphertext"`
+	Nonce       []byte     `json:"nonce"`
+	DekEnc      []byte     `json:"dek_enc"`
+	KekID       *string    `json:"kek_id"`
+	CreatedBy   *uuid.UUID `json:"created_by"`
+	CreatedAt   time.Time  `json:"created_at"`
+	DestroyedAt *time.Time `json:"destroyed_at"`
 }
 
 type Session struct {

@@ -25,7 +25,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.8.0
+ * OpenAPI spec version: 0.9.0
  */
 
 export type ProjectAction = typeof ProjectAction[keyof typeof ProjectAction];
@@ -45,4 +45,9 @@ export const ProjectAction = {
   deploymentview: 'deployment.view',
   deploymentcreate: 'deployment.create',
   deploymentrollback: 'deployment.rollback',
+  secretlist: 'secret.list',
+  secretcreate: 'secret.create',
+  secretupdate: 'secret.update',
+  secretrotate: 'secret.rotate',
+  secretdelete: 'secret.delete',
 } as const;

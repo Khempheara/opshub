@@ -140,6 +140,13 @@ const (
 	CodeAgentNotSupported Code = "AGENT_NOT_SUPPORTED"
 )
 
+// Module 8: secrets.
+const (
+	CodeSecretNotFound  Code = "SECRET_NOT_FOUND"  // #nosec G101 -- an error code, not a credential
+	CodeSecretNameTaken Code = "SECRET_NAME_TAKEN" // #nosec G101 -- an error code, not a credential
+	CodeSecretLimit     Code = "SECRET_LIMIT_REACHED"
+)
+
 // AllCodes lists every code; append new codes here as modules add them.
 var AllCodes = []Code{
 	CodeInternal, CodeBadRequest, CodeValidation, CodeUnauthenticated, CodeForbidden,
@@ -170,6 +177,7 @@ var AllCodes = []Code{
 	CodeTargetNotFound, CodeTargetNameTaken, CodeTargetInUse, CodeDeploymentNotFound, CodeDeploymentInProgress,
 	CodeNothingToRollBack, CodeEnvironmentProtected, CodeStrategyNotSupported, CodeDeployNotAllowed,
 	CodeAssetNotFound, CodeAssetNameTaken, CodeAgentTokenInvalid, CodeAgentNotSupported,
+	CodeSecretNotFound, CodeSecretNameTaken, CodeSecretLimit,
 }
 
 // Error is an application error carrying its HTTP status and client-facing code.

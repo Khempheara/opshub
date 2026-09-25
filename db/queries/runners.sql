@@ -57,8 +57,8 @@ WHERE j.status = 'running' AND (r.last_seen_at IS NULL OR r.last_seen_at < now()
 LIMIT 100;
 
 -- name: UpsertJobToken :exec
-INSERT INTO job_tokens (job_id, token_hash, expires_at) VALUES (@job_id, @token_hash, @expires_at)
-ON CONFLICT (job_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at;
+INSERT INTO job_tokens (job_id, token_hash, expires_at, masks_enc) VALUES (@job_id, @token_hash, @expires_at, sqlc.narg(masks_enc))
+ON CONFLICT (job_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at, masks_enc = EXCLUDED.masks_enc;
 
 -- name: GetJobByToken :one
 SELECT j.* FROM job_tokens t JOIN pipeline_jobs j ON j.id = t.job_id

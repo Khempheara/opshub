@@ -29,6 +29,7 @@ const (
 	MinTimeout      = time.Minute
 	MaxTimeout      = 6 * time.Hour
 	MaxArtifactDays = 90
+	MaxJobSecrets   = 50
 )
 
 // When controls when a job runs relative to its dependencies.
@@ -102,6 +103,8 @@ type Job struct {
 	Artifacts      *Artifacts        `json:"artifacts,omitempty"`
 	Cache          *Cache            `json:"cache,omitempty"`
 	Deploy         *Deploy           `json:"deploy,omitempty"`
+	// Secrets names the project secrets this job receives as environment variables (Module 8).
+	Secrets []string `json:"secrets,omitempty"`
 }
 
 // Step is one shell command.
@@ -171,6 +174,9 @@ var (
 	labelPattern     = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
 	refGlobPattern   = regexp.MustCompile(`^[A-Za-z0-9._/*-]{1,255}$`)
 	targetPattern    = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9_-]{0,62}[a-z0-9])?$`)
+	// SecretNamePattern is a secret's name, which becomes an environment variable. Names
+	// starting with OPSHUB_ are reserved.
+	SecretNamePattern = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,127}$`)
 )
 
 // parser collects problems while walking the document.
@@ -289,6 +295,37 @@ func (p *parser) stringList(n *yaml.Node, path string, pattern *regexp.Regexp, m
 			continue
 		}
 		out = append(out, s)
+	}
+	return out
+}
+
+// secrets reads a job's list of secret names: valid, not reserved, no duplicates.
+func (p *parser) secrets(n *yaml.Node, path string) []string {
+	if n.Kind == yaml.ScalarNode && n.Tag != "!!null" { // a single name is a one-item list
+		n = &yaml.Node{Kind: yaml.SequenceNode, Content: []*yaml.Node{n}, Line: n.Line, Column: n.Column}
+	}
+	if n.Kind != yaml.SequenceNode {
+		p.add(n, path, "type", "list")
+		return nil
+	}
+	if len(n.Content) > MaxJobSecrets {
+		p.add(n, path, "max", strconv.Itoa(MaxJobSecrets))
+	}
+	out := []string{}
+	for i, item := range n.Content {
+		ip := fmt.Sprintf("%s[%d]", path, i)
+		s, ok := p.scalar(item, ip)
+		switch {
+		case !ok:
+		case !SecretNamePattern.MatchString(s):
+			p.add(item, ip, "pattern", "")
+		case strings.HasPrefix(s, "OPSHUB_"):
+			p.add(item, ip, "reserved", "OPSHUB_")
+		case slices.Contains(out, s):
+			p.add(item, ip, "duplicate", "")
+		default:
+			out = append(out, s)
+		}
 	}
 	return out
 }
@@ -495,7 +532,7 @@ func (p *parser) triggers(n *yaml.Node) Triggers {
 
 func (p *parser) job(name string, n *yaml.Node, jp string, stages []string) (*Job, *yaml.Node) {
 	m := p.mapping(n, jp, "stage", "image", "needs", "steps", "variables", "when", "environment",
-		"runs_on", "timeout", "artifacts", "cache", "deploy")
+		"runs_on", "timeout", "artifacts", "cache", "deploy", "secrets")
 	if n.Kind != yaml.MappingNode {
 		return nil, nil
 	}
@@ -581,6 +618,13 @@ func (p *parser) job(name string, n *yaml.Node, jp string, stages []string) (*Jo
 		}
 		if s, ok := m["steps"]; ok {
 			p.add(s[0], join(jp, "steps"), "deploy_with_steps", "")
+		}
+	}
+
+	if v, ok := m["secrets"]; ok {
+		job.Secrets = p.secrets(v[1], join(jp, "secrets"))
+		if job.Deploy != nil {
+			p.add(v[0], join(jp, "secrets"), "deploy_with_secrets", "")
 		}
 	}
 

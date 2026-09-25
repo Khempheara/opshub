@@ -60,7 +60,9 @@
     "runner_lost": "Runner បានឈប់ឆ្លើយតប ឬត្រូវបានលុប។",
     "deploy_failed": "ការដាក់ឱ្យដំណើរការបានបរាជ័យ។",
     "target_not_found": "គោលដៅដាក់ឱ្យដំណើរការមិនមានទេ។",
-    "deploy_invalid": "មិនអាចប្រើប្លុក deploy បានទេ (មើលកំណត់ហេតុ)។"
+    "deploy_invalid": "មិនអាចប្រើប្លុក deploy បានទេ (មើលកំណត់ហេតុ)។",
+    "secret_not_found": "Secret ដែល Job រាយមិនមានទេ (មើលកំណត់ហេតុ)។",
+    "secrets_not_allowed": "ការដំណើរការពី Pull request មិនទទួលបាន Secret ទេ។"
   },
   "runs": {
     "title": "Pipeline",
@@ -125,7 +127,8 @@
     "path": "ប្រើផ្លូវដែលទាក់ទងនឹង workspace។",
     "deploy_requires_environment": "Job ដាក់ឱ្យដំណើរការត្រូវការបរិស្ថាន។",
     "default": "មិនត្រឹមត្រូវ ({{rule}})។",
-    "deploy_with_steps": "Job ដាក់ឱ្យដំណើរការមិនអាចមានជំហានបានទេ៖ OpsHub ធ្វើការដាក់ឱ្យដំណើរការ។"
+    "deploy_with_steps": "Job ដាក់ឱ្យដំណើរការមិនអាចមានជំហានបានទេ៖ OpsHub ធ្វើការដាក់ឱ្យដំណើរការ។",
+    "deploy_with_secrets": "Job ដាក់ឱ្យដំណើរការមិនអាចរាយ Secret បានទេ៖ OpsHub ធ្វើការដាក់ឱ្យដំណើរការ។"
   },
   "run": {
     "title": "ការដំណើរការ #{{number}}",

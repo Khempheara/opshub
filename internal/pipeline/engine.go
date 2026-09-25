@@ -9,19 +9,21 @@ import (
 
 // Failure and skip reasons recorded on jobs (translated by the UI).
 const (
-	ReasonUpstreamFailed   = "upstream_failed"    // skipped: a dependency failed or was canceled
-	ReasonNotNeeded        = "not_needed"         // skipped: its `when` condition wasn't met
-	ReasonRejected         = "rejected"           // failed: an approver rejected it
-	ReasonBranchNotAllowed = "branch_not_allowed" // failed: protected environment, branch not allowed
-	ReasonEnvNotFound      = "environment_not_found"
-	ReasonTimeout          = "timeout"
-	ReasonNoRunner         = "no_runner"   // failed: queued for 24 h without a runner
-	ReasonStepFailed       = "step_failed" // failed: a step exited non-zero
-	ReasonRunnerError      = "runner_error"
-	ReasonRunnerLost       = "runner_lost"      // the runner stopped sending heartbeats or was deleted
-	ReasonDeployFailed     = "deploy_failed"    // the job's deployment failed (Module 6)
-	ReasonTargetNotFound   = "target_not_found" // deploy.target names no deploy target
-	ReasonDeployInvalid    = "deploy_invalid"   // deploy.version didn't expand to an image reference
+	ReasonUpstreamFailed    = "upstream_failed"    // skipped: a dependency failed or was canceled
+	ReasonNotNeeded         = "not_needed"         // skipped: its `when` condition wasn't met
+	ReasonRejected          = "rejected"           // failed: an approver rejected it
+	ReasonBranchNotAllowed  = "branch_not_allowed" // failed: protected environment, branch not allowed
+	ReasonEnvNotFound       = "environment_not_found"
+	ReasonTimeout           = "timeout"
+	ReasonNoRunner          = "no_runner"   // failed: queued for 24 h without a runner
+	ReasonStepFailed        = "step_failed" // failed: a step exited non-zero
+	ReasonRunnerError       = "runner_error"
+	ReasonRunnerLost        = "runner_lost"         // the runner stopped sending heartbeats or was deleted
+	ReasonDeployFailed      = "deploy_failed"       // the job's deployment failed (Module 6)
+	ReasonTargetNotFound    = "target_not_found"    // deploy.target names no deploy target
+	ReasonDeployInvalid     = "deploy_invalid"      // deploy.version didn't expand to an image reference
+	ReasonSecretNotFound    = "secret_not_found"    // a name in `secrets:` matches no secret the job can use
+	ReasonSecretsNotAllowed = "secrets_not_allowed" // pull-request runs never receive secrets
 )
 
 // node is the engine's view of a job's current attempt.

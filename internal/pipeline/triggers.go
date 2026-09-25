@@ -219,6 +219,12 @@ func (s *Service) Tick(ctx context.Context, enqueue Enqueuer) error {
 // FailJob fails a running or queued job (timeouts, lost runners, no runner) and advances its
 // run. Jobs that finished meanwhile are left alone.
 func (s *Service) FailJob(ctx context.Context, jobID uuid.UUID, reason string) error {
+	return s.FailJobWithNotice(ctx, jobID, reason, "")
+}
+
+// FailJobWithNotice is FailJob that also explains the failure in the job's log (when
+// message isn't empty).
+func (s *Service) FailJobWithNotice(ctx context.Context, jobID uuid.UUID, reason, message string) error {
 	return s.inTx(ctx, func(tx pgx.Tx, q *store.Queries) error {
 		j, err := q.GetJob(ctx, jobID)
 		if err != nil {
@@ -233,7 +239,11 @@ func (s *Service) FailJob(ctx context.Context, jobID uuid.UUID, reason string) e
 		if j.Status != store.JobStatusRunning && j.Status != store.JobStatusQueued {
 			return nil // finished meanwhile
 		}
-		if err := s.setStatus(ctx, q, j.ID, store.JobStatusFailed, reason, nil); err != nil {
+		if message != "" {
+			if err := s.failWithNotice(ctx, q, j.ID, reason, message); err != nil {
+				return err
+			}
+		} else if err := s.setStatus(ctx, q, j.ID, store.JobStatusFailed, reason, nil); err != nil {
 			return err
 		}
 		if err := q.FinishOpenSteps(ctx, store.FinishOpenStepsParams{JobID: j.ID, Status: store.StepStatusCanceled}); err != nil {

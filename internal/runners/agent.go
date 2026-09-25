@@ -2,6 +2,7 @@ package runners
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -17,6 +18,7 @@ import (
 	"github.com/opshub/opshub/internal/crypto"
 	"github.com/opshub/opshub/internal/database"
 	"github.com/opshub/opshub/internal/pipeline"
+	"github.com/opshub/opshub/internal/secret"
 	"github.com/opshub/opshub/internal/store"
 )
 
@@ -177,8 +179,8 @@ func (s *Service) Heartbeat(ctx context.Context, r store.Runner, in HeartbeatInp
 }
 
 // AssignedJob is everything the runner needs to execute a job. Token authenticates the
-// job-scoped endpoints. Secrets (and Masks, values to hide in logs) stay empty until
-// secret variables exist.
+// job-scoped endpoints. Secrets are the job's `secrets:`, decrypted; Masks are the values to
+// hide in its log.
 type AssignedJob struct {
 	pipeline.ClaimedJob
 	Token   string            `json:"token"`
@@ -221,8 +223,16 @@ func (s *Service) RequestJob(ctx context.Context, r store.Runner, wait time.Dura
 	}
 }
 
+// errSecretsUnavailable rolls back a claim whose job can't get its secrets.
+var errSecretsUnavailable = errors.New("job secrets unavailable")
+
 func (s *Service) tryClaim(ctx context.Context, r store.Runner) (*AssignedJob, error) {
-	var token string
+	var (
+		token       string
+		sec         = secret.JobSecrets{Values: map[string]string{}, Masks: []string{}}
+		unavailable *secret.UnavailableError
+		failJobID   uuid.UUID
+	)
 	hook := func(ctx context.Context, q *store.Queries, j store.PipelineJob) error {
 		cur, err := q.LockRunner(ctx, r.ID)
 		if err != nil {
@@ -239,21 +249,55 @@ func (s *Service) tryClaim(ctx context.Context, r store.Runner) (*AssignedJob, e
 		if n > int64(cur.MaxConcurrency) {
 			return errNoCapacity
 		}
+		if err := s.jobSecrets(ctx, q, j, r.ID, &sec); err != nil {
+			if errors.As(err, &unavailable) {
+				failJobID = j.ID
+				return errSecretsUnavailable
+			}
+			return err
+		}
 		token = authn.JobTokenPrefix + crypto.RandomToken(32)
 		return q.UpsertJobToken(ctx, store.UpsertJobTokenParams{
 			JobID: j.ID, TokenHash: crypto.HashToken(token),
 			ExpiresAt: s.now().Add(time.Duration(j.TimeoutSeconds)*time.Second + jobTokenGrace),
+			MasksEnc:  sec.MasksEnc,
 		})
 	}
 	c, err := s.pipelines.Claim(ctx, r.OrganizationID, r.ID, r.Labels, hook)
 	if errors.Is(err, errNoCapacity) {
 		return nil, nil
 	}
+	if errors.Is(err, errSecretsUnavailable) {
+		// The claim rolled back; fail the job so no runner picks it up again.
+		return nil, s.pipelines.FailJobWithNotice(ctx, failJobID, unavailable.Reason, unavailable.Message)
+	}
 	if err != nil || c == nil {
 		return nil, err
 	}
 	s.logger.InfoContext(ctx, "job assigned", "job_id", c.Job.ID, "runner_id", r.ID)
-	return &AssignedJob{ClaimedJob: *c, Token: token, Secrets: map[string]string{}, Masks: []string{}}, nil
+	return &AssignedJob{ClaimedJob: *c, Token: token, Secrets: sec.Values, Masks: sec.Masks}, nil
+}
+
+// jobSecrets fills sec for a job that lists secrets.
+func (s *Service) jobSecrets(ctx context.Context, q *store.Queries, j store.PipelineJob, runnerID uuid.UUID, sec *secret.JobSecrets) error {
+	if s.secrets == nil {
+		var js struct {
+			Secrets []string `json:"secrets"`
+		}
+		if err := json.Unmarshal(j.Spec, &js); err != nil {
+			return err
+		}
+		if len(js.Secrets) > 0 {
+			return &secret.UnavailableError{Reason: pipeline.ReasonSecretNotFound, Message: "Secrets aren't available on this server."}
+		}
+		return nil
+	}
+	got, err := s.secrets.ForJob(ctx, q, j, runnerID)
+	if err != nil {
+		return err
+	}
+	*sec = got
+	return nil
 }
 
 // AuthenticateJob resolves a job token for the job named in the path. The job must still be
@@ -318,8 +362,17 @@ type LogInput struct {
 	Content string `json:"content"`
 }
 
-// AppendLog stores output. The runner masks Masks before sending.
+// AppendLog stores output. The runner masks Masks before sending; the API masks again, so
+// a value split oddly by the runner or printed by a modified runner isn't stored.
 func (s *Service) AppendLog(ctx context.Context, j store.PipelineJob, in LogInput) error {
+	var masks pipeline.Masker
+	if s.secrets != nil {
+		m, err := s.secrets.JobMasks(ctx, store.New(s.pool), j.ID)
+		if err != nil {
+			return err
+		}
+		masks = m
+	}
 	// PostgreSQL text can't hold NUL bytes.
-	return s.pipelines.AppendLog(ctx, j.ID, in.Seq, strings.ReplaceAll(in.Content, "\x00", ""), nil)
+	return s.pipelines.AppendLog(ctx, j.ID, in.Seq, strings.ReplaceAll(in.Content, "\x00", ""), masks)
 }

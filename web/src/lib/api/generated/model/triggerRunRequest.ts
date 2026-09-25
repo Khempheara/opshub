@@ -25,13 +25,13 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.8.0
+ * OpenAPI spec version: 0.9.0
  */
 import type { TriggerRunRequestVariables } from './triggerRunRequestVariables';
 
 export interface TriggerRunRequest {
   /**
-     * Branch
+     * Branch, tag or commit; defaults to the default branch.
      * @maxLength 255
      */
   ref?: string;

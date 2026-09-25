@@ -104,10 +104,12 @@ Owners or other Admins. They may change their own role or leave. Owners manage e
 ² Only if the environment's protection rule allows `developer` (allowed roles mean "this role or higher"). Protection rules can
 additionally require N approvals from distinct users; the approver may not be the person who triggered the run.
 
-³ Non-protected environments only.
+³ Secrets of unprotected environments only. A secret for all environments also reaches protected
+ones, so it counts as protected.
 
 **Secrets are write-only for everyone.** After creation, values are only ever decrypted for the runner
-executing a job that references them (audited as `secret.read`); there is no "reveal" permission.
+executing a job that lists them (audited as `secret.read`); there is no "reveal" permission
+([secrets.md](secrets.md)).
 
 ## Action identifiers
 

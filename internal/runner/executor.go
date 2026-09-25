@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"path"
 	"sort"
@@ -170,15 +171,7 @@ func (x *Executor) execute(ctx context.Context, j *Job, logs *LogShipper) (err e
 		return err
 	}
 
-	env := make([]string, 0, len(j.Variables)+len(j.Secrets)+1)
-	for k, v := range j.Variables {
-		env = append(env, k+"="+v)
-	}
-	for k, v := range j.Secrets {
-		env = append(env, k+"="+v)
-	}
-	env = append(env, "OPSHUB_WORKSPACE="+Workspace)
-	sort.Strings(env)
+	env := jobEnv(j.Variables, j.Secrets)
 
 	for i, step := range j.Spec.Steps {
 		if err := x.step(ctx, j, i, step, image, env, labels, volume, logs); err != nil {
@@ -464,4 +457,19 @@ func (x *Executor) Cleanup(ctx context.Context) {
 			_ = x.docker.RemoveVolume(ctx, v)
 		}
 	}
+}
+
+// jobEnv is the containers' environment: variables, then secrets (a secret wins over a
+// variable of the same name), then OPSHUB_WORKSPACE; sorted for stable output.
+func jobEnv(vars, secrets map[string]string) []string {
+	merged := make(map[string]string, len(vars)+len(secrets)+1)
+	maps.Copy(merged, vars)
+	maps.Copy(merged, secrets)
+	merged["OPSHUB_WORKSPACE"] = Workspace
+	env := make([]string, 0, len(merged))
+	for k, v := range merged {
+		env = append(env, k+"="+v)
+	}
+	sort.Strings(env)
+	return env
 }
