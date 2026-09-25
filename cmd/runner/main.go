@@ -2,10 +2,15 @@
 //
 //	opshub-runner register --url https://opshub.example.com --token ohr_reg_… [--name n] [--labels a,b]
 //	opshub-runner run [--config path]
+//	opshub-runner agent --url https://opshub.example.com [--token-file path] [--disk /]
 //	opshub-runner version
 //
 // `run` can also register itself on first start from OPSHUB_URL and
 // OPSHUB_REGISTRATION_TOKEN (used by the Docker Compose "runner" profile).
+//
+// `agent` is the infrastructure agent for one server asset: it reports CPU, memory, disk and
+// load every 30 seconds. The token comes from OPSHUB_AGENT_TOKEN or --token-file (never a
+// flag, which would show in process lists).
 package main
 
 import (
@@ -47,6 +52,8 @@ func main() {
 		err = register(os.Args[2:])
 	case "run":
 		err = run(os.Args[2:], logger)
+	case "agent":
+		err = agent(os.Args[2:], logger)
 	case "version":
 		fmt.Println(version)
 	default:
@@ -60,7 +67,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: opshub-runner register|run|version [flags]")
+	fmt.Fprintln(os.Stderr, "usage: opshub-runner register|run|agent|version [flags]")
 }
 
 func splitLabels(s string) []string {
@@ -156,4 +163,38 @@ func run(args []string, logger *slog.Logger) error {
 		Network: cfg.Network, TempDir: cfg.TempDir,
 	}, logger)
 	return runner.NewAgent(cfg, version, client, exec, logger).Run(ctx, *grace)
+}
+
+func agent(args []string, logger *slog.Logger) error {
+	fl := flag.NewFlagSet("agent", flag.ExitOnError)
+	url := fl.String("url", os.Getenv("OPSHUB_URL"), "OpsHub URL")
+	tokenFile := fl.String("token-file", os.Getenv("OPSHUB_AGENT_TOKEN_FILE"), "file holding the agent token (mode 0600)")
+	disk := fl.String("disk", envOr("OPSHUB_AGENT_DISK", "/"), "filesystem whose usage is reported")
+	proc := fl.String("proc", envOr("OPSHUB_AGENT_PROC", "/proc"), "procfs to read (the host's /proc when running in a container)")
+	hostname := fl.String("hostname", os.Getenv("OPSHUB_AGENT_HOSTNAME"), "name to report (default: this machine's)")
+	_ = fl.Parse(args)
+
+	token := os.Getenv("OPSHUB_AGENT_TOKEN")
+	if *tokenFile != "" {
+		info, err := os.Stat(*tokenFile) // #nosec G703 -- operator-chosen path on the operator's own machine
+		if err != nil {
+			return err
+		}
+		if info.Mode().Perm()&0o077 != 0 {
+			return fmt.Errorf("%s is readable by other users; run: chmod 600 %s", *tokenFile, *tokenFile)
+		}
+		b, err := os.ReadFile(*tokenFile) // #nosec G304 G703 -- operator-chosen path on the operator's own machine
+		if err != nil {
+			return err
+		}
+		token = strings.TrimSpace(string(b))
+	}
+	if *url == "" || !strings.HasPrefix(token, "ohi_") {
+		return errors.New("--url and an agent token (OPSHUB_AGENT_TOKEN or --token-file) are required")
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return (&runner.InfraAgent{
+		URL: *url, Token: token, DiskPath: *disk, ProcRoot: *proc, Hostname: *hostname, Version: version, Logger: logger,
+	}).Run(ctx)
 }

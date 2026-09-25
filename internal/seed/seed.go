@@ -127,7 +127,10 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 	if err := seedRuns(ctx, pool, opts.Out); err != nil {
 		return err
 	}
-	return seedDeployments(ctx, pool, opts.Keys, opts.Out)
+	if err := seedDeployments(ctx, pool, opts.Keys, opts.Out); err != nil {
+		return err
+	}
+	return seedInfra(ctx, pool, opts.Out)
 }
 
 // DemoProjectSlug is the seeded project in the demo organization.

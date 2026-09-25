@@ -2,6 +2,7 @@ import type auth from '@/locales/en/auth.json';
 import type common from '@/locales/en/common.json';
 import type deploy from '@/locales/en/deploy.json';
 import type errors from '@/locales/en/errors.json';
+import type infra from '@/locales/en/infra.json';
 import type home from '@/locales/en/home.json';
 import type org from '@/locales/en/org.json';
 import type pipeline from '@/locales/en/pipeline.json';
@@ -20,6 +21,7 @@ declare module 'i18next' {
       deploy: typeof deploy;
       errors: typeof errors;
       home: typeof home;
+      infra: typeof infra;
       org: typeof org;
       pipeline: typeof pipeline;
       project: typeof project;

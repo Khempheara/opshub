@@ -143,6 +143,15 @@ func (c *Client) Heartbeat(ctx context.Context, token, version, os, arch string,
 	return out.CancelJobIDs, err
 }
 
+// InfraHeartbeat sends an infra agent's sample; it returns the interval the server asks for.
+func (c *Client) InfraHeartbeat(ctx context.Context, token string, body map[string]any) (int, error) {
+	var out struct {
+		IntervalSeconds int `json:"interval_seconds"`
+	}
+	_, err := c.jsonCall(ctx, http.MethodPost, "/agent/heartbeat", token, body, &out)
+	return out.IntervalSeconds, err
+}
+
 // Job is an assigned job (the fields the executor uses).
 type Job struct {
 	Job struct {

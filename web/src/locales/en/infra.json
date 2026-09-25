@@ -1,0 +1,149 @@
+{
+  "title": "Infrastructure",
+  "description": "Servers, clusters, databases and domains your organization runs, with live health from the OpsHub agent.",
+  "tabs": {
+    "label": "Infrastructure sections",
+    "assets": "Assets",
+    "certificates": "Certificates"
+  },
+  "kinds": {
+    "server": "Server",
+    "cluster": "Cluster",
+    "database": "Database",
+    "domain": "Domain"
+  },
+  "status": {
+    "online": "Online",
+    "offline": "Offline",
+    "pending": "Waiting for agent",
+    "no_agent": "No agent",
+    "valid": "Valid",
+    "expiring": "Expiring soon",
+    "expired": "Expired",
+    "error": "Check failed",
+    "unchecked": "Not checked yet",
+    "inventory": "Inventory"
+  },
+  "assets": {
+    "add": "Add asset",
+    "search": "Search by name or address",
+    "kind": "Kind",
+    "allKinds": "All kinds",
+    "statusFilter": "Status",
+    "allStatuses": "All statuses",
+    "empty": "No assets yet",
+    "emptyManage": "Add a server, cluster, database or domain to start tracking it.",
+    "columns": {
+      "name": "Name",
+      "address": "Address",
+      "tags": "Tags",
+      "status": "Status",
+      "health": "Health"
+    },
+    "lastSeen": "Last seen {{time}}",
+    "createTitle": "Add asset",
+    "editTitle": "Edit {{name}}",
+    "formIntro": "Assets are shared by everyone in the organization. Tags help you group and filter them.",
+    "form": {
+      "kind": "Kind",
+      "name": "Name",
+      "address": "Address",
+      "addressHint": {
+        "server": "Host name or IP address, e.g. web-1.internal or 10.0.0.12.",
+        "cluster": "API server URL, e.g. https://k8s.example.com:6443.",
+        "database": "Host and port, e.g. db.internal:5432.",
+        "domain": "Domain name to watch, e.g. example.com. OpsHub checks its TLS certificate."
+      },
+      "tlsPort": "TLS port",
+      "description": "Description",
+      "tags": "Tags",
+      "tagsHint": "Separated by commas or spaces, e.g. prod, web, region:sg.",
+      "metadata": "Metadata",
+      "metadataHint": "One KEY=value per line, e.g. provider=hetzner."
+    },
+    "created": "Asset added",
+    "saved": "Asset saved",
+    "deleted": "Asset deleted",
+    "back": "All assets",
+    "edit": "Edit",
+    "details": "Details",
+    "updated": "Last updated",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteBody": "Its metrics, certificate history and agent token are deleted too. A running agent stops being accepted."
+  },
+  "agent": {
+    "title": "Agent",
+    "issue": "Create agent token",
+    "rotate": "Rotate token",
+    "rotateTitle": "Rotate the agent token?",
+    "rotateBody": "The current token stops working immediately. Update the agent with the new token to keep receiving metrics.",
+    "none": "No agent has been set up for this server.",
+    "noneManage": "Create an agent token, then run the OpsHub agent on this server to report CPU, memory and disk usage.",
+    "token": "Token",
+    "hostname": "Host name",
+    "platform": "Platform",
+    "lastSeen": "Last heartbeat",
+    "state": "State",
+    "waiting": "Waiting for the first heartbeat",
+    "tokenTitle": "Agent token",
+    "tokenBody": "Copy the token now. It is shown only once; if you lose it, rotate it.",
+    "binary": "Run the agent binary",
+    "docker": "Or run it with Docker",
+    "copyCommand": "Copy command",
+    "linuxOnly": "The agent reports metrics on Linux only. It runs as a non-root user and only reads /proc and disk usage.",
+    "done": "Done"
+  },
+  "metrics": {
+    "title": "Usage",
+    "range": "Time range",
+    "ranges": {
+      "1h": "1 hour",
+      "24h": "24 hours",
+      "7d": "7 days",
+      "30d": "30 days",
+      "90d": "90 days"
+    },
+    "cpu": "CPU",
+    "mem": "Memory",
+    "disk": "Disk",
+    "avg": "avg",
+    "max": "max",
+    "summary": "Average {{avg}}% · peak {{max}}%",
+    "noData": "No data in this time range.",
+    "noAgent": "Metrics appear once the agent is running.",
+    "sourceRaw": "Each point covers {{step}}.",
+    "sourceHourly": "Each point covers {{step}}, from hourly rollups."
+  },
+  "certificates": {
+    "description": "TLS certificates of your domains. OpsHub checks each one daily, and hourly after a failure.",
+    "cardTitle": "TLS certificate",
+    "checkNow": "Check now",
+    "checkedOk": "Certificate checked",
+    "notChecked": "This certificate has not been checked yet.",
+    "filter": "Show",
+    "within": {
+      "all": "All certificates",
+      "7d": "Expiring within 7 days",
+      "14d": "Expiring within 14 days",
+      "30d": "Expiring within 30 days",
+      "90d": "Expiring within 90 days"
+    },
+    "empty": "No domains yet",
+    "emptyHint": "Add a domain asset to watch its certificate.",
+    "emptyFiltered": "Nothing expiring in this window",
+    "columns": {
+      "domain": "Domain",
+      "status": "Status",
+      "expires": "Expires",
+      "issuer": "Issuer"
+    },
+    "expires": "Expires {{date}}",
+    "daysLeft_one": "{{count}} day left",
+    "daysLeft_other": "{{count}} days left",
+    "subject": "Subject",
+    "issuer": "Issuer",
+    "names": "Names",
+    "fingerprint": "SHA-256 fingerprint",
+    "checked": "Last checked"
+  }
+}

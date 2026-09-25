@@ -6,6 +6,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -34,6 +35,7 @@ type Querier interface {
 	CountRunningJobs(ctx context.Context, runnerID *uuid.UUID) (int64, error)
 	CountUnusedRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
+	CreateAsset(ctx context.Context, arg CreateAssetParams) (InfraAsset, error)
 	// The id is chosen by the caller: it is the associated data of the credentials' encryption.
 	CreateDeployTargetWithID(ctx context.Context, arg CreateDeployTargetWithIDParams) (DeployTarget, error)
 	CreateDeployment(ctx context.Context, arg CreateDeploymentParams) (Deployment, error)
@@ -52,6 +54,8 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// The latest attempt of every job in a run.
 	CurrentJobs(ctx context.Context, runID uuid.UUID) ([]PipelineJob, error)
+	DeleteAsset(ctx context.Context, id uuid.UUID) (int64, error)
+	DeleteCertificate(ctx context.Context, assetID uuid.UUID) error
 	DeleteDeployTarget(ctx context.Context, id uuid.UUID) (int64, error)
 	// Periodic cleanup. Sessions are kept 30 days after expiry/revocation for the security page history.
 	DeleteExpiredAuthRecords(ctx context.Context) error
@@ -60,6 +64,7 @@ type Querier interface {
 	DeleteExpiredJobTokens(ctx context.Context) (int64, error)
 	DeleteExpiredRegistrationTokens(ctx context.Context) (int64, error)
 	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (UserIdentity, error)
+	DeleteOldHourlyMetrics(ctx context.Context, before time.Time) (int64, error)
 	DeleteProjectGrantsForTeam(ctx context.Context, teamID uuid.UUID) error
 	// Called when someone leaves or is removed from an organization.
 	DeleteProjectGrantsForUserInOrg(ctx context.Context, arg DeleteProjectGrantsForUserInOrgParams) error
@@ -74,6 +79,8 @@ type Querier interface {
 	DependencyArtifacts(ctx context.Context, arg DependencyArtifactsParams) ([]DependencyArtifactsRow, error)
 	DeploymentByJob(ctx context.Context, jobID *uuid.UUID) (Deployment, error)
 	DisableTOTP(ctx context.Context, id uuid.UUID) error
+	// Domain assets whose certificate is due for a check (or was never checked).
+	DueCertificateChecks(ctx context.Context) ([]DueCertificateChecksRow, error)
 	DueSchedules(ctx context.Context) ([]PipelineSchedule, error)
 	EnableTOTP(ctx context.Context, arg EnableTOTPParams) error
 	// Removes the least recently used entries beyond a project's quota.
@@ -85,7 +92,10 @@ type Querier interface {
 	FinishOpenSteps(ctx context.Context, arg FinishOpenStepsParams) error
 	GetActiveAPITokenByHash(ctx context.Context, tokenHash []byte) (GetActiveAPITokenByHashRow, error)
 	GetArtifact(ctx context.Context, id uuid.UUID) (Artifact, error)
+	GetAsset(ctx context.Context, id uuid.UUID) (InfraAsset, error)
+	GetAssetByAgentToken(ctx context.Context, tokenHash []byte) (InfraAsset, error)
 	GetCacheEntry(ctx context.Context, arg GetCacheEntryParams) (CacheEntry, error)
+	GetCertificate(ctx context.Context, assetID uuid.UUID) (SslCertificate, error)
 	GetCurrentDeployment(ctx context.Context, environmentID uuid.UUID) (Deployment, error)
 	GetDeployTarget(ctx context.Context, id uuid.UUID) (DeployTarget, error)
 	GetDeployTargetByName(ctx context.Context, arg GetDeployTargetByNameParams) (DeployTarget, error)
@@ -127,6 +137,8 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByIDForUpdate(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (User, error)
+	// The same from hourly rollups (for ranges beyond the raw retention); -1 = no data.
+	HourlyMetricSeries(ctx context.Context, arg HourlyMetricSeriesParams) ([]HourlyMetricSeriesRow, error)
 	IncrementMFAAttempts(ctx context.Context, id uuid.UUID) error
 	InsertApproval(ctx context.Context, arg InsertApprovalParams) (uuid.UUID, error)
 	InsertArtifact(ctx context.Context, arg InsertArtifactParams) (Artifact, error)
@@ -134,6 +146,8 @@ type Querier interface {
 	InsertDeploymentLog(ctx context.Context, arg InsertDeploymentLogParams) (int64, error)
 	InsertJob(ctx context.Context, arg InsertJobParams) (PipelineJob, error)
 	InsertLogChunk(ctx context.Context, arg InsertLogChunkParams) (int64, error)
+	// One sample per asset and second; a re-sent heartbeat within the same second is ignored.
+	InsertMetric(ctx context.Context, arg InsertMetricParams) error
 	InsertRecoveryCodes(ctx context.Context, arg []InsertRecoveryCodesParams) (int64, error)
 	InsertRepository(ctx context.Context, arg InsertRepositoryParams) (Repository, error)
 	InsertRun(ctx context.Context, arg InsertRunParams) (PipelineRun, error)
@@ -146,8 +160,12 @@ type Querier interface {
 	// Keyset pagination (newest first).
 	ListActiveSessions(ctx context.Context, arg ListActiveSessionsParams) ([]Session, error)
 	ListApprovals(ctx context.Context, jobID uuid.UUID) ([]ListApprovalsRow, error)
+	ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListAssetsRow, error)
 	// Keyset pagination on (created_at, id) newest first.
 	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
+	// Certificates of the organization's domains, soonest expiry first; expiring_before (optional)
+	// keeps those expiring earlier or failing.
+	ListCertificates(ctx context.Context, arg ListCertificatesParams) ([]ListCertificatesRow, error)
 	ListDeployTargets(ctx context.Context, organizationID uuid.UUID) ([]DeployTarget, error)
 	ListDeploymentLogs(ctx context.Context, arg ListDeploymentLogsParams) ([]ListDeploymentLogsRow, error)
 	// Newest first; keyset pagination on (created_at, id).
@@ -183,6 +201,7 @@ type Querier interface {
 	LockRunner(ctx context.Context, id uuid.UUID) (Runner, error)
 	// Running jobs whose runner stopped sending heartbeats.
 	LostRunnerJobs(ctx context.Context, staleSeconds int32) ([]uuid.UUID, error)
+	MaintainMetricPartitions(ctx context.Context, keepMonths int32) error
 	MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) error
 	MarkRefreshTokenUsed(ctx context.Context, id uuid.UUID) error
 	NextDeploymentNumber(ctx context.Context, id uuid.UUID) (int32, error)
@@ -194,8 +213,11 @@ type Querier interface {
 	OrphanedRunnerJobs(ctx context.Context, arg OrphanedRunnerJobsParams) ([]uuid.UUID, error)
 	// The latest successful deployment of the environment before the given time.
 	PreviousSuccessfulDeployment(ctx context.Context, arg PreviousSuccessfulDeploymentParams) (Deployment, error)
+	// Averages and maxima per step (seconds) from the raw samples; -1 = no data in the bucket.
+	RawMetricSeries(ctx context.Context, arg RawMetricSeriesParams) ([]RawMetricSeriesRow, error)
 	// Guards against creating a second run for the same event when a worker is retried.
 	RecentRunExists(ctx context.Context, arg RecentRunExistsParams) (bool, error)
+	RecordHeartbeat(ctx context.Context, arg RecordHeartbeatParams) error
 	RecordLoginFailure(ctx context.Context, arg RecordLoginFailureParams) error
 	RecordLoginSuccess(ctx context.Context, id uuid.UUID) error
 	RecordTargetTest(ctx context.Context, arg RecordTargetTestParams) error
@@ -210,7 +232,10 @@ type Querier interface {
 	RevokeSession(ctx context.Context, arg RevokeSessionParams) (uuid.UUID, error)
 	// Revokes every session of a user, optionally keeping one (the caller's).
 	RevokeUserSessions(ctx context.Context, arg RevokeUserSessionsParams) error
+	// Summarizes raw samples of whole hours in [from, to) into hourly rows (idempotent).
+	RollupMetrics(ctx context.Context, arg RollupMetricsParams) (int64, error)
 	RunningJobsForRunner(ctx context.Context, runnerID *uuid.UUID) ([]uuid.UUID, error)
+	SetAgentToken(ctx context.Context, arg SetAgentTokenParams) (InfraAsset, error)
 	SetCurrentDeployment(ctx context.Context, arg SetCurrentDeploymentParams) error
 	SetJobStatus(ctx context.Context, arg SetJobStatusParams) error
 	SetTOTPPending(ctx context.Context, arg SetTOTPPendingParams) error
@@ -228,6 +253,7 @@ type Querier interface {
 	TouchRepositoryDelivery(ctx context.Context, id uuid.UUID) error
 	TouchRunner(ctx context.Context, arg TouchRunnerParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	UpdateAsset(ctx context.Context, arg UpdateAssetParams) (InfraAsset, error)
 	UpdateDeployTarget(ctx context.Context, arg UpdateDeployTargetParams) (DeployTarget, error)
 	UpdateEnvironment(ctx context.Context, arg UpdateEnvironmentParams) (Environment, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error
@@ -243,6 +269,7 @@ type Querier interface {
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
 	// Returns the replaced blob's key (if any) so the caller can delete it.
 	UpsertCacheEntry(ctx context.Context, arg UpsertCacheEntryParams) (string, error)
+	UpsertCertificate(ctx context.Context, arg UpsertCertificateParams) (SslCertificate, error)
 	UpsertJobToken(ctx context.Context, arg UpsertJobTokenParams) error
 	UpsertProjectTeamGrant(ctx context.Context, arg UpsertProjectTeamGrantParams) error
 	UpsertProjectUserGrant(ctx context.Context, arg UpsertProjectUserGrantParams) error

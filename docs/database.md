@@ -144,13 +144,19 @@ entry's old blob is deleted after the new one is recorded.
 | `environments.current_deployment_id` | | The release the environment runs now |
 | `projects.last_deployment_number` | | Numbers deployments per project |
 
-### 7. Infrastructure inventory
+### 7. Infrastructure inventory **(✓ 000007)**
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `infra_assets` | `organization_id`, `kind (server\|cluster\|database\|domain)`, `name`, `address`, `tags text[]`, `metadata jsonb`, `agent_token_hash`, `last_heartbeat_at` | |
-| `asset_metrics` | `asset_id`, `ts`, `cpu_pct`, `mem_pct`, `disk_pct` | Partitioned by month; downsampled by a retention job |
-| `ssl_certificates` | `asset_id` (domain), `issuer`, `not_before`, `not_after`, `last_checked_at` | Expiry alerts |
+| `infra_assets` | `organization_id`, `kind (server\|cluster\|database\|domain)`, `name` (`UNIQUE` per org), `address`, `description`, `tags text[]` (≤ 20), `metadata jsonb`, `tls_port`, `agent_token_hash` (`UNIQUE`), `agent_token_prefix`, `agent_version/hostname/os/arch`, `last_heartbeat_at`, `last_metrics jsonb`, `version` | `updated_at` changes only with `version` (edits, token rotation), not with heartbeats |
+| `asset_metrics` | `(asset_id, ts)`, `cpu_pct`, `mem_pct`, `disk_pct`, `load1` | `PARTITION BY RANGE (ts)`, one partition per month (`asset_metrics_YYYYMM`); current + previous month kept |
+| `asset_metrics_hourly` | `(asset_id, hour)`, average and peak per metric | Rollups kept 400 days |
+| `ssl_certificates` | `asset_id` (domain, PK), `host`, `port`, `subject`, `issuer`, `dns_names`, `serial`, `fingerprint`, `not_before`, `not_after`, `error`, `last_checked_at`, `next_check_at` | Last known dates survive a failed check |
+
+`opshub_maintain_metric_partitions(keep_months)` creates this month's and the next two months'
+partitions and drops older ones. It is `SECURITY DEFINER` (owned by `opshub_migrator`,
+`search_path` pinned, `EXECUTE` revoked from `PUBLIC` and granted to `opshub_app`), so the hourly
+job can maintain partitions while the application role keeps no DDL rights.
 
 ### 8. Secrets
 
@@ -209,7 +215,7 @@ Computed from existing tables (no new source of truth), materialized daily by a 
 | Role | Privileges | Used by |
 |---|---|---|
 | `opshub_migrator` | Owns schema; DDL | `cmd/api migrate` (Helm pre-upgrade Job / `make migrate-up`) |
-| `opshub_app` | `SELECT, INSERT, UPDATE, DELETE` on app tables; `INSERT, SELECT` only on `audit_log`; no `TRUNCATE`, no DDL | API + workers |
+| `opshub_app` | `SELECT, INSERT, UPDATE, DELETE` on app tables; `INSERT, SELECT` only on `audit_log`; no `TRUNCATE`, no DDL (metric partitions via one `SECURITY DEFINER` function, §7) | API + workers |
 | `opshub_backup` | `pg_read_all_data` | Backup job |
 
 In local dev a single superuser is used for convenience; `docker-compose.yml` creates the three roles to

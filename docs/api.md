@@ -160,16 +160,20 @@ of the credential fields that are set.
 | GET | `/deployments/{deploymentId}/logs/stream` | JWT | `deployment.view` | **SSE**: `status`, `log` (resumable), `end` |
 | POST | `/deployments/{deploymentId}/rollback` | JWT | `deployment.rollback` | The environment's current release → the one before it, 202 **(IK)** (`NOTHING_TO_ROLL_BACK`) |
 
-## 7. Infrastructure
+## 7. Infrastructure **(✓ Module 7)**
+
+See [infrastructure.md](infrastructure.md).
 
 | Method | Path | Auth | Action | Description |
 |---|---|---|---|---|
-| GET / POST | `/orgs/{orgId}/assets` | JWT | `infra.view` / `infra.manage` | Filter kind, tag, status |
-| GET / PATCH / DELETE | `/assets/{assetId}` | JWT | `infra.manage` | **(IM)** |
-| GET | `/assets/{assetId}/metrics` | JWT | `infra.view` | `?from&to&step` CPU/RAM/disk series |
-| POST | `/assets/{assetId}/agent-token` | JWT | `infra.manage` | Issue/rotate agent token (shown once) |
-| GET | `/orgs/{orgId}/certificates` | JWT | `infra.view` | SSL expiry list `?expiring_within=30d` |
-| POST | `/agent/heartbeat` | Agent | | Metrics sample |
+| GET / POST | `/orgs/{orgId}/assets` | JWT | `infra.view` / `infra.manage` | Filter `kind`, `tag`, `status`, `q` (name or address); answers include status, agent, latest metrics and certificate summary |
+| GET / PATCH / DELETE | `/assets/{assetId}` | JWT | `infra.view` / `infra.manage` | PATCH **(IM)**; kind is fixed; changing a domain's address or port discards its certificate |
+| GET | `/assets/{assetId}/metrics` | JWT | `infra.view` | `?from&to&step` → average and peak CPU/memory/disk per step; raw samples (≤ 30 days back) or hourly rollups; ≤ 1000 points |
+| POST | `/assets/{assetId}/agent-token` | JWT | `infra.manage` | Servers only (`AGENT_NOT_SUPPORTED`); issues or rotates the `ohi_…` token, shown once |
+| GET | `/assets/{assetId}/certificate` | JWT | `infra.view` | `{certificate: null \| {…}}` for domains |
+| POST | `/assets/{assetId}/certificate/check` | JWT | `infra.manage` | Probe now; a failed probe is a 200 with `error` set |
+| GET | `/orgs/{orgId}/certificates` | JWT | `infra.view` | Every domain's certificate, soonest expiry first; `?expiring_within=30d` keeps those expiring within the window or failing |
+| POST | `/agent/heartbeat` | Agent (`ohi_…`) | | Version, hostname, os/arch and an optional metrics sample → `{interval_seconds}` |
 
 ## 8. Secrets
 
@@ -243,5 +247,6 @@ Module-specific examples: `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED`, `EMAIL_NOT_VE
 `RUNNER_NOT_FOUND`, `RUNNER_TOKEN_INVALID`, `REGISTRATION_TOKEN_INVALID`, `RUNNER_DISABLED`,
 `JOB_TOKEN_INVALID`, `ARTIFACT_NOT_FOUND`, `CACHE_NOT_FOUND`, `DEPLOY_TARGET_NOT_FOUND`,
 `DEPLOY_TARGET_NAME_TAKEN`, `DEPLOY_TARGET_IN_USE`, `DEPLOYMENT_NOT_FOUND`, `DEPLOYMENT_IN_PROGRESS`,
-`STRATEGY_NOT_SUPPORTED`, `DEPLOY_NOT_ALLOWED`.
+`STRATEGY_NOT_SUPPORTED`, `DEPLOY_NOT_ALLOWED`, `ASSET_NOT_FOUND`, `ASSET_NAME_TAKEN`,
+`AGENT_TOKEN_INVALID`, `AGENT_NOT_SUPPORTED`.
 Each has EN + KM entries in `web/src/locales/*/errors.json` (enforced by a Go test).

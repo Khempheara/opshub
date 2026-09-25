@@ -16,6 +16,8 @@ export const OrgAction = {
   runnerManage: 'runner.manage',
   targetView: 'target.view',
   targetManage: 'target.manage',
+  infraView: 'infra.view',
+  infraManage: 'infra.manage',
 } as const;
 
 /**

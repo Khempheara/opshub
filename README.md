@@ -165,8 +165,16 @@ reverted automatically; the current release rolls back in one click
 ([deployment guide](docs/deployments.md)). The demo data includes `demo-k8s`, a cluster that
 doesn't exist: deployments to it fail safely as "target unreachable".
 
+## Infrastructure
+
+**Organization → Infrastructure** keeps an inventory of servers, clusters, databases and
+domains. On a server, create an agent token and run `opshub-runner agent` (Linux) to chart CPU,
+memory and disk; OpsHub checks every domain's TLS certificate and lists those about to expire
+([infrastructure guide](docs/infrastructure.md)). The demo server `web-1` comes with a day of
+sample metrics.
+
 ## Roadmap
 
 1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. ✅ CI/CD pipelines · 5. ✅ Runner agent ·
-6. ✅ Deployments · 7. Infrastructure · 8. Secrets · 9. Monitoring & alerts · 10. Logs ·
+6. ✅ Deployments · 7. ✅ Infrastructure · 8. Secrets · 9. Monitoring & alerts · 10. Logs ·
 11. Audit log · 12. Dashboard & DORA metrics

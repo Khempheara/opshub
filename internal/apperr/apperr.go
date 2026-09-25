@@ -132,6 +132,14 @@ const (
 	CodeDeployNotAllowed     Code = "DEPLOY_NOT_ALLOWED"
 )
 
+// Module 7: infrastructure.
+const (
+	CodeAssetNotFound     Code = "ASSET_NOT_FOUND"
+	CodeAssetNameTaken    Code = "ASSET_NAME_TAKEN"
+	CodeAgentTokenInvalid Code = "AGENT_TOKEN_INVALID" // #nosec G101 -- an error code, not a credential
+	CodeAgentNotSupported Code = "AGENT_NOT_SUPPORTED"
+)
+
 // AllCodes lists every code; append new codes here as modules add them.
 var AllCodes = []Code{
 	CodeInternal, CodeBadRequest, CodeValidation, CodeUnauthenticated, CodeForbidden,
@@ -161,6 +169,7 @@ var AllCodes = []Code{
 	CodeJobTokenInvalid, CodeArtifactNotFound, CodeCacheNotFound,
 	CodeTargetNotFound, CodeTargetNameTaken, CodeTargetInUse, CodeDeploymentNotFound, CodeDeploymentInProgress,
 	CodeNothingToRollBack, CodeEnvironmentProtected, CodeStrategyNotSupported, CodeDeployNotAllowed,
+	CodeAssetNotFound, CodeAssetNameTaken, CodeAgentTokenInvalid, CodeAgentNotSupported,
 }
 
 // Error is an application error carrying its HTTP status and client-facing code.
