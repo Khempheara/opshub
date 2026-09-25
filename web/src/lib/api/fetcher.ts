@@ -50,7 +50,7 @@ const NO_RETRY = /\/api\/v1\/auth\//;
 
 async function send(url: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
-  headers.set('Accept', 'application/json');
+  if (!headers.has('Accept')) headers.set('Accept', 'application/json');
   headers.set('Accept-Language', i18n.resolvedLanguage ?? 'en');
   const token = getAccessToken();
   if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
@@ -64,11 +64,7 @@ async function send(url: string, init: RequestInit): Promise<Response> {
   }
 }
 
-/**
- * Mutator used by every orval-generated function. Adds the access token, language and CSRF
- * header; on 401 it refreshes the session once and retries; errors become ApiError/NetworkError.
- */
-export async function customFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
+async function sendWithRefresh(url: string, init: RequestInit): Promise<Response> {
   let res = await send(url, init);
   if (res.status === 401 && !NO_RETRY.test(url) && getAccessToken() !== null) {
     if (await refreshSession()) {
@@ -77,6 +73,38 @@ export async function customFetch<T>(url: string, init: RequestInit = {}): Promi
       clearSession();
     }
   }
+  return res;
+}
+
+/**
+ * Downloads a file (logs, artifacts) with the same authentication as API calls and saves it
+ * under fileName. Errors are ApiError/NetworkError, as for JSON calls.
+ */
+export async function downloadFile(url: string, fileName: string, accept = '*/*'): Promise<void> {
+  const res = await sendWithRefresh(url, { headers: { Accept: accept } });
+  if (!res.ok) {
+    let e: ErrorEnvelope['error'];
+    try {
+      e = ((await res.json()) as ErrorEnvelope).error;
+    } catch {
+      e = undefined;
+    }
+    throw new ApiError(res.status, e?.code ?? 'INTERNAL', e?.message ?? res.statusText, e?.details ?? {});
+  }
+  const href = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(href);
+}
+
+/**
+ * Mutator used by every orval-generated function. Adds the access token, language and CSRF
+ * header; on 401 it refreshes the session once and retries; errors become ApiError/NetworkError.
+ */
+export async function customFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const res = await sendWithRefresh(url, init);
 
   const text = await res.text();
   let body: unknown;

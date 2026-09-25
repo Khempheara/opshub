@@ -74,7 +74,14 @@
     "RUN_NOT_CANCELABLE": "This run has already finished.",
     "JOB_NOT_RETRYABLE": "Only a finished job that failed or was canceled can run again.",
     "APPROVAL_NOT_ALLOWED": "You can't approve or reject this job.",
-    "JOB_NOT_RUNNING": "This job isn't running (it may have been canceled)."
+    "JOB_NOT_RUNNING": "This job isn't running (it may have been canceled).",
+    "RUNNER_NOT_FOUND": "Runner not found.",
+    "RUNNER_TOKEN_INVALID": "The runner token is invalid or was revoked.",
+    "REGISTRATION_TOKEN_INVALID": "This registration token is invalid, already used or expired.",
+    "RUNNER_DISABLED": "This runner is disabled.",
+    "JOB_TOKEN_INVALID": "The job token is invalid or expired.",
+    "ARTIFACT_NOT_FOUND": "Artifact not found (it may have expired).",
+    "CACHE_NOT_FOUND": "No cache for this key."
   },
   "rules": {
     "required": "This field is required.",

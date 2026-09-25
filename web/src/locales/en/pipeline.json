@@ -56,7 +56,8 @@
     "timeout": "Stopped: it ran longer than its timeout.",
     "no_runner": "No runner picked it up within 24 hours.",
     "step_failed": "A step exited with an error.",
-    "runner_error": "The runner reported an error."
+    "runner_error": "The runner reported an error.",
+    "runner_lost": "The runner stopped responding or was deleted."
   },
   "runs": {
     "title": "Pipelines",
@@ -189,5 +190,10 @@
       "self": "You started this run, so someone else must approve it.",
       "already_decided": "You already decided on this job."
     }
+  },
+  "artifacts": {
+    "title": "Artifacts",
+    "download": "Download",
+    "expires": "Kept until {{date}}"
   }
 }

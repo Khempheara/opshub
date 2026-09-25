@@ -18,6 +18,7 @@ const (
 	ReasonNoRunner         = "no_runner"   // failed: queued for 24 h without a runner
 	ReasonStepFailed       = "step_failed" // failed: a step exited non-zero
 	ReasonRunnerError      = "runner_error"
+	ReasonRunnerLost       = "runner_lost" // the runner stopped sending heartbeats or was deleted
 )
 
 // node is the engine's view of a job's current attempt.

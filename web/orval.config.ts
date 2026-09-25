@@ -4,7 +4,8 @@ import { defineConfig } from 'orval';
 // Run `npm run api:generate` after changing api/openapi.yaml. Output is committed.
 export default defineConfig({
   opshub: {
-    input: { target: '../api/openapi.yaml' },
+    // The runner API is for the opshub-runner agent (Go), not the browser.
+    input: { target: '../api/openapi.yaml', filters: { mode: 'exclude', tags: ['runner-api'] } },
     output: {
       mode: 'tags-split',
       target: 'src/lib/api/generated',

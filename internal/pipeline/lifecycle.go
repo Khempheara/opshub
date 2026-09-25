@@ -41,9 +41,13 @@ type ClaimedJob struct {
 	Variables map[string]string `json:"variables"`
 }
 
+// ClaimHook runs inside the claim transaction (e.g. to issue a job token), so a failure
+// leaves the job queued instead of assigned to a runner that never heard of it.
+type ClaimHook func(ctx context.Context, q *store.Queries, job store.PipelineJob) error
+
 // Claim assigns the organization's oldest queued job that the runner's labels satisfy.
 // It returns nil when there is nothing to do.
-func (s *Service) Claim(ctx context.Context, orgID, runnerID uuid.UUID, labels []string) (*ClaimedJob, error) {
+func (s *Service) Claim(ctx context.Context, orgID, runnerID uuid.UUID, labels []string, hook ClaimHook) (*ClaimedJob, error) {
 	var out *ClaimedJob
 	err := s.inTx(ctx, func(tx pgx.Tx, q *store.Queries) error {
 		if labels == nil {
@@ -58,6 +62,11 @@ func (s *Service) Claim(ctx context.Context, orgID, runnerID uuid.UUID, labels [
 		}
 		if err := q.StartJob(ctx, store.StartJobParams{ID: j.ID, RunnerID: &runnerID}); err != nil {
 			return err
+		}
+		if hook != nil {
+			if err := hook(ctx, q, j); err != nil {
+				return err
+			}
 		}
 		if err := s.advance(ctx, tx, q, j.RunID); err != nil {
 			return err

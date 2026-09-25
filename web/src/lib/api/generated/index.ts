@@ -6,6 +6,7 @@ export * from './organizations/organizations';
 export * from './pipelines/pipelines';
 export * from './projects/projects';
 export * from './repositories/repositories';
+export * from './runners/runners';
 export * from './system/system';
 export * from './teams/teams';
 export * from './webhooks/webhooks';

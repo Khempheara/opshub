@@ -3,7 +3,8 @@
     "members": "សមាជិក",
     "teams": "ក្រុម",
     "settings": "ការកំណត់អង្គភាព",
-    "group": "អង្គភាព"
+    "group": "អង្គភាព",
+    "runners": "Runner"
   },
   "roleDescriptions": {
     "owner": "គ្រប់គ្រងទាំងស្រុង រួមទាំងការលុបអង្គភាព និងការគ្រប់គ្រង Owner។",

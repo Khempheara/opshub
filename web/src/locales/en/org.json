@@ -3,7 +3,8 @@
     "members": "Members",
     "teams": "Teams",
     "settings": "Organization settings",
-    "group": "Organization"
+    "group": "Organization",
+    "runners": "Runners"
   },
   "roleDescriptions": {
     "owner": "Full control, including deleting the organization and managing owners.",

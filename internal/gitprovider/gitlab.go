@@ -3,6 +3,7 @@ package gitprovider
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -97,4 +98,11 @@ func (g *gitlab) Commit(ctx context.Context, ref string) (Commit, error) {
 		return Commit{}, err
 	}
 	return Commit{SHA: out.ID, Message: out.Message}, nil
+}
+
+func (g *gitlab) Archive(ctx context.Context, sha string) (io.ReadCloser, error) {
+	if !validRef(sha) {
+		return nil, ErrInvalidInput
+	}
+	return g.client().stream(ctx, g.project()+"/repository/archive.tar.gz?sha="+url.QueryEscape(sha), "*/*")
 }

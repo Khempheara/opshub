@@ -154,11 +154,17 @@ func newEnv(t *testing.T) *env {
 	orgs := org.NewService(pool, &recJobs{}, org.Config{PublicURL: "https://ops.example.com"})
 	e := &env{
 		svc: NewService(pool, projects, logger), projects: projects, git: git, q: store.New(pool),
-		owner: newUser(t), admin: newUser(t), dev: newUser(t), viewer: newUser(t), outsider: newUser(t), runnerID: uuid.New(),
+		owner: newUser(t), admin: newUser(t), dev: newUser(t), viewer: newUser(t), outsider: newUser(t),
 	}
 	o, err := orgs.Create(e.owner.ctx, org.CreateInput{Name: "Pipelines Inc", Slug: "pl-" + strings.ToLower(uuid.NewString()[:8])})
 	require.NoError(t, err)
 	e.orgID = o.ID
+	runner, err := e.q.CreateRunner(context.Background(), store.CreateRunnerParams{
+		OrganizationID: o.ID, Name: "test-runner", Labels: []string{"linux"}, TokenHash: []byte(uuid.NewString()),
+		TokenPrefix: "test", MaxConcurrency: 4,
+	})
+	require.NoError(t, err)
+	e.runnerID = runner.ID
 	for u, role := range map[*user]authz.Role{&e.admin: authz.Admin, &e.dev: authz.Developer, &e.viewer: authz.Viewer} {
 		require.NoError(t, e.q.AddOrganizationMember(context.Background(), store.AddOrganizationMemberParams{OrganizationID: o.ID, UserID: u.id, Role: role}))
 	}
@@ -222,7 +228,7 @@ func jobByName(t *testing.T, r RunDetail, name string) Job {
 // runner claims the next job and finishes it (success or failure), logging one line.
 func (e *env) runNext(t *testing.T, success bool) *ClaimedJob {
 	t.Helper()
-	c, err := e.svc.Claim(context.Background(), e.orgID, e.runnerID, []string{"linux"})
+	c, err := e.svc.Claim(context.Background(), e.orgID, e.runnerID, []string{"linux"}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, c, "expected a queued job")
 	ctx := context.Background()

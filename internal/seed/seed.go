@@ -309,12 +309,18 @@ func seedRuns(ctx context.Context, pool *pgxpool.Pool, out io.Writer) error {
 		return err
 	}
 	svc := pipeline.NewService(pool, nil, slog.New(slog.DiscardHandler))
-	runner := uuid.New()
+	// The demo runs were "executed" by a placeholder runner that never connects.
+	var runner uuid.UUID
+	if err := pool.QueryRow(ctx, `INSERT INTO runners (organization_id, name, labels, token_hash, token_prefix, disabled_at)
+		VALUES ($1, 'demo-runner (seed data)', '{linux}', $2, 'demo', now()) RETURNING id`,
+		orgID, crypto.HashToken(crypto.RandomToken(32))).Scan(&runner); err != nil {
+		return err
+	}
 
 	// work runs every queued job; failing names fail with the "test-failed" log.
 	work := func(fail bool) error {
 		for {
-			c, err := svc.Claim(ctx, orgID, runner, nil)
+			c, err := svc.Claim(ctx, orgID, runner, nil, nil)
 			if err != nil || c == nil {
 				return err
 			}

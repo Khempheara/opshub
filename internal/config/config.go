@@ -77,6 +77,14 @@ type Config struct {
 	// addresses (SSRF protection) except these CIDRs or single addresses.
 	OutboundAllowedCIDRs []string `env:"OPSHUB_OUTBOUND_ALLOWED_CIDRS" envSeparator:","`
 
+	// Pipeline artifacts and caches are stored as files here (a shared volume when several
+	// API replicas run). Sizes are in bytes.
+	BlobDir          string `env:"OPSHUB_BLOB_DIR" envDefault:"data/blobs"`
+	ArtifactMaxBytes int64  `env:"OPSHUB_ARTIFACT_MAX_BYTES" envDefault:"104857600"`         // 100 MiB per job
+	CacheMaxBytes    int64  `env:"OPSHUB_CACHE_MAX_BYTES" envDefault:"524288000"`            // 500 MiB per entry
+	CacheQuotaBytes  int64  `env:"OPSHUB_CACHE_PROJECT_QUOTA_BYTES" envDefault:"2147483648"` // 2 GiB per project
+	SourceMaxBytes   int64  `env:"OPSHUB_SOURCE_MAX_BYTES" envDefault:"524288000"`           // 500 MiB per checkout
+
 	SMTP SMTPConfig
 	SSO  SSOConfig
 }
@@ -158,6 +166,14 @@ func (c Config) Validate() error {
 	}
 	if _, err := safehttp.ParseCIDRs(c.OutboundAllowedCIDRs); err != nil {
 		errs = append(errs, fmt.Errorf("OPSHUB_OUTBOUND_ALLOWED_CIDRS: %w", err))
+	}
+	for name, v := range map[string]int64{
+		"OPSHUB_ARTIFACT_MAX_BYTES": c.ArtifactMaxBytes, "OPSHUB_CACHE_MAX_BYTES": c.CacheMaxBytes,
+		"OPSHUB_CACHE_PROJECT_QUOTA_BYTES": c.CacheQuotaBytes, "OPSHUB_SOURCE_MAX_BYTES": c.SourceMaxBytes,
+	} {
+		if v < 1 {
+			errs = append(errs, fmt.Errorf("%s must be positive", name))
+		}
 	}
 	if c.DBMaxConns < 1 {
 		errs = append(errs, errors.New("OPSHUB_DB_MAX_CONNS must be >= 1"))

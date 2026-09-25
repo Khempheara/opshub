@@ -12,6 +12,8 @@ export const OrgAction = {
   memberUpdateRole: 'member.update_role',
   teamManage: 'team.manage',
   projectCreate: 'project.create',
+  runnerView: 'runner.view',
+  runnerManage: 'runner.manage',
 } as const;
 
 /**

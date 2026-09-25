@@ -4,8 +4,10 @@ A project's pipeline lives in `.opshub.yml` at the root of its connected reposit
 reads the file at the exact commit being built, so every run uses the pipeline as it was in that
 commit; the run keeps a snapshot of it.
 
-Jobs run on runners (Module 5). Until a runner picks a job up it shows **Waiting for a runner**,
-and a job nobody picks up within 24 hours fails with `no_runner`.
+Jobs run on [runners](runners.md): each step runs with `/bin/sh -ec` in a container of the job's
+`image` (default `alpine:3.20`), in a workspace holding the commit's files. Until a runner picks a
+job up it shows **Waiting for a runner**, and a job nobody picks up within 24 hours fails with
+`no_runner`.
 
 ## Example
 
@@ -93,8 +95,8 @@ jobs:
 | `variables` | Job variables. |
 | `runs_on` | Runner labels the runner must have. |
 | `timeout` | `1m`–`6h`, default `60m`. |
-| `artifacts` | Paths (relative to the workspace) kept after the job; `expire_in: Nd` (1–90, default 7). Uploaded by runners (Module 5). |
-| `cache` | `{key, paths}` restored before and saved after the job (Module 5). |
+| `artifacts` | Paths (relative to the workspace) kept after a successful job as one archive; `expire_in: Nd` (1–90, default 7). Jobs that `need` it get the files in their workspace; people download them from the job panel. |
+| `cache` | `{key, paths}` restored before and saved after a successful job; shared by the project's jobs with the same key. Evicted least-recently-used beyond the project quota. |
 | `deploy` | `{target, strategy}`; requires `environment` (Module 6). |
 
 A skipped dependency whose own condition wasn't met (for example an `on_failure` job after a
@@ -130,7 +132,8 @@ Variables aren't secret. Secrets (Module 8) are injected separately and masked i
 - Job status: `created` (waiting for its needs), `waiting_approval`, `queued`, `running`,
   `succeeded`, `failed`, `canceled`, `skipped`.
 - Failure/skip reasons: `upstream_failed`, `not_needed`, `rejected`, `branch_not_allowed`,
-  `environment_not_found`, `timeout`, `no_runner`, `step_failed`, `runner_error`.
+  `environment_not_found`, `timeout`, `no_runner`, `step_failed`, `runner_error`, `runner_lost`
+  (the runner stopped sending heartbeats or was deleted).
 - **Cancel** stops every unfinished job. **Retry job** adds a new attempt of a failed or
   canceled job and re-opens the jobs after it. **Re-run failed jobs** does that for every failed
   job of a finished run. **Re-run** creates a new run from the same snapshot and commit.

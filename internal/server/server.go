@@ -4,11 +4,13 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"net/http"
 	"regexp"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -22,6 +24,7 @@ import (
 	"github.com/opshub/opshub/internal/audit"
 	"github.com/opshub/opshub/internal/authn"
 	"github.com/opshub/opshub/internal/config"
+	"github.com/opshub/opshub/internal/crypto"
 	"github.com/opshub/opshub/internal/httpx"
 	"github.com/opshub/opshub/internal/i18n"
 	"github.com/opshub/opshub/internal/ratelimit"
@@ -155,6 +158,11 @@ func principalKey(r *http.Request) string {
 			return "token:" + p.TokenID.String()
 		}
 		return "user:" + p.UserID.String()
+	}
+	// Runner and job tokens get their own bucket, so runners sharing a NAT address don't
+	// throttle each other (invalid tokens are still bounded by the per-IP limit).
+	if _, cred, ok := strings.Cut(r.Header.Get("Authorization"), " "); ok && authn.IsMachineToken(cred) {
+		return "machine:" + hex.EncodeToString(crypto.HashToken(cred)[:12])
 	}
 	return "ip:" + middleware.GetClientIP(r.Context())
 }

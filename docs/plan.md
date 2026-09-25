@@ -82,3 +82,8 @@ recorded; zero HIGH/CRITICAL findings; short changelog.
 | M4-2 | 4 | Cron triggers use an in-house 5-field cron parser (no dependency) |
 | M4-3 | 4 | Artifacts and cache (blob store, upload/download) arrive with runners in Module 5; Module 4 validates and stores their definitions |
 | M4-4 | 4 | One pipeline per project (`.opshub.yml`); runs snapshot the definition. An invalid file on push creates a failed run listing the problems; a manual run with an invalid file is refused (`PIPELINE_INVALID`) |
+| M5-1 | 5 | Runners get source through OpsHub (`/runner/jobs/{id}/source` proxies the provider's tarball of the run's commit), so Git credentials never leave the server; no repository → empty workspace |
+| M5-2 | 5 | Docker executor: one named volume per job at `/workspace`, one container per step (`/bin/sh -ec`), never privileged, `no-new-privileges`, optional CPU/memory limits, PID limit; the agent talks to the Engine API over the unix socket with the standard library (per D8) |
+| M5-3 | 5 | Local development runner is an opt-in compose profile (`make runner`) using the host Docker socket; documented as root-equivalent on the host |
+| M5-4 | 5 | Heartbeats every 10 s; a runner silent for 30 s is offline and its jobs fail `runner_lost`; jobs assigned to a runner that it doesn't report fail the same way (agent restarts, lost assignments) |
+| M5-5 | 5 | One artifact archive (gzip tar) per job, default 7 days; artifacts restore into jobs that `need` the producer; cache failures never fail a job; secrets/masks fields are in the job payload but empty until Module 8 |

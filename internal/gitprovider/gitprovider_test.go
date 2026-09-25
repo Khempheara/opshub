@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -344,4 +345,54 @@ func TestEventDetails(t *testing.T) {
 	ev, _ = ParseGitHub(h, []byte(`{"ref":"refs/heads/main","after":"abc","head_commit":{"message":"`+long+`"}}`))
 	assert.True(t, utf8.ValidString(ev.Title))
 	assert.LessOrEqual(t, len(ev.Title), 200)
+}
+
+func TestArchiveFollowsRedirectWithoutLeakingToken(t *testing.T) {
+	var downloadAuth string
+	download := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		downloadAuth = r.Header.Get("Authorization") + r.Header.Get("PRIVATE-TOKEN")
+		_, _ = w.Write([]byte("tarball-bytes"))
+	}))
+	t.Cleanup(download.Close)
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/acme/api/tarball/abc123":
+			assert.Equal(t, "Bearer secret", r.Header.Get("Authorization"))
+			http.Redirect(w, r, download.URL+"/signed?token=xyz", http.StatusFound)
+		case "/repos/acme/loop/tarball/abc123":
+			http.Redirect(w, r, r.URL.String(), http.StatusFound)
+		case "/api/v4/projects/grp%2Fapp/repository/archive.tar.gz", "/api/v4/projects/grp/app/repository/archive.tar.gz":
+			assert.Equal(t, "abc123", r.URL.Query().Get("sha"))
+			_, _ = w.Write([]byte("gitlab-tarball"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(api.Close)
+	fac := Factory{HTTP: api.Client(), GitHubAPIURL: api.URL, GitLabURL: api.URL}
+	ctx := context.Background()
+
+	gh, _ := fac.Client(GitHub, "", "acme/api", "secret")
+	rc, err := gh.Archive(ctx, "abc123")
+	require.NoError(t, err)
+	b, _ := io.ReadAll(rc)
+	_ = rc.Close()
+	assert.Equal(t, "tarball-bytes", string(b))
+	assert.Empty(t, downloadAuth, "the Git token isn't sent to the download host")
+
+	loop, _ := fac.Client(GitHub, "", "acme/loop", "secret")
+	_, err = loop.Archive(ctx, "abc123")
+	assert.ErrorIs(t, err, ErrUnavailable)
+	missing, _ := fac.Client(GitHub, "", "acme/missing", "secret")
+	_, err = missing.Archive(ctx, "abc123")
+	assert.ErrorIs(t, err, ErrNotFound)
+	_, err = gh.Archive(ctx, "../x")
+	assert.ErrorIs(t, err, ErrInvalidInput)
+
+	gl, _ := fac.Client(GitLab, "", "grp/app", "secret")
+	rc, err = gl.Archive(ctx, "abc123")
+	require.NoError(t, err)
+	b, _ = io.ReadAll(rc)
+	_ = rc.Close()
+	assert.Equal(t, "gitlab-tarball", string(b))
 }

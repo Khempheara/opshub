@@ -25,7 +25,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.5.0
+ * OpenAPI spec version: 0.6.0
  */
 
 export * from './aPIScope';
@@ -37,6 +37,8 @@ export * from './approvalRequest';
 export * from './approvalRequestDecision';
 export * from './approvalState';
 export * from './approvalStateDeniedReason';
+export * from './artifact';
+export * from './artifactList';
 export * from './changePasswordRequest';
 export * from './codeRequest';
 export * from './connectRepositoryRequest';
@@ -125,6 +127,8 @@ export * from './receiveGitLabWebhookBody';
 export * from './recoveryCodes';
 export * from './register202';
 export * from './registerRequest';
+export * from './registrationToken';
+export * from './registrationTokenRequest';
 export * from './repository';
 export * from './repositoryTest';
 export * from './repositoryWebhookMode';
@@ -133,6 +137,10 @@ export * from './resetPasswordRequest';
 export * from './role';
 export * from './run';
 export * from './runDetail';
+export * from './runner';
+export * from './runnerLabels';
+export * from './runnerList';
+export * from './runnerStatus';
 export * from './runPage';
 export * from './runStatus';
 export * from './runTrigger';
@@ -162,6 +170,7 @@ export * from './updateMemberRoleRequest';
 export * from './updateOrganizationRequest';
 export * from './updateProfileRequest';
 export * from './updateProjectRequest';
+export * from './updateRunnerRequest';
 export * from './user';
 export * from './validatePipelineRequest';
 export * from './validatePipelineResult';

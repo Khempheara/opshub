@@ -120,15 +120,19 @@ One pipeline per project, defined in `.opshub.yml`; there is no `pipelines` tabl
 | `job_approvals` | `job_id`, `user_id`, `decision`, `comment` | `UNIQUE (job_id, user_id)` |
 | `pipeline_schedules` | `project_id`, `cron`, `next_run_at`, `last_run_at` | Synced from the default branch's file; a minute tick enqueues due ones |
 
-### 5. Runners (planned)
+### 5. Runners **(✓ 000005)**
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `runners` | `organization_id`, `name`, `labels text[]`, `token_hash`, `version`, `os`, `arch`, `last_seen_at`, `max_concurrency`, `disabled_at` | Registered with a one-time token |
-| `runner_registration_tokens` | `organization_id`, `token_hash`, `expires_at`, `used_at` | One-time |
-| `job_tokens` | `job_id`, `token_hash`, `expires_at` (job timeout + 10 min) | Scopes runner calls to one job |
-| `artifacts` | `job_id`, `path`, `size_bytes`, `sha256`, `storage_key`, `expires_at` | Local blob store (D5) |
-| `cache_entries` | `project_id`, `key`, `storage_key`, `size_bytes`, `last_used_at` | LRU-evicted per project quota |
+| `runners` | `organization_id`, `name`, `labels text[]`, `token_hash` (`UNIQUE`), `token_prefix`, `version`, `os`, `arch`, `max_concurrency (1–64)`, `last_seen_at`, `disabled_at`, `row_version` | Registered with a one-time token; `pipeline_jobs.runner_id` references it (`ON DELETE SET NULL`) |
+| `runner_registration_tokens` | `organization_id`, `token_hash`, `labels`, `expires_at`, `used_at`, `runner_id` | One-time, 1 h; purged 7 days after expiry |
+| `job_tokens` | `job_id` (PK), `token_hash`, `expires_at` (job timeout + 10 min) | Issued in the claim transaction; scopes runner calls to one job |
+| `artifacts` | `job_id` (`UNIQUE`), `project_id`, `organization_id`, `name`, `size_bytes`, `sha256`, `storage_key`, `expires_at` | One gzip tar per job in the local blob store (D5); expired rows and blobs are removed by housekeeping |
+| `cache_entries` | `(project_id, key)` `UNIQUE`, `storage_key`, `size_bytes`, `sha256`, `last_used_at` | Least recently used entries beyond the project quota are evicted |
+
+Tokens are stored as SHA-256 hashes only. Blobs live under `OPSHUB_BLOB_DIR`
+(`artifacts/<project>/<job>-<random>.tar.gz`, `cache/<project>/<random>`); a replaced cache
+entry's old blob is deleted after the new one is recorded.
 
 ### 6. Deployments
 

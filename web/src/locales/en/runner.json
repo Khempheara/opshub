@@ -1,0 +1,72 @@
+{
+  "title": "Runners",
+  "description": "Machines that run this organization's pipeline jobs. A runner takes jobs whose runs_on labels it has.",
+  "noLabels": "No labels",
+  "jobs": "{{running}} of {{max}} jobs",
+  "status": {
+    "online": "Online",
+    "offline": "Offline",
+    "disabled": "Disabled"
+  },
+  "columns": {
+    "name": "Runner",
+    "status": "Status",
+    "labels": "Labels",
+    "jobs": "Running",
+    "platform": "Version",
+    "lastSeen": "Last seen"
+  },
+  "empty": {
+    "title": "No runners yet",
+    "manage": "Register a runner so queued pipeline jobs can run.",
+    "view": "Ask an organization admin to register a runner."
+  },
+  "form": {
+    "name": "Name",
+    "labels": "Labels",
+    "labelsPlaceholder": "linux, docker",
+    "labelsHint": "Comma-separated, e.g. linux, docker, gpu. Lowercase letters, numbers, dots, dashes and underscores.",
+    "labelsInvalid": "Use lowercase letters, numbers, dots, dashes and underscores (start with a letter or number).",
+    "labelsTooMany": "Use at most 20 labels.",
+    "maxConcurrency": "Jobs at once",
+    "maxConcurrencyHint": "How many jobs this runner may run at the same time (1–64).",
+    "concurrencyRange": "Enter a whole number from 1 to 64."
+  },
+  "register": {
+    "button": "Register runner",
+    "title": "Register a runner",
+    "description": "Creates a one-time token. Labels given here are added to the ones the runner reports.",
+    "create": "Create token"
+  },
+  "token": {
+    "title": "Registration token",
+    "body": "Copy it now: it's shown once, works for one runner and expires at {{time}}.",
+    "binary": "With the opshub-runner binary",
+    "docker": "With Docker",
+    "copyCommand": "Copy command",
+    "socketWarning": "The runner starts job containers through the Docker socket, which gives it full control of that machine's Docker. Use a machine dedicated to CI."
+  },
+  "edit": {
+    "buttonFor": "Edit {{name}}",
+    "title": "Edit {{name}}",
+    "saved": "Runner updated."
+  },
+  "disable": {
+    "button": "Disable",
+    "title": "Disable {{name}}?",
+    "body": "It stops taking new jobs. Jobs it is running now continue to the end.",
+    "done": "Runner disabled."
+  },
+  "enable": {
+    "button": "Enable",
+    "done": "Runner enabled."
+  },
+  "delete": {
+    "buttonFor": "Delete {{name}}",
+    "title": "Delete {{name}}?",
+    "body": "Its token stops working immediately. To use the machine again, register it with a new token.",
+    "bodyRunning_one": "Its token stops working immediately and the job it is running fails.",
+    "bodyRunning_other": "Its token stops working immediately and the {{count}} jobs it is running fail.",
+    "done": "Runner deleted."
+  }
+}

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpsHub API
-  version: 0.5.0
+  version: 0.6.0
   summary: All-in-One DevOps Platform
   description: |
     REST API for OpsHub. All resource endpoints are versioned under `/api/v1`.
@@ -61,6 +61,16 @@ tags:
     description: |
       Pipeline runs from `.opshub.yml` (docs/pipelines.md): runs, jobs, logs, approvals and
       live updates over Server-Sent Events. Jobs execute on runners (Module 5).
+  - name: runners
+    description: |
+      Runner agents that execute pipeline jobs (docs/runners.md): registration tokens, the
+      organization's runners, and job artifacts. Runners the caller can't see answer 404
+      RUNNER_NOT_FOUND.
+  - name: runner-api
+    description: |
+      Used by the `opshub-runner` agent, not by people. `/runner/heartbeat` and
+      `/runner/jobs/request` take the runner token (`ohr_…`); `/runner/jobs/{jobId}/…` take the
+      job token (`ohj_…`) handed out with the job, valid only while that job runs.
 
 security:
   - bearerAuth: []
@@ -1582,12 +1592,373 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
 
+  /api/v1/orgs/{orgId}/runners:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [runners]
+      operationId: listRunners
+      summary: The organization's runners with status and running jobs (runner.view)
+      description: |
+        `status` is `online` when the runner sent a heartbeat within 30 seconds, `offline`
+        otherwise, or `disabled`.
+      responses:
+        "200":
+          description: Runners.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunnerList" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/runner-registration-tokens:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    post:
+      tags: [runners]
+      operationId: createRunnerRegistrationToken
+      summary: Issue a one-time token to register a runner (runner.manage)
+      description: |
+        The token is shown once, expires after an hour and registers a single runner. Labels
+        given here are added to the runner's own.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegistrationTokenRequest" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationToken" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runners/{runnerId}:
+    parameters:
+      - $ref: "#/components/parameters/RunnerID"
+    patch:
+      tags: [runners]
+      operationId: updateRunner
+      summary: Rename, relabel, limit or disable a runner (runner.manage)
+      description: A disabled runner takes no new jobs; jobs it is running continue.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateRunnerRequest" }
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Runner" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "428": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [runners]
+      operationId: deleteRunner
+      summary: Delete a runner and revoke its token (runner.manage)
+      description: Jobs it is running fail with reason `runner_lost`.
+      responses:
+        "204": { description: Deleted. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/jobs/{jobId}/artifacts:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+    get:
+      tags: [runners]
+      operationId: listJobArtifacts
+      summary: A job's unexpired artifacts (run.view)
+      responses:
+        "200":
+          description: Artifacts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArtifactList" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/artifacts/{artifactId}/download:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactID"
+    get:
+      tags: [runners]
+      operationId: downloadArtifact
+      summary: Download an artifact archive (run.view)
+      responses:
+        "200":
+          description: gzip-compressed tar archive.
+          headers:
+            X-Content-SHA256: { schema: { type: string }, description: Hex SHA-256 of the archive. }
+          content:
+            application/gzip:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runner/register:
+    post:
+      tags: [runner-api]
+      operationId: runnerRegister
+      summary: Exchange a registration token for a runner token
+      description: Rate-limited to 10 attempts per minute per address.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRunnerRequest" }
+      responses:
+        "201":
+          description: Registered. The runner token is shown once.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunnerRegistration" }
+        "401": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runner/heartbeat:
+    post:
+      tags: [runner-api]
+      operationId: runnerHeartbeat
+      summary: Report liveness and running jobs; learn which to stop
+      description: |
+        Send every 10 seconds. `cancel_job_ids` lists reported jobs that are no longer running
+        on this runner (canceled, timed out, unknown). Running jobs of this runner that it
+        doesn't report fail as `runner_lost` after 30 seconds.
+      security:
+        - runnerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HeartbeatRequest" }
+      responses:
+        "200":
+          description: Recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HeartbeatResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runner/jobs/request:
+    post:
+      tags: [runner-api]
+      operationId: runnerRequestJob
+      summary: Long-poll for a job matching the runner's labels
+      description: |
+        Waits up to `wait_seconds` (at most 30). Returns 204 when no job became available or the
+        runner is at `max_concurrency`.
+      security:
+        - runnerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RequestJobRequest" }
+      responses:
+        "200":
+          description: A job was assigned to this runner.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssignedJob" }
+        "204": { description: Nothing to do. }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runner/jobs/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+    patch:
+      tags: [runner-api]
+      operationId: runnerReportJob
+      summary: Report a step's progress or the job's result
+      description: "`409 JOB_NOT_RUNNING` means the job was canceled or finished: stop it."
+      security:
+        - jobToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobReportRequest" }
+      responses:
+        "204": { description: Recorded. }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runner/jobs/{jobId}/logs:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+    post:
+      tags: [runner-api]
+      operationId: runnerAppendLog
+      summary: Append a log chunk (at most 256 KiB; re-sending a seq is ignored)
+      security:
+        - jobToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LogChunk" }
+      responses:
+        "204": { description: Stored. }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runner/jobs/{jobId}/source:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+    get:
+      tags: [runner-api]
+      operationId: runnerGetSource
+      summary: The run's commit as a gzip-compressed tarball
+      description: |
+        Entries sit under one top-level directory. `404 REPOSITORY_NOT_FOUND` when the project has
+        no connected repository (start from an empty workspace).
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: Archive.
+          content:
+            application/gzip:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runner/jobs/{jobId}/artifacts:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+    post:
+      tags: [runner-api]
+      operationId: runnerUploadArtifacts
+      summary: Upload the job's artifacts as one gzip-compressed tar archive
+      security:
+        - jobToken: []
+      parameters:
+        - { name: name, in: query, schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$" } }
+      requestBody:
+        required: true
+        content:
+          application/gzip:
+            schema: { type: string, format: binary }
+      responses:
+        "201":
+          description: Stored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Artifact" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runner/jobs/{jobId}/dependencies:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+    get:
+      tags: [runner-api]
+      operationId: runnerListDependencies
+      summary: Artifacts of the jobs this job needs
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: Artifacts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArtifactList" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runner/jobs/{jobId}/dependencies/{artifactId}:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+      - $ref: "#/components/parameters/ArtifactID"
+    get:
+      tags: [runner-api]
+      operationId: runnerDownloadDependency
+      summary: Download one dependency artifact
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: gzip-compressed tar archive.
+          content:
+            application/gzip:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/v1/runner/jobs/{jobId}/cache/{key}:
+    parameters:
+      - $ref: "#/components/parameters/JobID"
+      - $ref: "#/components/parameters/CacheKey"
+    get:
+      tags: [runner-api]
+      operationId: runnerGetCache
+      summary: Download the project's cache archive for a key
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: gzip-compressed tar archive.
+          content:
+            application/gzip:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [runner-api]
+      operationId: runnerPutCache
+      summary: Store or replace the project's cache archive for a key
+      description: Least recently used entries beyond the project's quota are evicted.
+      security:
+        - jobToken: []
+      requestBody:
+        required: true
+        content:
+          application/gzip:
+            schema: { type: string, format: binary }
+      responses:
+        "204": { description: Stored. }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       description: Access JWT (15 min) or personal API token (`ohp_…`).
+    runnerToken:
+      type: http
+      scheme: bearer
+      description: Runner token (`ohr_…`) from registration.
+    jobToken:
+      type: http
+      scheme: bearer
+      description: Job token (`ohj_…`) from the job assignment.
     refreshCookie:
       type: apiKey
       in: cookie
@@ -1654,6 +2025,21 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    RunnerID:
+      name: runnerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ArtifactID:
+      name: artifactId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CacheKey:
+      name: key
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[A-Za-z0-9._-]{1,200}$" }
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -2439,7 +2825,7 @@ components:
         attempt: { type: integer }
         failure_reason:
           type: [string, "null"]
-          description: upstream_failed, not_needed, rejected, branch_not_allowed, environment_not_found, timeout, no_runner, step_failed, runner_error
+          description: upstream_failed, not_needed, rejected, branch_not_allowed, environment_not_found, timeout, no_runner, step_failed, runner_error, runner_lost
         exit_code: { type: [integer, "null"] }
         timeout_seconds: { type: integer }
         queued_at: { type: [string, "null"], format: date-time }
@@ -2571,6 +2957,164 @@ components:
           oneOf:
             - type: object
             - type: "null"
+
+    Runner:
+      type: object
+      required: [id, name, labels, version, os, arch, max_concurrency, status, running_jobs, last_seen_at, token_prefix, row_version, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        labels: { type: array, items: { type: string } }
+        version: { type: string }
+        os: { type: string }
+        arch: { type: string }
+        max_concurrency: { type: integer, minimum: 1, maximum: 64 }
+        status: { type: string, enum: [online, offline, disabled] }
+        running_jobs: { type: integer }
+        last_seen_at: { type: [string, "null"], format: date-time }
+        token_prefix: { type: string, examples: [ohr_k3j9x2ab] }
+        row_version: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    RunnerList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Runner" }
+
+    RunnerLabels:
+      type: array
+      maxItems: 20
+      items: { type: string, pattern: "^[a-z0-9][a-z0-9._-]{0,62}$" }
+
+    RegistrationTokenRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        labels: { $ref: "#/components/schemas/RunnerLabels" }
+
+    RegistrationToken:
+      type: object
+      required: [token, labels, expires_at]
+      properties:
+        token: { type: string, description: "`ohr_reg_…`, shown once." }
+        labels: { type: array, items: { type: string } }
+        expires_at: { type: string, format: date-time }
+
+    UpdateRunnerRequest:
+      type: object
+      required: [name, labels, max_concurrency, disabled]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        labels: { $ref: "#/components/schemas/RunnerLabels" }
+        max_concurrency: { type: integer, minimum: 1, maximum: 64 }
+        disabled: { type: boolean }
+
+    Artifact:
+      type: object
+      required: [id, job_id, name, size_bytes, sha256, expires_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        job_id: { type: string, format: uuid }
+        job_name: { type: string }
+        name: { type: string, examples: [build.tar.gz] }
+        size_bytes: { type: integer, format: int64 }
+        sha256: { type: string }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    ArtifactList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Artifact" }
+
+    RegisterRunnerRequest:
+      type: object
+      required: [token, name]
+      additionalProperties: false
+      properties:
+        token: { type: string, maxLength: 200 }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        labels: { $ref: "#/components/schemas/RunnerLabels" }
+        version: { type: string, maxLength: 50 }
+        os: { type: string, maxLength: 50 }
+        arch: { type: string, maxLength: 50 }
+        max_concurrency: { type: integer, minimum: 0, maximum: 64, description: 0 means 1. }
+
+    RunnerRegistration:
+      type: object
+      required: [id, token, name, labels, heartbeat_interval_seconds]
+      properties:
+        id: { type: string, format: uuid }
+        token: { type: string, description: "`ohr_…`, shown once." }
+        name: { type: string }
+        labels: { type: array, items: { type: string } }
+        heartbeat_interval_seconds: { type: integer }
+
+    HeartbeatRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        version: { type: string, maxLength: 50 }
+        os: { type: string, maxLength: 50 }
+        arch: { type: string, maxLength: 50 }
+        running_job_ids: { type: array, maxItems: 64, items: { type: string, format: uuid } }
+
+    HeartbeatResponse:
+      type: object
+      required: [cancel_job_ids]
+      properties:
+        cancel_job_ids: { type: array, items: { type: string, format: uuid } }
+
+    RequestJobRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        wait_seconds: { type: integer, minimum: 0, maximum: 30, description: 0 means 30. }
+
+    AssignedJob:
+      type: object
+      required: [job, spec, run_id, run_number, project_id, ref, commit_sha, variables, token, secrets, masks]
+      properties:
+        job: { $ref: "#/components/schemas/Job" }
+        spec:
+          type: object
+          description: The job as parsed from `.opshub.yml` (image, steps, artifacts, cache, …).
+        run_id: { type: string, format: uuid }
+        run_number: { type: integer }
+        project_id: { type: string, format: uuid }
+        ref: { type: string }
+        commit_sha: { type: string }
+        variables: { type: object, additionalProperties: { type: string } }
+        token: { type: string, description: "Job token (`ohj_…`) for /runner/jobs/{jobId}/…" }
+        secrets: { type: object, additionalProperties: { type: string } }
+        masks: { type: array, items: { type: string }, description: Values to hide in log output. }
+
+    JobReportRequest:
+      type: object
+      additionalProperties: false
+      description: Exactly one of `step` or `complete`.
+      properties:
+        step:
+          type: object
+          required: [index, status]
+          properties:
+            index: { type: integer, minimum: 0 }
+            status: { type: string, enum: [running, succeeded, failed, skipped, canceled] }
+            exit_code: { type: [integer, "null"] }
+        complete:
+          type: object
+          required: [success]
+          properties:
+            success: { type: boolean }
+            exit_code: { type: [integer, "null"] }
+            reason: { type: string, enum: [step_failed, timeout, runner_error] }
 
     ErrorCode:
       type: string

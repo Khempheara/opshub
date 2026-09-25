@@ -47,6 +47,7 @@ export const routes: RouteObject[] = [
               { path: 'teams', ...page(() => import('@/features/org/TeamsPage'), 'TeamsPage') },
               { path: 'teams/:teamId', ...page(() => import('@/features/org/TeamDetailPage'), 'TeamDetailPage') },
               { path: 'settings', ...page(() => import('@/features/org/OrgSettingsPage'), 'OrgSettingsPage') },
+              { path: 'runners', ...page(() => import('@/features/runner/RunnersRoute'), 'RunnersRoute') },
               { path: 'projects', ...page(() => import('@/features/project/ProjectsPage'), 'ProjectsPage') },
               {
                 path: 'projects/:projectId',

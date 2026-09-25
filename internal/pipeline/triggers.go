@@ -200,7 +200,7 @@ func (s *Service) Tick(ctx context.Context, enqueue Enqueuer) error {
 		return err
 	}
 	for _, j := range expired {
-		if err := s.failJob(ctx, j.ID, ReasonTimeout); err != nil {
+		if err := s.FailJob(ctx, j.ID, ReasonTimeout); err != nil {
 			return err
 		}
 	}
@@ -209,15 +209,16 @@ func (s *Service) Tick(ctx context.Context, enqueue Enqueuer) error {
 		return err
 	}
 	for _, j := range stale {
-		if err := s.failJob(ctx, j.ID, ReasonNoRunner); err != nil {
+		if err := s.FailJob(ctx, j.ID, ReasonNoRunner); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// failJob fails a running or queued job (timeouts, no runner) and advances its run.
-func (s *Service) failJob(ctx context.Context, jobID uuid.UUID, reason string) error {
+// FailJob fails a running or queued job (timeouts, lost runners, no runner) and advances its
+// run. Jobs that finished meanwhile are left alone.
+func (s *Service) FailJob(ctx context.Context, jobID uuid.UUID, reason string) error {
 	return s.inTx(ctx, func(tx pgx.Tx, q *store.Queries) error {
 		j, err := q.GetJob(ctx, jobID)
 		if err != nil {

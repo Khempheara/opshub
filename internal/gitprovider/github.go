@@ -3,6 +3,7 @@ package gitprovider
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -108,4 +109,11 @@ func escapePath(p string) string {
 		parts[i] = url.PathEscape(s)
 	}
 	return strings.Join(parts, "/")
+}
+
+func (g *github) Archive(ctx context.Context, sha string) (io.ReadCloser, error) {
+	if !validRef(sha) {
+		return nil, ErrInvalidInput
+	}
+	return g.client().stream(ctx, "/repos/"+g.fullName+"/tarball/"+url.PathEscape(sha), "application/vnd.github+json")
 }

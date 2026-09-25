@@ -4,3 +4,6 @@
 .DS_Store
 
 /coverage-services.out
+
+# Local blob storage (artifacts, caches)
+/data/

@@ -108,14 +108,21 @@ security: ## govulncheck + gosec + npm audit
 
 ##@ Build
 .PHONY: build
-build: ## Build the API binary (bin/opshub-api) and the web bundle (web/dist)
+build: ## Build the API and runner binaries (bin/) and the web bundle (web/dist)
 	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o bin/opshub-api ./cmd/api
+	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o bin/opshub-runner ./cmd/runner
 	cd web && npm run build
 
 .PHONY: docker
 docker: ## Build the Docker images
 	docker build -f deploy/docker/api.Dockerfile --build-arg VERSION=$(VERSION) -t opshub-api:$(VERSION) .
 	docker build -f deploy/docker/web.Dockerfile -t opshub-web:$(VERSION) .
+	docker build -f deploy/docker/runner.Dockerfile --build-arg VERSION=$(VERSION) -t opshub-runner:$(VERSION) .
+
+.PHONY: runner
+runner: .env ## Start a local runner (Docker socket); first time set OPSHUB_RUNNER_REGISTRATION_TOKEN in .env
+	docker compose --profile runner up -d --build runner
+	@echo "Runner started. Logs: docker compose logs -f runner"
 
 .PHONY: help
 help:
