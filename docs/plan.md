@@ -100,3 +100,9 @@ recorded; zero HIGH/CRITICAL findings; short changelog.
 | M7-3 | 7 | Module 7 shows metrics and certificate expiry in the UI only; thresholds and notifications arrive with monitoring & alerts in Module 9 |
 | M7-4 | 7 | Metric partitions are managed by a `SECURITY DEFINER` function owned by the migration role, so the application role stays DML-only |
 | M7-5 | 7 | Retention: raw samples for the current and previous month (charts read them up to 30 days back), hourly average/peak rollups for 400 days; heartbeat timestamps are the server's |
+| M8-1 | 8 | Jobs receive only the secrets they list (`secrets:` in `.opshub.yml`); an environment's secret wins over an all-environments one of the same name; names are checked when the job becomes ready (`secret_not_found`) |
+| M8-2 | 8 | Pull-request runs never receive secrets (`secrets_not_allowed`): their pipeline file comes from the pull request |
+| M8-3 | 8 | Rotation destroys older values; history keeps who and when. There is no reveal endpoint (rbac.md over the api.md draft) |
+| M8-4 | 8 | Developers change secrets of unprotected environments only; all-environments secrets count as protected |
+| M8-5 | 8 | `opshub-api keys rotate` re-encrypts all key-ring data (secret DEKs, 2FA seeds, Git tokens, webhook secrets, deploy credentials, job masks), so an old master key can be removed |
+| M8-6 | 8 | The API masks stored job output too, with the job's values sealed in its token row; a secret wins over a variable of the same name in the job environment |

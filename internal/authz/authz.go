@@ -127,7 +127,7 @@ func Allowed(role Role) []Action {
 	return out
 }
 
-// Project-scope actions. Later modules add secrets.
+// Project-scope actions.
 const (
 	ProjectView          Action = "project.view"
 	ProjectUpdate        Action = "project.update"
@@ -142,6 +142,13 @@ const (
 	DeploymentView       Action = "deployment.view"
 	DeploymentCreate     Action = "deployment.create"   // further limited by environment protection rules
 	DeploymentRollback   Action = "deployment.rollback" // further limited by environment protection rules
+	// Secrets are write-only: there is no action that returns a value. Developers may only
+	// change secrets of unprotected environments (see secret.Service).
+	SecretList   Action = "secret.list"
+	SecretCreate Action = "secret.create"
+	SecretUpdate Action = "secret.update"
+	SecretRotate Action = "secret.rotate"
+	SecretDelete Action = "secret.delete"
 )
 
 // projectMatrix is the minimum effective project role for each project-scope action.
@@ -159,6 +166,11 @@ var projectMatrix = map[Action]Role{
 	DeploymentView:       Viewer,
 	DeploymentCreate:     Developer,
 	DeploymentRollback:   Developer,
+	SecretList:           Developer,
+	SecretCreate:         Developer,
+	SecretUpdate:         Developer,
+	SecretRotate:         Developer,
+	SecretDelete:         Developer,
 }
 
 // ProjectActions lists every project-scope action (stable order).

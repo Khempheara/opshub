@@ -80,7 +80,7 @@ func TestRoleOrdering(t *testing.T) {
 	assert.False(t, ValidRole("root"))
 }
 
-// The project-scope matrix from docs/rbac.md (Module 3 actions).
+// The project-scope matrix from docs/rbac.md.
 func TestProjectPermissionMatrix(t *testing.T) {
 	type row struct{ owner, admin, developer, viewer bool }
 	matrix := map[Action]row{
@@ -97,6 +97,12 @@ func TestProjectPermissionMatrix(t *testing.T) {
 		DeploymentView:       {true, true, true, true},
 		DeploymentCreate:     {true, true, true, false},
 		DeploymentRollback:   {true, true, true, false},
+		// Developers are further limited to unprotected environments (secret.Service).
+		SecretList:   {true, true, true, false},
+		SecretCreate: {true, true, true, false},
+		SecretUpdate: {true, true, true, false},
+		SecretRotate: {true, true, true, false},
+		SecretDelete: {true, true, true, false},
 	}
 	assert.ElementsMatch(t, ProjectActions(), func() []Action {
 		var out []Action

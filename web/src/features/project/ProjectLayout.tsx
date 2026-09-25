@@ -8,11 +8,12 @@ import { hasCode } from '@/lib/api/errors';
 import { useGetProject } from '@/lib/api/generated/projects/projects';
 import { cn } from '@/lib/utils';
 import { NotFoundPage } from '@/pages/NotFoundPage';
-import { ProjectContext } from './context';
+import { ProjectAction } from '@/lib/api/generated/model';
+import { canProject, ProjectContext } from './context';
 
 /** Loads the project for /o/:orgSlug/projects/:projectId/* and renders its header and tabs. */
 export function ProjectLayout() {
-  const { t } = useTranslation(['project', 'pipeline', 'deploy']);
+  const { t } = useTranslation(['project', 'pipeline', 'deploy', 'secret']);
   const { projectId = '' } = useParams();
   const { pathname } = useLocation();
   const org = useCurrentOrg();
@@ -33,6 +34,8 @@ export function ProjectLayout() {
     { to: base, label: t('pipeline:tab'), end: !pathname.startsWith(`${base}/runs/`) },
     { to: `${base}/deployments`, label: t('deploy:tab') },
     { to: `${base}/environments`, label: t('detail.tabs.environments') },
+    // Secret names are for Developers and up (secret.list).
+    ...(canProject(p, ProjectAction.secretlist) ? [{ to: `${base}/secrets`, label: t('secret:tab') }] : []),
     { to: `${base}/repository`, label: t('detail.tabs.repository') },
     { to: `${base}/access`, label: t('detail.tabs.access') },
     { to: `${base}/settings`, label: t('detail.tabs.settings') },

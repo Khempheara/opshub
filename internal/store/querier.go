@@ -19,6 +19,8 @@ type Querier interface {
 	AdvanceSchedule(ctx context.Context, arg AdvanceScheduleParams) error
 	// Accepts a TOTP time step only once (replay protection); returns no row if already used.
 	AdvanceTOTPStep(ctx context.Context, arg AdvanceTOTPStepParams) (uuid.UUID, error)
+	// Rotation: the next value version, also a new ETag version.
+	BumpSecretVersion(ctx context.Context, arg BumpSecretVersionParams) (Secret, error)
 	// Inserts an in-flight record (or takes over an expired one); returns no row when a live
 	// record already exists for this user and key.
 	ClaimIdempotencyKey(ctx context.Context, arg ClaimIdempotencyKeyParams) (uuid.UUID, error)
@@ -33,6 +35,7 @@ type Querier interface {
 	CountIdentities(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountOwners(ctx context.Context, organizationID uuid.UUID) (int64, error)
 	CountRunningJobs(ctx context.Context, runnerID *uuid.UUID) (int64, error)
+	CountSecrets(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountUnusedRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateAsset(ctx context.Context, arg CreateAssetParams) (InfraAsset, error)
@@ -49,6 +52,7 @@ type Querier interface {
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateRegistrationToken(ctx context.Context, arg CreateRegistrationTokenParams) (RunnerRegistrationToken, error)
 	CreateRunner(ctx context.Context, arg CreateRunnerParams) (Runner, error)
+	CreateSecret(ctx context.Context, arg CreateSecretParams) (Secret, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
@@ -78,6 +82,8 @@ type Querier interface {
 	// Artifacts of the latest successful attempt of each named job in a run.
 	DependencyArtifacts(ctx context.Context, arg DependencyArtifactsParams) ([]DependencyArtifactsRow, error)
 	DeploymentByJob(ctx context.Context, jobID *uuid.UUID) (Deployment, error)
+	// Destroys the values of every version below before_version (all of them when it is 0).
+	DestroySecretValues(ctx context.Context, arg DestroySecretValuesParams) (int64, error)
 	DisableTOTP(ctx context.Context, id uuid.UUID) error
 	// Domain assets whose certificate is due for a check (or was never checked).
 	DueCertificateChecks(ctx context.Context) ([]DueCertificateChecksRow, error)
@@ -108,6 +114,7 @@ type Querier interface {
 	GetInvitationByTokenForUpdate(ctx context.Context, tokenHash []byte) (GetInvitationByTokenForUpdateRow, error)
 	GetJob(ctx context.Context, id uuid.UUID) (PipelineJob, error)
 	GetJobByToken(ctx context.Context, tokenHash []byte) (PipelineJob, error)
+	GetJobMasks(ctx context.Context, jobID uuid.UUID) ([]byte, error)
 	GetMFAChallengeForUpdate(ctx context.Context, tokenHash []byte) (MfaChallenge, error)
 	GetMember(ctx context.Context, arg GetMemberParams) (GetMemberRow, error)
 	// The caller's role in a live organization (tenant check for every org-scoped request).
@@ -131,6 +138,8 @@ type Querier interface {
 	GetRunner(ctx context.Context, id uuid.UUID) (Runner, error)
 	GetRunnerByTokenHash(ctx context.Context, tokenHash []byte) (Runner, error)
 	GetSchedule(ctx context.Context, id uuid.UUID) (PipelineSchedule, error)
+	// A live secret with its scope; environments deleted since hide their secrets.
+	GetSecret(ctx context.Context, id uuid.UUID) (GetSecretRow, error)
 	GetTeam(ctx context.Context, id uuid.UUID) (Team, error)
 	GetTeamInOrg(ctx context.Context, arg GetTeamInOrgParams) (Team, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
@@ -151,10 +160,13 @@ type Querier interface {
 	InsertRecoveryCodes(ctx context.Context, arg []InsertRecoveryCodesParams) (int64, error)
 	InsertRepository(ctx context.Context, arg InsertRepositoryParams) (Repository, error)
 	InsertRun(ctx context.Context, arg InsertRunParams) (PipelineRun, error)
+	InsertSecretVersion(ctx context.Context, arg InsertSecretVersionParams) error
 	InsertStep(ctx context.Context, arg InsertStepParams) error
 	// Returns no row when a valid delivery with the same id was already recorded (a redelivery).
 	InsertWebhookDelivery(ctx context.Context, arg InsertWebhookDeliveryParams) (uuid.UUID, error)
 	InvalidateEmailTokens(ctx context.Context, arg InvalidateEmailTokensParams) error
+	// The subset of names a job can be given (no decryption: used when the job becomes ready).
+	JobSecretNames(ctx context.Context, arg JobSecretNamesParams) ([]string, error)
 	LinkRegistrationToken(ctx context.Context, arg LinkRegistrationTokenParams) error
 	ListAPITokens(ctx context.Context, arg ListAPITokensParams) ([]ApiToken, error)
 	// Keyset pagination (newest first).
@@ -188,6 +200,10 @@ type Querier interface {
 	ListRunners(ctx context.Context, organizationID uuid.UUID) ([]ListRunnersRow, error)
 	ListRuns(ctx context.Context, arg ListRunsParams) ([]ListRunsRow, error)
 	ListSchedules(ctx context.Context, projectID uuid.UUID) ([]PipelineSchedule, error)
+	ListSecretVersions(ctx context.Context, secretID uuid.UUID) ([]ListSecretVersionsRow, error)
+	// Project-wide first, then by environment and name. project_wide = true lists only
+	// project-wide secrets; environment_id lists only that environment's.
+	ListSecrets(ctx context.Context, arg ListSecretsParams) ([]ListSecretsRow, error)
 	ListSteps(ctx context.Context, jobID uuid.UUID) ([]JobStep, error)
 	ListStepsForJobs(ctx context.Context, jobIds []uuid.UUID) ([]JobStep, error)
 	ListTeamMembers(ctx context.Context, teamID uuid.UUID) ([]ListTeamMembersRow, error)
@@ -226,6 +242,9 @@ type Querier interface {
 	RemoveMember(ctx context.Context, arg RemoveMemberParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error)
 	RemoveUserFromOrgTeams(ctx context.Context, arg RemoveUserFromOrgTeamsParams) error
+	// The live secrets a job may receive, by name: the job's environment's secret wins over a
+	// project-wide one of the same name. environment_id NULL = a job without an environment.
+	ResolveJobSecrets(ctx context.Context, arg ResolveJobSecretsParams) ([]ResolveJobSecretsRow, error)
 	RevokeAPIToken(ctx context.Context, arg RevokeAPITokenParams) (uuid.UUID, error)
 	RevokeInvitation(ctx context.Context, id uuid.UUID) error
 	RevokeOpenInvitationForEmail(ctx context.Context, arg RevokeOpenInvitationForEmailParams) error
@@ -244,6 +263,7 @@ type Querier interface {
 	SoftDeleteEnvironment(ctx context.Context, id uuid.UUID) error
 	SoftDeleteOrganization(ctx context.Context, id uuid.UUID) error
 	SoftDeleteProject(ctx context.Context, id uuid.UUID) error
+	SoftDeleteSecret(ctx context.Context, arg SoftDeleteSecretParams) (int64, error)
 	SoftDeleteTeam(ctx context.Context, id uuid.UUID) error
 	StaleQueuedJobs(ctx context.Context) ([]StaleQueuedJobsRow, error)
 	StartDeployment(ctx context.Context, id uuid.UUID) (Deployment, error)
@@ -262,6 +282,7 @@ type Querier interface {
 	UpdateRepositoryDefaultBranch(ctx context.Context, arg UpdateRepositoryDefaultBranchParams) error
 	UpdateRunStatus(ctx context.Context, arg UpdateRunStatusParams) error
 	UpdateRunner(ctx context.Context, arg UpdateRunnerParams) (Runner, error)
+	UpdateSecretDescription(ctx context.Context, arg UpdateSecretDescriptionParams) (Secret, error)
 	UpdateStep(ctx context.Context, arg UpdateStepParams) (int64, error)
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
 	UpdateUserPreferences(ctx context.Context, arg UpdateUserPreferencesParams) (User, error)

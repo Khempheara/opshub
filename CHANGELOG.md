@@ -1,5 +1,79 @@
 # Changelog
 
+## Module 8 — Secrets
+
+### Built
+
+**Backend** (`internal/secret`, `internal/keyrotate`)
+- Write-only project secrets, for all environments or one environment. Names are environment
+  variable names (`OPSHUB_` reserved). Values up to 64 KiB. At most 500 per project.
+- **Endpoints:** 7 (list, create, get, description with If-Match, rotate, history, delete).
+  No response contains a value. Every change is audited without the value.
+- **Permissions:**
+  - Developers manage secrets only for unprotected environments.
+  - A secret for all environments also reaches protected ones, so it counts as protected.
+  - There is no reveal endpoint for anyone.
+- **Envelope encryption:** a random AES-256-GCM data key per version, sealed by the master key
+  ring. Both layers are bound to the secret and version.
+- **Rotation and deletion:** rotation destroys older values, and deletion destroys all of them.
+  The history keeps who changed a secret and when.
+- **Pipelines:** a job lists `secrets: [NAME]`; an environment's secret wins over an
+  all-environments one.
+  - Names are checked when the job becomes ready (`secret_not_found`, and the log names what's
+    missing).
+  - Pull-request runs never get secrets (`secrets_not_allowed`).
+  - Deploy jobs can't list secrets (`deploy_with_secrets`).
+- **Runners:** a runner gets the values when it claims the job, inside the claim transaction,
+  with one `secret.read` audit row per value.
+  - If a secret was deleted meanwhile, the job fails with a notice.
+  - The API masks stored log output too, using the job's masks sealed in its token row.
+  - Each line of a multi-line value is masked.
+- **Runner fix:** a secret now always wins over a variable of the same name. Before, the
+  winner depended on sort order.
+- **`opshub-api keys rotate`:** re-encrypts every key-ring column (secret data keys, 2FA seeds,
+  Git tokens, webhook secrets, deploy credentials, job masks) with the active key. It is
+  idempotent, resumable, safe while running, and prints counts per column. After it, an old
+  master key can be removed.
+- **Delivery:** migration `000008_secrets`; 3 error codes and 4 validation rules (EN + KM);
+  OpenAPI 0.9.0. Also fixed two older spec descriptions that YAML had truncated at a comma.
+- **Demo seed:** `SENTRY_DSN` (all environments) and `DATABASE_URL` (staging, production).
+
+**Frontend**
+- **Project → Secrets tab** (Developers and up):
+  - Filter by scope.
+  - Add dialog: names normalized as you type; Developers only see unprotected environments;
+    hidden or multi-line value.
+  - Rotate, description, history (who, when, destroyed, how to use it in `.opshub.yml`) and
+    delete.
+- New `secret` translation namespace (EN + KM).
+
+### Quality
+
+- **Go:**
+  - Envelope and re-wrap crypto (tampering, AAD binding, swapped data keys).
+  - Validation, scopes and the per-role permission rules.
+  - Rotation and deletion destroy values; audit entries never contain values; the limit.
+  - Gate and injection: precedence, pull requests, missing and deleted secrets, unreadable
+    values.
+  - Server-side masking through the real claim path.
+  - Key rotation across pages, idempotency, and rows it can't read.
+  - Tenant isolation over all 7 routes with a coverage guard, and the parser rules.
+  - Coverage: secret 84.0 %, keyrotate 88.9 %; service coverage 77.0 %.
+- **Web:** 94 Vitest tests (+6 secret form) and 46 Playwright tests (+3):
+  - Create, rotate, edit and delete, and no value ever shown.
+  - Developer restrictions in the Khmer UI, with Khmer layout at phone and desktop widths.
+  - Viewers get no tab.
+- **Checked by hand:** `keys rotate` on the dev database. It moved 14 values to a new key;
+  a second run changed nothing; the new key alone read everything; rotating back worked.
+- golangci-lint, gosec, govulncheck, ESLint, TypeScript and the i18n check are clean. Trivy
+  finds 0 HIGH/CRITICAL in the api, web and runner images. Migrations pass up/down/up; sqlc
+  and orval are deterministic; the OpenAPI ↔ routes test passes.
+
+### Next — Module 9: Monitoring & alerts
+
+Uptime checks, alert rules (including the infrastructure metrics and certificate expiry from
+Module 7), silences, escalation, and Telegram/Slack/Email/Webhook notifications.
+
 ## Module 7 — Infrastructure
 
 ### Built
@@ -52,10 +126,6 @@
   finds 0 HIGH/CRITICAL in the api, web and runner images. Migrations pass up/down/up
   (including the grant to `opshub_app`); sqlc and orval are deterministic; the OpenAPI ↔ routes
   test passes.
-
-### Next — Module 8: Secrets
-
-Envelope-encrypted secrets with versions and rotation, audited reads and a KEK rotation CLI.
 
 ## Module 6 — Deployments
 

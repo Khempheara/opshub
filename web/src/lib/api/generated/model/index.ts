@@ -25,7 +25,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.8.0
+ * OpenAPI spec version: 0.9.0
  */
 
 export * from './agentHeartbeat';
@@ -132,6 +132,7 @@ export * from './listOrganizationsParams';
 export * from './listProjectMembers200';
 export * from './listProjectsParams';
 export * from './listRunsParams';
+export * from './listSecretsParams';
 export * from './listSessionsParams';
 export * from './listTeamsParams';
 export * from './listWebhookDeliveriesParams';
@@ -187,6 +188,13 @@ export * from './runPage';
 export * from './runStatus';
 export * from './runTrigger';
 export * from './runVariables';
+export * from './secret';
+export * from './secretCreateRequest';
+export * from './secretList';
+export * from './secretRotateRequest';
+export * from './secretUpdateRequest';
+export * from './secretVersion';
+export * from './secretVersionList';
 export * from './session';
 export * from './sessionAuthMethod';
 export * from './sessionPage';

@@ -29,6 +29,7 @@ import (
 	"github.com/opshub/opshub/internal/database"
 	"github.com/opshub/opshub/internal/pipeline"
 	"github.com/opshub/opshub/internal/project"
+	"github.com/opshub/opshub/internal/secret"
 	"github.com/opshub/opshub/internal/store"
 )
 
@@ -58,7 +59,18 @@ type Service struct {
 	cfg       Config
 	logger    *slog.Logger
 	now       func() time.Time
+	secrets   SecretProvider
 }
+
+// SecretProvider gives claimed jobs their secrets (Module 8, secret.Service).
+type SecretProvider interface {
+	ForJob(ctx context.Context, q *store.Queries, j store.PipelineJob, runnerID uuid.UUID) (secret.JobSecrets, error)
+	JobMasks(ctx context.Context, q *store.Queries, jobID uuid.UUID) (pipeline.Masker, error)
+}
+
+// SetSecrets installs the secrets module. Without it, jobs that list secrets fail when
+// claimed (the pipeline gate normally stops them first).
+func (s *Service) SetSecrets(p SecretProvider) { s.secrets = p }
 
 func NewService(pool *pgxpool.Pool, pipelines *pipeline.Service, projects *project.Service, blobs blob.Store, cfg Config, logger *slog.Logger) *Service {
 	return &Service{pool: pool, pipelines: pipelines, projects: projects, blobs: blobs, cfg: cfg, logger: logger, now: time.Now}

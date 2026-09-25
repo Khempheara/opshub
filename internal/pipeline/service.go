@@ -10,8 +10,10 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -429,6 +431,7 @@ func (s *Service) gate(ctx context.Context, q *store.Queries, run store.Pipeline
 	if job.Condition == string(spec.WhenManual) {
 		required = 1
 	}
+	var envID *uuid.UUID
 	if job.Environment != nil {
 		env, err := q.GetEnvironmentByName(ctx, store.GetEnvironmentByNameParams{ProjectID: run.ProjectID, Name: *job.Environment})
 		if database.IsNoRows(err) {
@@ -437,6 +440,7 @@ func (s *Service) gate(ctx context.Context, q *store.Queries, run store.Pipeline
 		if err != nil {
 			return err
 		}
+		envID = &env.Environment.ID
 		if env.Protected {
 			if len(env.AllowedBranches) > 0 && !(&spec.BranchFilter{Branches: env.AllowedBranches}).Matches(refName(run.Ref)) {
 				return s.setStatus(ctx, q, job.ID, store.JobStatusFailed, ReasonBranchNotAllowed, nil)
@@ -444,10 +448,61 @@ func (s *Service) gate(ctx context.Context, q *store.Queries, run store.Pipeline
 			required = max(required, int(env.RequiredApprovals))
 		}
 	}
+	if ok, err := s.checkSecrets(ctx, q, run, job, envID); err != nil || !ok {
+		return err
+	}
 	if required > 0 {
 		return s.setStatus(ctx, q, job.ID, store.JobStatusWaitingApproval, "", nil)
 	}
 	return s.setStatus(ctx, q, job.ID, store.JobStatusQueued, "", nil)
+}
+
+// checkSecrets fails a job whose `secrets:` can't be given to it: pull-request runs get none,
+// and every name must match a secret of the project (or of the job's environment). Values
+// are decrypted only when a runner claims the job.
+func (s *Service) checkSecrets(ctx context.Context, q *store.Queries, run store.PipelineRun, job store.PipelineJob, envID *uuid.UUID) (bool, error) {
+	var js spec.Job
+	if err := json.Unmarshal(job.Spec, &js); err != nil {
+		return false, err
+	}
+	if len(js.Secrets) == 0 {
+		return true, nil
+	}
+	if run.Trigger == store.RunTriggerPullRequest {
+		return false, s.failWithNotice(ctx, q, job.ID, ReasonSecretsNotAllowed,
+			"Pull-request runs don't receive secrets: the pipeline file comes from the pull request itself.")
+	}
+	found, err := q.JobSecretNames(ctx, store.JobSecretNamesParams{ProjectID: run.ProjectID, Names: js.Secrets, EnvironmentID: envID})
+	if err != nil {
+		return false, err
+	}
+	var missing []string
+	for _, n := range js.Secrets {
+		if !slices.Contains(found, n) {
+			missing = append(missing, n)
+		}
+	}
+	if len(missing) > 0 {
+		return false, s.failWithNotice(ctx, q, job.ID, ReasonSecretNotFound,
+			fmt.Sprintf("No secret named %s for this job (project-wide or its environment).", strings.Join(missing, ", ")))
+	}
+	return true, nil
+}
+
+// failWithNotice fails a job that never ran, explaining why in its log.
+func (s *Service) failWithNotice(ctx context.Context, q *store.Queries, jobID uuid.UUID, reason, message string) error {
+	line := "\x1b[31;1m" + message + "\x1b[0m\n"
+	seq, err := q.NextJobLogSeq(ctx, jobID)
+	if err != nil {
+		return err
+	}
+	if _, err := q.InsertLogChunk(ctx, store.InsertLogChunkParams{JobID: jobID, Seq: seq, Content: line}); err != nil {
+		return err
+	}
+	if _, err := q.AddLogBytes(ctx, store.AddLogBytesParams{ID: jobID, Bytes: int64(len(line))}); err != nil {
+		return err
+	}
+	return s.setStatus(ctx, q, jobID, store.JobStatusFailed, reason, nil)
 }
 
 func (s *Service) setStatus(ctx context.Context, q *store.Queries, jobID uuid.UUID, st store.JobStatus, reason string, exit *int32) error {

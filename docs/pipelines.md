@@ -98,6 +98,7 @@ jobs:
 | `timeout` | `1m`–`6h`, default `60m`. |
 | `artifacts` | Paths (relative to the workspace) kept after a successful job as one archive; `expire_in: Nd` (1–90, default 7). Jobs that `need` it get the files in their workspace; people download them from the job panel. |
 | `cache` | `{key, paths}` restored before and saved after a successful job; shared by the project's jobs with the same key. Evicted least-recently-used beyond the project quota. |
+| `secrets` | Names of [project secrets](secrets.md) the job receives as environment variables (at most 50). Never given to pull-request runs; a missing name fails the job. |
 | `deploy` | `{target, strategy, version}`: OpsHub deploys the container image `version` (default `${DEPLOY_VERSION}`; `${VAR}` uses the job's variables) to the named [deploy target](deployments.md) for the job's `environment`, which is required. A deploy job has no `steps` and needs no runner; it succeeds or fails with its deployment. |
 
 A skipped dependency whose own condition wasn't met (for example an `on_failure` job after a
@@ -124,7 +125,8 @@ variables given when starting a run manually → predefined variables:
 `OPSHUB_JOB_NAME`, `OPSHUB_JOB_ATTEMPT`, `OPSHUB_STAGE`, `OPSHUB_COMMIT_SHA`, `OPSHUB_REF`,
 `OPSHUB_REF_NAME`, `OPSHUB_TRIGGER`, `OPSHUB_ENVIRONMENT`.
 
-Variables aren't secret. Secrets (Module 8) are injected separately and masked in logs.
+Variables aren't secret. [Secrets](secrets.md) are listed per job under `secrets:`, win over
+variables of the same name, and are masked in logs.
 
 ## Runs, jobs and retries
 
@@ -135,7 +137,9 @@ Variables aren't secret. Secrets (Module 8) are injected separately and masked i
 - Failure/skip reasons: `upstream_failed`, `not_needed`, `rejected`, `branch_not_allowed`,
   `environment_not_found`, `timeout`, `no_runner`, `step_failed`, `runner_error`, `runner_lost`
   (the runner stopped sending heartbeats or was deleted), `deploy_failed`, `target_not_found`,
-  `deploy_invalid` (the deploy block's version or strategy couldn't be used; see the job log).
+  `deploy_invalid` (the deploy block's version or strategy couldn't be used; see the job log),
+  `secret_not_found` (a name under `secrets:` has no secret for the job; see the job log),
+  `secrets_not_allowed` (a pull-request run's job lists secrets).
 - **Cancel** stops every unfinished job. **Retry job** adds a new attempt of a failed or
   canceled job and re-opens the jobs after it. **Re-run failed jobs** does that for every failed
   job of a finished run. **Re-run** creates a new run from the same snapshot and commit.
@@ -143,7 +147,7 @@ Variables aren't secret. Secrets (Module 8) are injected separately and masked i
 ## Logs and live updates
 
 Runners send output in numbered chunks (256 KiB max each, 10 MiB per job; the rest is dropped
-with a notice). Known secret values are masked before storage. The UI streams run changes and
+with a notice). Secret values the job received are masked by the runner and again before storage. The UI streams run changes and
 log output with Server-Sent Events (`GET /runs/{id}/events`, `GET /jobs/{id}/logs/stream`),
 resuming with `Last-Event-ID`; the whole log can be downloaded as text.
 
@@ -154,7 +158,7 @@ Problems carry a line, column, path and one of these codes (translated in the UI
 `unsupported_version`, `oneof`, `pattern`, `max`, `schedule_needs_cron`, `invalid_cron`,
 `variable_name`, `reserved`, `job_name`, `unknown_stage`, `unknown_job`, `self_need`,
 `need_later_stage`, `cycle`, `duration`, `range`, `path`, `deploy_requires_environment`,
-`deploy_with_steps`.
+`deploy_with_steps`, `deploy_with_secrets`.
 
 Use **Check pipeline file** on the Pipelines tab (or `POST /projects/{id}/pipeline/validate`)
 to lint a file before committing it.

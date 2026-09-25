@@ -42,6 +42,7 @@ import (
 	"github.com/opshub/opshub/internal/idempotency"
 	"github.com/opshub/opshub/internal/infra"
 	"github.com/opshub/opshub/internal/jobs"
+	"github.com/opshub/opshub/internal/keyrotate"
 	"github.com/opshub/opshub/internal/logging"
 	"github.com/opshub/opshub/internal/mail"
 	"github.com/opshub/opshub/internal/org"
@@ -49,6 +50,7 @@ import (
 	"github.com/opshub/opshub/internal/project"
 	"github.com/opshub/opshub/internal/runners"
 	"github.com/opshub/opshub/internal/safehttp"
+	"github.com/opshub/opshub/internal/secret"
 	"github.com/opshub/opshub/internal/seed"
 	"github.com/opshub/opshub/internal/server"
 	"github.com/opshub/opshub/internal/telemetry"
@@ -154,6 +156,9 @@ func serve() error {
 
 	infraSvc := infra.NewService(pool, infra.Config{OutboundAllowedCIDRs: outboundCIDRs}, logger)
 
+	secretSvc := secret.NewService(pool, keyRing, logger)
+	runnerSvc.SetSecrets(secretSvc)
+
 	river, err := jobs.NewClient(jobs.Deps{
 		Pool: pool, Logger: logger,
 		Renderer: &mail.Renderer{Bundle: bundle},
@@ -204,6 +209,7 @@ func serve() error {
 				runners.NewHandler(runnerSvc),
 				deploy.NewHandler(deploySvc, hub, idempotency.Middleware(pool)),
 				infra.NewHandler(infraSvc),
+				secret.NewHandler(secretSvc),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -317,6 +323,43 @@ func migrateCmd(args []string) error {
 	}
 }
 
+// keysRotate re-encrypts all stored values with the first (active) master key. Safe while
+// the API runs; rerun it until nothing fails, then remove the old key.
+func keysRotate() error {
+	cfg, _, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	pool, err := database.Connect(ctx, cfg.DatabaseURL, 2)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	masterKeys, _ := config.ParseKeyRing(cfg.MasterKeys) // validated by config.Load
+	keys, err := crypto.NewKeyRing(masterKeys)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Re-encrypting with the active master key %q\n", keys.ActiveKeyID())
+	results, err := keyrotate.Rotate(ctx, pool, keys)
+	for _, r := range results {
+		fmt.Printf("  %-34s %6d scanned  %6d re-encrypted  %4d failed\n", r.Column, r.Scanned, r.Rewrapped, r.Failed)
+	}
+	if errors.Is(err, keyrotate.ErrUnreadable) {
+		return fmt.Errorf("%w: keep the old keys configured and check the failed columns", err)
+	}
+	if err != nil {
+		return err
+	}
+	if len(masterKeys) > 1 {
+		fmt.Println("Done. Older keys can now be removed from OPSHUB_MASTER_KEYS.")
+	} else {
+		fmt.Println("Done.")
+	}
+	return nil
+}
+
 func seedCmd() error {
 	cfg, _, err := loadConfig()
 	if err != nil {
@@ -381,8 +424,11 @@ func healthcheck() error {
 }
 
 func keysCmd(args []string) error {
+	if len(args) == 1 && args[0] == "rotate" {
+		return keysRotate()
+	}
 	if len(args) != 1 || args[0] != "generate" {
-		return errors.New("usage: opshub-api keys generate")
+		return errors.New("usage: opshub-api keys generate | keys rotate")
 	}
 	id := time.Now().UTC().Format("20060102")
 	gen := func() string {

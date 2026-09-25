@@ -783,18 +783,24 @@ func (q *Queries) UpsertCacheEntry(ctx context.Context, arg UpsertCacheEntryPara
 }
 
 const upsertJobToken = `-- name: UpsertJobToken :exec
-INSERT INTO job_tokens (job_id, token_hash, expires_at) VALUES ($1, $2, $3)
-ON CONFLICT (job_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at
+INSERT INTO job_tokens (job_id, token_hash, expires_at, masks_enc) VALUES ($1, $2, $3, $4)
+ON CONFLICT (job_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at, masks_enc = EXCLUDED.masks_enc
 `
 
 type UpsertJobTokenParams struct {
 	JobID     uuid.UUID `json:"job_id"`
 	TokenHash []byte    `json:"token_hash"`
 	ExpiresAt time.Time `json:"expires_at"`
+	MasksEnc  []byte    `json:"masks_enc"`
 }
 
 func (q *Queries) UpsertJobToken(ctx context.Context, arg UpsertJobTokenParams) error {
-	_, err := q.db.Exec(ctx, upsertJobToken, arg.JobID, arg.TokenHash, arg.ExpiresAt)
+	_, err := q.db.Exec(ctx, upsertJobToken,
+		arg.JobID,
+		arg.TokenHash,
+		arg.ExpiresAt,
+		arg.MasksEnc,
+	)
 	return err
 }
 

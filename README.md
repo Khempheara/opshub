@@ -84,7 +84,7 @@ one. The essentials:
 |---|---|
 | `OPSHUB_PUBLIC_URL` | URL users open (email links, SSO callbacks, CSRF origin check). Must be https in production. |
 | `OPSHUB_DATABASE_URL` / `OPSHUB_MIGRATE_DATABASE_URL` | App (DML-only) and schema-owner connections |
-| `OPSHUB_MASTER_KEYS` | AES-256 key ring for data at rest (TOTP seeds; later secrets and credentials). Back it up separately from the database. |
+| `OPSHUB_MASTER_KEYS` | AES-256 key ring for data at rest (secrets, 2FA seeds, Git tokens, deploy credentials). Back it up separately from the database. |
 | `OPSHUB_JWT_KEYS` | Ed25519 key ring for access tokens |
 | `OPSHUB_ALLOW_SIGNUP`, `OPSHUB_BOOTSTRAP_ADMIN_EMAIL` | Who can register; the bootstrap address becomes platform admin |
 | `OPSHUB_SMTP_*` | Outgoing email |
@@ -94,7 +94,8 @@ one. The essentials:
 | `OPSHUB_CORS_ALLOWED_ORIGINS` | Extra browser origins (empty = same-origin, recommended) |
 
 Generate keys with `go run ./cmd/api keys generate`. To rotate, put the new key first and keep the
-old one after it (`id2:…,id1:…`).
+old one after it (`id2:…,id1:…`), run `opshub-api keys rotate`, then remove the old key
+([details](docs/secrets.md#rotating-the-master-key)).
 
 ## Architecture in brief
 
@@ -173,8 +174,14 @@ memory and disk; OpsHub checks every domain's TLS certificate and lists those ab
 ([infrastructure guide](docs/infrastructure.md)). The demo server `web-1` comes with a day of
 sample metrics.
 
+## Secrets
+
+Add secrets in a project's **Secrets** tab (for all environments or one environment) and list
+them under a job's `secrets:` in `.opshub.yml`. Values are encrypted, write-only and masked in
+logs; pull-request runs never receive them ([secrets guide](docs/secrets.md)).
+
 ## Roadmap
 
 1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. ✅ CI/CD pipelines · 5. ✅ Runner agent ·
-6. ✅ Deployments · 7. ✅ Infrastructure · 8. Secrets · 9. Monitoring & alerts · 10. Logs ·
+6. ✅ Deployments · 7. ✅ Infrastructure · 8. ✅ Secrets · 9. Monitoring & alerts · 10. Logs ·
 11. Audit log · 12. Dashboard & DORA metrics

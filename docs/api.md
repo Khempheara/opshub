@@ -175,19 +175,23 @@ See [infrastructure.md](infrastructure.md).
 | GET | `/orgs/{orgId}/certificates` | JWT | `infra.view` | Every domain's certificate, soonest expiry first; `?expiring_within=30d` keeps those expiring within the window or failing |
 | POST | `/agent/heartbeat` | Agent (`ohi_…`) | | Version, hostname, os/arch and an optional metrics sample → `{interval_seconds}` |
 
-## 8. Secrets
+## 8. Secrets **(✓ Module 8)**
+
+See [secrets.md](secrets.md). Values are write-only: no response contains one.
 
 | Method | Path | Auth | Action | Description |
 |---|---|---|---|---|
-| GET | `/projects/{projectId}/secrets` | JWT | `secret.list` | Names + metadata only; filter environment |
-| POST | `/projects/{projectId}/secrets` | JWT | `secret.create` | {name, environment_id?, value}; value never returned |
+| GET | `/projects/{projectId}/secrets` | JWT | `secret.list` | Names and metadata; `?environment_id=<id>` or `none` (all-environments secrets only); `can_manage` per secret |
+| POST | `/projects/{projectId}/secrets` | JWT | `secret.create` | `{name, environment_id?, description, value}`; Developers only for unprotected environments; ≤ 500 per project (`SECRET_LIMIT_REACHED`) |
 | GET | `/secrets/{secretId}` | JWT | `secret.list` | Metadata, current version |
 | PATCH | `/secrets/{secretId}` | JWT | `secret.update` | Description only **(IM)** |
-| POST | `/secrets/{secretId}/versions` | JWT | `secret.rotate` | New value → new version |
-| GET | `/secrets/{secretId}/versions` | JWT | `secret.list` | Version metadata (who, when) |
-| DELETE | `/secrets/{secretId}` | JWT | `secret.delete` | Soft delete |
+| POST | `/secrets/{secretId}/versions` | JWT | `secret.rotate` | New value → next version; older values destroyed |
+| GET | `/secrets/{secretId}/versions` | JWT | `secret.list` | Who set each version and when; when its value was destroyed |
+| DELETE | `/secrets/{secretId}` | JWT | `secret.delete` | Soft delete; every value destroyed |
 
-Master-key (KEK) rotation is an operator CLI: `opshub-api keys rotate` (re-wraps all DEKs).
+Runners receive a job's `secrets:` decrypted in `POST /runner/jobs/request`, audited as
+`secret.read`. Master-key (KEK) rotation is an operator CLI: `opshub-api keys rotate` re-wraps
+secret data keys and re-encrypts every other value stored under the key ring.
 
 ## 9. Monitoring & alerts
 
@@ -248,5 +252,5 @@ Module-specific examples: `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED`, `EMAIL_NOT_VE
 `JOB_TOKEN_INVALID`, `ARTIFACT_NOT_FOUND`, `CACHE_NOT_FOUND`, `DEPLOY_TARGET_NOT_FOUND`,
 `DEPLOY_TARGET_NAME_TAKEN`, `DEPLOY_TARGET_IN_USE`, `DEPLOYMENT_NOT_FOUND`, `DEPLOYMENT_IN_PROGRESS`,
 `STRATEGY_NOT_SUPPORTED`, `DEPLOY_NOT_ALLOWED`, `ASSET_NOT_FOUND`, `ASSET_NAME_TAKEN`,
-`AGENT_TOKEN_INVALID`, `AGENT_NOT_SUPPORTED`.
+`AGENT_TOKEN_INVALID`, `AGENT_NOT_SUPPORTED`, `SECRET_LIMIT_REACHED`.
 Each has EN + KM entries in `web/src/locales/*/errors.json` (enforced by a Go test).

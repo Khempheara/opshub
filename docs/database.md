@@ -158,14 +158,17 @@ partitions and drops older ones. It is `SECURITY DEFINER` (owned by `opshub_migr
 `search_path` pinned, `EXECUTE` revoked from `PUBLIC` and granted to `opshub_app`), so the hourly
 job can maintain partitions while the application role keeps no DDL rights.
 
-### 8. Secrets
+### 8. Secrets **(✓ 000008)**
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `secrets` | `project_id`, `environment_id NULL` (= all envs), `name`, `current_version`, `deleted_at` | `UNIQUE (project_id, environment_id, name)` |
-| `secret_versions` | `secret_id`, `version`, `ciphertext bytea`, `nonce bytea`, `dek_enc bytea`, `kek_id text`, `created_by` | Envelope encryption: random DEK per version (AES-256-GCM), DEK wrapped by the master key (KEK). Rotation = new version and/or re-wrap DEKs under a new KEK |
+| `secrets` | `project_id`, `environment_id NULL` (= all environments), `name`, `description`, `current_version`, `version`, `created_by`, `deleted_at` | Unique `(project_id, environment_id, name) NULLS NOT DISTINCT` among live secrets; name checked in SQL too |
+| `secret_versions` | `(secret_id, version)`, `ciphertext`, `nonce`, `dek_enc`, `kek_id`, `created_by`, `destroyed_at` | Envelope encryption: a random DEK per version (AES-256-GCM, aad `secret:<id>:<version>`), the DEK sealed by the master key ring (`kek_id`). Rotation and deletion set the value columns to NULL and `destroyed_at` |
+| `job_tokens.masks_enc` | | A running job's values to mask, sealed by the key ring (aad `job-masks:<job id>`), so the API masks stored output too |
 
-Every secret **read** (runner fetch or reveal) writes an `audit_log` row with action `secret.read`.
+Every value a runner receives writes an `audit_log` row with action `secret.read`.
+`opshub-api keys rotate` re-encrypts every key-ring column under the active master key
+([secrets.md](secrets.md#rotating-the-master-key)).
 
 ### 9. Monitoring & alerts
 

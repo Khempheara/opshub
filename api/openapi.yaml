@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpsHub API
-  version: 0.8.0
+  version: 0.9.0
   summary: All-in-One DevOps Platform
   description: |
     REST API for OpsHub. All resource endpoints are versioned under `/api/v1`.
@@ -76,6 +76,12 @@ tags:
       The organization's asset inventory (servers, clusters, databases, domains), metrics from
       infra agents and TLS certificates probed on domains (docs/infrastructure.md). Assets the
       caller can't see answer 404 ASSET_NOT_FOUND.
+  - name: secrets
+    description: |
+      Write-only project secrets (docs/secrets.md): no endpoint returns a value. Values are
+      envelope-encrypted per version; rotation destroys older values. Pipeline jobs receive the
+      secrets they list when a runner claims them (audited as secret.read). Developers change
+      only secrets of unprotected environments; project-wide secrets count as protected.
   - name: runner-api
     description: |
       Used by the `opshub-runner` agent, not by people. `/runner/heartbeat` and
@@ -2134,6 +2140,143 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /api/v1/projects/{projectId}/secrets:
+    parameters:
+      - $ref: "#/components/parameters/ProjectID"
+    get:
+      tags: [secrets]
+      operationId: listSecrets
+      summary: A project's secrets, metadata only (secret.list)
+      description: Project-wide secrets first, then by environment and name.
+      parameters:
+        - name: environment_id
+          in: query
+          description: An environment's id for its secrets only, or `none` for project-wide secrets only.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Secrets.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecretList" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [secrets]
+      operationId: createSecret
+      summary: Create a secret with its first version (secret.create)
+      description: |
+        Names are unique per scope (project-wide, or one environment). Developers can create
+        secrets only for unprotected environments. At most 500 per project (SECRET_LIMIT_REACHED).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecretCreateRequest" }
+      responses:
+        "201":
+          description: Created. The value is never returned.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Secret" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/secrets/{secretId}:
+    parameters:
+      - $ref: "#/components/parameters/SecretID"
+    get:
+      tags: [secrets]
+      operationId: getSecret
+      summary: One secret's metadata (secret.list)
+      responses:
+        "200":
+          description: Secret.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Secret" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [secrets]
+      operationId: updateSecret
+      summary: Change a secret's description (secret.update)
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecretUpdateRequest" }
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Secret" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "428": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [secrets]
+      operationId: deleteSecret
+      summary: Delete a secret and destroy its values (secret.delete)
+      description: The history (who changed it, when) stays; the name can be reused.
+      responses:
+        "204": { description: Deleted. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/v1/secrets/{secretId}/versions:
+    parameters:
+      - $ref: "#/components/parameters/SecretID"
+    get:
+      tags: [secrets]
+      operationId: listSecretVersions
+      summary: A secret's versions, newest first (secret.list)
+      responses:
+        "200":
+          description: Versions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecretVersionList" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [secrets]
+      operationId: rotateSecret
+      summary: Rotate a secret to a new value (secret.rotate)
+      description: The new value becomes the next version; every older value is destroyed. Jobs claimed from now on receive it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecretRotateRequest" }
+      responses:
+        "201":
+          description: Rotated.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Secret" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /api/v1/agent/heartbeat:
     post:
       tags: [infrastructure]
@@ -2480,6 +2623,11 @@ components:
       schema: { type: string, format: uuid }
     JobID:
       name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SecretID:
+      name: secretId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -2996,7 +3144,7 @@ components:
 
     ProjectAction:
       type: string
-      enum: [project.view, project.update, project.delete, project.manage_members, repo.connect, environment.manage, run.view, pipeline.trigger, run.cancel, approval.decide, deployment.view, deployment.create, deployment.rollback]
+      enum: [project.view, project.update, project.delete, project.manage_members, repo.connect, environment.manage, run.view, pipeline.trigger, run.cancel, approval.decide, deployment.view, deployment.create, deployment.rollback, secret.list, secret.create, secret.update, secret.rotate, secret.delete]
 
     ProjectDetail:
       allOf:
@@ -3298,7 +3446,7 @@ components:
         attempt: { type: integer }
         failure_reason:
           type: [string, "null"]
-          description: upstream_failed, not_needed, rejected, branch_not_allowed, environment_not_found, timeout, no_runner, step_failed, runner_error, runner_lost, deploy_failed, target_not_found, deploy_invalid
+          description: upstream_failed, not_needed, rejected, branch_not_allowed, environment_not_found, timeout, no_runner, step_failed, runner_error, runner_lost, deploy_failed, target_not_found, deploy_invalid, secret_not_found, secrets_not_allowed
         exit_code: { type: [integer, "null"] }
         timeout_seconds: { type: integer }
         queued_at: { type: [string, "null"], format: date-time }
@@ -3390,7 +3538,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        ref: { type: string, maxLength: 255, description: Branch, tag or commit; defaults to the default branch. }
+        ref: { type: string, maxLength: 255, description: "Branch, tag or commit; defaults to the default branch." }
         variables:
           type: object
           maxProperties: 50
@@ -3566,8 +3714,11 @@ components:
         commit_sha: { type: string }
         variables: { type: object, additionalProperties: { type: string } }
         token: { type: string, description: "Job token (`ohj_…`) for /runner/jobs/{jobId}/…" }
-        secrets: { type: object, additionalProperties: { type: string } }
-        masks: { type: array, items: { type: string }, description: Values to hide in log output. }
+        secrets:
+          type: object
+          additionalProperties: { type: string }
+          description: The job's `secrets:`, decrypted. Set them as environment variables (they win over `variables`); never log them.
+        masks: { type: array, items: { type: string }, description: Values to hide in log output (the API masks stored output too). }
 
     JobReportRequest:
       type: object
@@ -3950,6 +4101,70 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Certificate" }
 
+    Secret:
+      type: object
+      description: A secret's metadata. The value is write-only.
+      required: [id, project_id, name, description, environment_id, environment_name, protected, can_manage, current_version, version, created_at, updated_at, rotated_at]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        name: { type: string, pattern: "^[A-Z_][A-Z0-9_]{0,127}$" }
+        description: { type: string }
+        environment_id: { type: [string, "null"], format: uuid, description: null = every environment }
+        environment_name: { type: [string, "null"] }
+        protected: { type: boolean, description: The secret reaches a protected environment (project-wide secrets reach them all). }
+        can_manage: { type: boolean, description: "Whether the caller may update, rotate or delete it." }
+        current_version: { type: integer, minimum: 1 }
+        version: { type: integer, description: ETag version. }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        rotated_at: { type: string, format: date-time, description: When the current value was set. }
+    SecretList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Secret" }
+    SecretCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, value]
+      properties:
+        name: { type: string, pattern: "^[A-Z_][A-Z0-9_]{0,127}$", description: "Becomes an environment variable; names starting with OPSHUB_ are reserved." }
+        environment_id: { type: [string, "null"], format: uuid, description: Omit or null for every environment. }
+        description: { type: string, maxLength: 500 }
+        value: { type: string, minLength: 1, description: "At most 64 KiB; no NUL bytes. Never returned." }
+    SecretUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [description]
+      properties:
+        description: { type: string, maxLength: 500 }
+    SecretRotateRequest:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value: { type: string, minLength: 1, description: "At most 64 KiB; no NUL bytes. Never returned." }
+    SecretVersion:
+      type: object
+      required: [version, current, created_at, created_by, created_by_name, destroyed_at]
+      properties:
+        version: { type: integer }
+        current: { type: boolean }
+        created_at: { type: string, format: date-time }
+        created_by: { type: [string, "null"], format: uuid }
+        created_by_name: { type: [string, "null"] }
+        destroyed_at: { type: [string, "null"], format: date-time, description: When the value was destroyed (by a rotation or deletion). }
+    SecretVersionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SecretVersion" }
+
     ErrorCode:
       type: string
       description: Stable machine-readable error code. New codes may be added over time.
@@ -3961,7 +4176,7 @@ components:
       properties:
         field: { type: string, description: JSON path of the invalid field, examples: [email] }
         rule: { type: string, description: Failed validation rule, examples: [required, email, min] }
-        param: { type: string, description: Rule parameter, e.g. the minimum length }
+        param: { type: string, description: "Rule parameter, e.g. the minimum length" }
 
     Error:
       type: object

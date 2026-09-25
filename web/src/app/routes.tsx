@@ -63,6 +63,7 @@ export const routes: RouteObject[] = [
                   { path: 'deployments/:deploymentId', ...page(() => import('@/features/deploy/DeploymentPage'), 'DeploymentPage') },
                   { path: 'settings', ...page(() => import('@/features/project/ProjectSettingsPage'), 'ProjectSettingsPage') },
                   { path: 'environments', ...page(() => import('@/features/project/EnvironmentsPage'), 'EnvironmentsPage') },
+                  { path: 'secrets', ...page(() => import('@/features/secret/SecretsPage'), 'SecretsPage') },
                   { path: 'repository', ...page(() => import('@/features/project/RepositoryPage'), 'RepositoryPage') },
                   { path: 'access', ...page(() => import('@/features/project/AccessPage'), 'AccessPage') },
                 ],

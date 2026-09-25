@@ -275,12 +275,26 @@ jobs:
 			[]string{"jobs.x.deploy:deploy_requires_environment"}},
 		{"deploy jobs have no steps", "version: 1\nstages: [a]\njobs:\n  x:\n    stage: a\n    environment: prod\n    image: alpine\n    steps: [make]\n    deploy: { target: t, version: \"app:1 2\" }\n",
 			[]string{"jobs.x.deploy.version:pattern", "jobs.x.steps:deploy_with_steps"}},
+		{"secrets", "version: 1\nstages: [a]\njobs:\n  x:\n    stage: a\n    image: i\n    steps: [ls]\n    secrets: [lower, OK, OPSHUB_X, OK, 42]\n",
+			[]string{"jobs.x.secrets[0]:pattern", "jobs.x.secrets[2]:reserved", "jobs.x.secrets[3]:duplicate", "jobs.x.secrets[4]:pattern"}},
+		{"secrets is a list", "version: 1\nstages: [a]\njobs:\n  x:\n    stage: a\n    image: i\n    steps: [ls]\n    secrets: {A: b}\n",
+			[]string{"jobs.x.secrets:type"}},
+		{"deploy jobs get no secrets", "version: 1\nstages: [a]\njobs:\n  x:\n    stage: a\n    environment: prod\n    secrets: [TOKEN]\n    deploy: { target: t }\n",
+			[]string{"jobs.x.secrets:deploy_with_secrets"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			assert.ElementsMatch(t, c.want, rules(problemsOf(t, c.src)))
 		})
 	}
+}
+
+func TestJobSecrets(t *testing.T) {
+	def, err := Parse([]byte("version: 1\nstages: [a]\njobs:\n  x:\n    stage: a\n    image: i\n    steps: [ls]\n    secrets: [NPM_TOKEN, _PRIVATE]\n  y:\n    stage: a\n    image: i\n    steps: [ls]\n    secrets: ONE\n  z:\n    stage: a\n    image: i\n    steps: [ls]\n"))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"NPM_TOKEN", "_PRIVATE"}, def.Jobs[0].Secrets)
+	assert.Equal(t, []string{"ONE"}, def.Jobs[1].Secrets, "a single name is a one-item list")
+	assert.Empty(t, def.Jobs[2].Secrets)
 }
 
 func TestProblemPositions(t *testing.T) {

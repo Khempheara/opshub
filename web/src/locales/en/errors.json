@@ -94,7 +94,10 @@
     "ASSET_NOT_FOUND": "Asset not found.",
     "ASSET_NAME_TAKEN": "An asset with this name already exists.",
     "AGENT_TOKEN_INVALID": "The agent token is invalid or was rotated.",
-    "AGENT_NOT_SUPPORTED": "Only servers run the infrastructure agent."
+    "AGENT_NOT_SUPPORTED": "Only servers run the infrastructure agent.",
+    "SECRET_NOT_FOUND": "This secret doesn't exist or was deleted.",
+    "SECRET_NAME_TAKEN": "A secret with this name already exists for this environment.",
+    "SECRET_LIMIT_REACHED": "This project has reached its limit of 500 secrets."
   },
   "rules": {
     "required": "This field is required.",
@@ -132,6 +135,10 @@
     "domain": "Enter a domain name, e.g. shop.example.com.",
     "before": "Must be before {{param}}.",
     "max_range": "The range can be at most {{param}}.",
-    "duration": "Enter a duration, e.g. 5m or 1h."
+    "duration": "Enter a duration, e.g. 5m or 1h.",
+    "secret_name": "Use capital letters, numbers and underscores, not starting with a number (e.g. DB_URL).",
+    "max_bytes": "Too large: at most {{param}} bytes.",
+    "text": "Use plain text without NUL characters.",
+    "reserved": "Names starting with {{param}} are reserved."
   }
 }

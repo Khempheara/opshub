@@ -25,7 +25,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.8.0
+ * OpenAPI spec version: 0.9.0
  */
 
 export interface FieldError {
@@ -33,6 +33,6 @@ export interface FieldError {
   field: string;
   /** Failed validation rule */
   rule: string;
-  /** Rule parameter */
+  /** Rule parameter, e.g. the minimum length */
   param?: string;
 }

@@ -60,7 +60,9 @@
     "runner_lost": "The runner stopped responding or was deleted.",
     "deploy_failed": "The deployment failed.",
     "target_not_found": "The deploy target doesn't exist.",
-    "deploy_invalid": "The deploy block couldn't be used (see the log)."
+    "deploy_invalid": "The deploy block couldn't be used (see the log).",
+    "secret_not_found": "A secret the job lists doesn't exist (see the log).",
+    "secrets_not_allowed": "Pull-request runs don't receive secrets."
   },
   "runs": {
     "title": "Pipelines",
@@ -125,7 +127,8 @@
     "path": "Use a path relative to the workspace.",
     "deploy_requires_environment": "A deploy job needs an environment.",
     "default": "Invalid ({{rule}}).",
-    "deploy_with_steps": "A deploy job can't have steps: OpsHub performs the deployment."
+    "deploy_with_steps": "A deploy job can't have steps: OpsHub performs the deployment.",
+    "deploy_with_secrets": "A deploy job can't list secrets: OpsHub performs the deployment."
   },
   "run": {
     "title": "Run #{{number}}",
