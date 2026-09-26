@@ -61,6 +61,12 @@
 - **E2E fix:** a new `switchLanguage` helper waits for the profile to save the language before
   the next page load. This fixes the intermittent failures where a reload brought back the
   previous language (seen in the monitoring and audit specs).
+- **Deployment rollback fix (Module 6):**
+  - When a Docker release failed, restoring the previous container could fail silently if
+    Docker hadn't yet released the removed container's port ("port is already allocated").
+    This happened once on CI.
+  - The rollback now retries the start for up to 15 s and writes every failed step to the
+    deployment log. A unit test covers it against a fake Docker API.
 - golangci-lint, gosec, govulncheck, ESLint, TypeScript and the i18n check are clean. Trivy
   finds 0 HIGH/CRITICAL in the api, web and runner images. Migrations pass up/down/up; sqlc and
   orval are deterministic; the OpenAPI ↔ routes test passes. The full Playwright suite passed

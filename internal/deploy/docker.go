@@ -237,7 +237,15 @@ func (x *dockerExecutor) Deploy(ctx context.Context, r Release, log io.Writer) (
 	return out, nil
 }
 
-// revert removes the new containers and restarts the previous ones.
+// restartAttempts and restartDelay bound retries when a restored container can't start at
+// once: Docker may release the removed container's published ports a moment later ("port is
+// already allocated").
+const restartAttempts = 15
+
+var restartDelay = time.Second
+
+// revert removes the new containers and restarts the previous ones. Failures are written to
+// the deployment log.
 func (x *dockerExecutor) revert(ctx context.Context, done []replaced, log io.Writer) bool {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
@@ -245,6 +253,7 @@ func (x *dockerExecutor) revert(ctx context.Context, done []replaced, log io.Wri
 	for i := len(done) - 1; i >= 0; i-- {
 		rep := done[i]
 		if err := x.docker.RemoveContainer(ctx, rep.name); err != nil {
+			_, _ = fmt.Fprintf(log, "Couldn't remove the new %s: %v\n", rep.name, err)
 			ok = false
 			continue
 		}
@@ -253,12 +262,26 @@ func (x *dockerExecutor) revert(ctx context.Context, done []replaced, log io.Wri
 		}
 		_, _ = fmt.Fprintf(log, "Restoring the previous %s\n", rep.name)
 		if err := x.docker.RenameContainer(ctx, rep.name+"-previous", rep.name); err != nil {
+			_, _ = fmt.Fprintf(log, "Couldn't rename the previous %s back: %v\n", rep.name, err)
 			ok = false
 			continue
 		}
-		if err := x.docker.StartContainer(ctx, rep.name); err != nil {
-			ok = false
+		var err error
+		for attempt := 1; attempt <= restartAttempts; attempt++ {
+			if err = x.docker.StartContainer(ctx, rep.name); err == nil || ctx.Err() != nil {
+				break
+			}
+			select {
+			case <-ctx.Done():
+			case <-time.After(restartDelay):
+			}
 		}
+		if err != nil {
+			_, _ = fmt.Fprintf(log, "Couldn't start the previous %s: %v\n", rep.name, err)
+			ok = false
+			continue
+		}
+		_, _ = fmt.Fprintf(log, "Restored the previous %s\n", rep.name)
 	}
 	return ok
 }
