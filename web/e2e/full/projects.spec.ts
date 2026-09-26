@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expectKhmerLayoutOK } from '../khmer';
-import { newOwnerWithOrg, SEED_PASSWORD, signIn, switchLanguage } from './helpers';
+import { demoProjectLink, newOwnerWithOrg, SEED_PASSWORD, signIn, switchLanguage } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -77,7 +77,7 @@ test('an org Viewer sees the demo project read-only', async ({ page }) => {
   await signIn(page, 'viewer@demo.opshub.local', SEED_PASSWORD);
   await page.goto('/o/angkor-tech/projects');
   await expect(page.getByRole('button', { name: 'New project' })).toHaveCount(0);
-  await page.getByTestId('project-list').getByRole('link').first().click();
+  await demoProjectLink(page).click();
   await tab(page, 'Settings').click();
   await expect(page.getByText('Only project Admins can change these settings.')).toBeVisible();
   await expect(page.getByLabel('Project name')).toBeDisabled();
@@ -100,7 +100,7 @@ test('Khmer layout of the project pages on mobile and desktop', async ({ page })
   await page.goto('/o/angkor-tech/projects');
   await switchLanguage(page, 'km');
   await expect(page.locator('html')).toHaveAttribute('lang', 'km');
-  const project = (await page.getByTestId('project-list').getByRole('link').first().getAttribute('href')) ?? '';
+  const project = (await demoProjectLink(page).getAttribute('href')) ?? '';
   const pages = ['/o/angkor-tech/projects', `${project}/settings`, `${project}/environments`, `${project}/repository`, `${project}/access`];
   for (const viewport of [
     { width: 375, height: 812 },

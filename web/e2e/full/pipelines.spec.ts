@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expectKhmerLayoutOK } from '../khmer';
-import { SEED_PASSWORD, signIn, switchLanguage } from './helpers';
+import { demoProjectLink, SEED_PASSWORD, signIn, switchLanguage } from './helpers';
 
 // Runs against the demo data from `make seed`: a succeeded run (approved production deploy),
 // a failed feature branch, a run waiting for approval and a queued manual run.
@@ -10,7 +10,7 @@ const PROJECT_LIST = '/o/angkor-tech/projects';
 
 async function openDemoProject(page: Page) {
   await page.goto(PROJECT_LIST);
-  await page.getByTestId('project-list').getByRole('link').first().click();
+  await demoProjectLink(page).click();
   await expect(page.getByTestId('runs-table')).toBeVisible();
 }
 
@@ -102,7 +102,7 @@ test('Khmer layout of the pipeline pages on mobile and desktop', async ({ page }
   await page.goto(PROJECT_LIST);
   await switchLanguage(page, 'km');
   await expect(page.locator('html')).toHaveAttribute('lang', 'km');
-  const project = (await page.getByTestId('project-list').getByRole('link').first().getAttribute('href')) ?? '';
+  const project = (await demoProjectLink(page).getAttribute('href')) ?? '';
   await page.goto(project);
   const run = (await runRow(page, { title: demo.failed.title, status: 'បរាជ័យ' }).getByRole('link').first().getAttribute('href')) ?? '';
   for (const viewport of [

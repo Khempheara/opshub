@@ -1,5 +1,81 @@
 # Changelog
 
+## Module 12a — Dashboard & DORA metrics
+
+The first of two parts of Module 12 (decision M12-1). Next, 12b: Grafana platform dashboard,
+backup/restore job and runbook, Helm chart, k6 load tests.
+
+### Built
+
+**Backend** (`internal/dashboard`)
+- **`GET /orgs/{id}/dashboard/pipelines`:**
+  - Runs in the range, success rate (succeeded ÷ succeeded + failed) and median and p95
+    duration.
+  - A trend per day, or per week for ranges over 92 days, in the caller's time zone, with empty
+    periods filled.
+  - The busiest projects with their last run.
+- **`GET /orgs/{id}/dashboard/dora`:**
+  - **Deployment frequency.**
+  - **Lead time for changes:** median and p95 from the commit to production.
+  - **Change failure rate:** failed or rolled back later ÷ changes.
+  - **Time to restore:** median, plus the number not restored yet.
+  - Organization-wide **alert recovery**, a trend of changes that stayed and changes that failed,
+    and per-project figures.
+  - A change is a finished production deployment that isn't a rollback; `environment` picks one
+    environment instead.
+- **Scope:**
+  - Computed on request (no materialized table): always current, with exact medians over up to
+    366 days.
+  - Covers the projects the caller can view; an ungranted project answers 404.
+- **Commit times:**
+  - Runs now record `committed_at` from the Git host (GitHub `commit.committer.date`, GitLab
+    `committed_date`) for manual, scheduled, webhook and re-run runs.
+  - A webhook run asks the host once more, best effort.
+  - Without a commit time, lead time starts at the run.
+- **Delivery:** migration `000012_dashboard` (column and indexes); 2 endpoints; OpenAPI 0.13.0.
+- **Demo seed:** the **Checkout Web** project with 60 days of weekday runs and production
+  deployments through staging, including failures, automatic reverts and a rollback (185 runs,
+  143 deployments).
+
+**Frontend**
+- The organization **Overview** is now the dashboard:
+  - The getting-started checklist stays until 2FA and a first project are done.
+  - Project and range filters (7 days to 12 months); refreshes every minute.
+  - Four DORA cards with their performance level (Elite/High/Medium/Low), a production-changes
+    chart and alert recovery.
+  - Pipeline cards, a runs chart, a run-duration chart (median and p95), and a projects table
+    linking to each project.
+- A small stacked-bar SVG chart. Durations now read in days when they are over 24 hours ("2 d
+  3 h").
+- New `dashboard` translation namespace (EN + KM).
+
+### Quality
+
+- **Go:**
+  - Pipelines: rates, medians and p95, empty ranges, per-day trends and time zones, weekly
+    buckets from Monday.
+  - DORA: failed, reverted and rolled-back changes, lead time with and without commit time,
+    restore time and open failures, staging excluded or chosen, alert recovery.
+  - Developer and viewer visibility, validation, HTTP tenant isolation and route coverage.
+  - Commit times parsed from GitHub and GitLab and stored for manual and webhook runs.
+  - Coverage: dashboard 92.9 %; service coverage 78.9 %.
+- **Web:** 129 Vitest tests (+8: levels, frequency units, project rows, periods, day durations)
+  and 55 Playwright tests (+3):
+  - Metrics and levels from the demo history, and the project and range filters.
+  - A new organization's empty dashboard with getting started.
+  - Khmer layout at phone and desktop widths, with and without data.
+- **E2E fix:** specs now open the Payments API demo project by name instead of "the first
+  project".
+- golangci-lint, gosec, govulncheck, ESLint, TypeScript and the i18n check are clean. Trivy
+  finds 0 HIGH/CRITICAL in the api, web and runner images. Migrations pass up/down/up; sqlc and
+  orval are deterministic; the OpenAPI ↔ routes test passes. The full Playwright suite passed
+  twice in a row.
+
+### Next — Module 12b: Operations
+
+Grafana dashboard for platform metrics, backup/restore job with a compose service and restore
+runbook, Helm chart (with the backup CronJob), and k6 load tests.
+
 ## Module 11 — Audit log
 
 ### Built

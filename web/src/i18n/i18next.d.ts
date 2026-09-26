@@ -1,6 +1,7 @@
 import type audit from '@/locales/en/audit.json';
 import type auth from '@/locales/en/auth.json';
 import type common from '@/locales/en/common.json';
+import type dashboard from '@/locales/en/dashboard.json';
 import type deploy from '@/locales/en/deploy.json';
 import type errors from '@/locales/en/errors.json';
 import type infra from '@/locales/en/infra.json';
@@ -23,6 +24,7 @@ declare module 'i18next' {
       audit: typeof audit;
       auth: typeof auth;
       common: typeof common;
+      dashboard: typeof dashboard;
       deploy: typeof deploy;
       errors: typeof errors;
       home: typeof home;

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 type gitlab struct {
@@ -91,13 +92,14 @@ func (g *gitlab) Commit(ctx context.Context, ref string) (Commit, error) {
 		return Commit{}, ErrInvalidInput
 	}
 	var out struct {
-		ID      string `json:"id"`
-		Message string `json:"message"`
+		ID            string    `json:"id"`
+		Message       string    `json:"message"`
+		CommittedDate time.Time `json:"committed_date"`
 	}
 	if err := g.client().do(ctx, http.MethodGet, g.project()+"/repository/commits/"+url.PathEscape(ref), nil, &out); err != nil {
 		return Commit{}, err
 	}
-	return Commit{SHA: out.ID, Message: out.Message}, nil
+	return Commit{SHA: out.ID, Message: out.Message, Time: out.CommittedDate}, nil
 }
 
 func (g *gitlab) Archive(ctx context.Context, sha string) (io.ReadCloser, error) {

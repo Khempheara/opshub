@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
@@ -262,14 +263,16 @@ func TestFileAndCommit(t *testing.T) {
 		case "GET /repos/acme/api/contents/big.yml":
 			_, _ = w.Write(make([]byte, MaxFileSize+1))
 		case "GET /repos/acme/api/commits/main":
-			writeJSON(w, http.StatusOK, map[string]any{"sha": "abc123", "commit": map[string]string{"message": "Fix it\n\nbody"}})
+			writeJSON(w, http.StatusOK, map[string]any{"sha": "abc123", "commit": map[string]any{
+				"message": "Fix it\n\nbody", "committer": map[string]string{"date": "2026-09-25T08:30:00Z"},
+			}})
 		case "GET /repos/acme/api/commits/nope":
 			w.WriteHeader(http.StatusUnprocessableEntity)
 		case "GET /api/v4/projects/grp%2Fapp/repository/files/.opshub.yml/raw":
 			assert.Equal(t, "def456", r.URL.Query().Get("ref"))
 			_, _ = w.Write([]byte("version: 1\n# gitlab\n"))
 		case "GET /api/v4/projects/grp%2Fapp/repository/commits/release%2F1.0":
-			writeJSON(w, http.StatusOK, map[string]any{"id": "def456", "message": "Release"})
+			writeJSON(w, http.StatusOK, map[string]any{"id": "def456", "message": "Release", "committed_date": "2026-09-25T15:30:00+07:00"})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -290,7 +293,9 @@ func TestFileAndCommit(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInvalidInput)
 	c, err := gh.Commit(ctx, "main")
 	require.NoError(t, err)
-	assert.Equal(t, Commit{SHA: "abc123", Message: "Fix it\n\nbody"}, c)
+	assert.Equal(t, "abc123", c.SHA)
+	assert.Equal(t, "Fix it\n\nbody", c.Message)
+	assert.True(t, c.Time.Equal(time.Date(2026, 9, 25, 8, 30, 0, 0, time.UTC)), c.Time)
 	_, err = gh.Commit(ctx, "nope")
 	assert.ErrorIs(t, err, ErrNotFound)
 
@@ -301,6 +306,7 @@ func TestFileAndCommit(t *testing.T) {
 	c, err = gl.Commit(ctx, "release/1.0")
 	require.NoError(t, err)
 	assert.Equal(t, "def456", c.SHA)
+	assert.True(t, c.Time.Equal(time.Date(2026, 9, 25, 8, 30, 0, 0, time.UTC)), c.Time)
 }
 
 func TestEventDetails(t *testing.T) {

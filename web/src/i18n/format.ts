@@ -156,13 +156,14 @@ export function formatRelative(
  */
 export function formatDuration(ms: number, prefs: FormatPrefs, nativeKhmer = HAS_NATIVE_KHMER): string {
   const totalSec = Math.max(0, Math.round(ms / 1000));
-  const parts: [number, 'hour' | 'minute' | 'second'][] = [
-    [Math.floor(totalSec / 3600), 'hour'],
+  const parts: [number, 'day' | 'hour' | 'minute' | 'second'][] = [
+    [Math.floor(totalSec / 86400), 'day'],
+    [Math.floor((totalSec % 86400) / 3600), 'hour'],
     [Math.floor((totalSec % 3600) / 60), 'minute'],
     [totalSec % 60, 'second'],
   ];
   const first = parts.findIndex(([v]) => v > 0);
-  const shown = first === -1 ? parts.slice(2) : parts.slice(first, first + 2);
+  const shown = first === -1 ? parts.slice(3) : parts.slice(first, first + 2);
   if (needsKhmerFallback(prefs, nativeKhmer)) {
     return shown.map(([v, unit]) => `${digits(String(v), prefs)} ${KM_UNITS[unit]}`).join(' ');
   }

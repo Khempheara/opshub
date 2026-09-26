@@ -222,17 +222,25 @@ River's own tables (`river_job`, `river_leader`, `river_queue`, …) are created
 run from our migration pipeline as a pinned step (`cmd/api migrate` applies ours, then River's) so
 schema changes stay versioned and reversible.
 
-### 12. Dashboard & DORA metrics
+### 12. Dashboard & DORA metrics **(✓ 000012)**
 
-Computed from existing tables (no new source of truth), materialized daily by a River job into
-`dora_daily(organization_id, project_id, day, deployments, lead_time_p50_s, change_failures, mttr_s)`:
+Computed on request from existing tables (no new source of truth and no materialized copy, so
+figures are current and medians exact over any range up to 366 days; decision M12-5). 000012
+adds `pipeline_runs.committed_at` (the commit's time from the Git host, NULL when unknown) and
+indexes on `pipeline_runs (organization_id, created_at)`, `deployments (organization_id,
+created_at)`, `deployments (rollback_of_id)`, `deployments (environment_id, finished_at) WHERE
+status = 'succeeded'` and `alerts (organization_id, resolved_at) WHERE status = 'resolved'`.
+
+A **change** is a finished deployment (succeeded or failed) to an environment of kind
+`production` (or one chosen environment), excluding rollbacks (`rollback_of_id IS NOT NULL`).
 
 | Metric | Source |
 |---|---|
-| Deployment frequency | `deployments` succeeded to production environments per day |
-| Lead time for changes | `deployments.finished_at` − commit time of `pipeline_runs.commit_sha` |
-| Change failure rate | production deployments that were rolled back or followed by a firing alert / failed status ÷ total |
-| MTTR | `alerts.resolved_at − started_at`, and failed-deploy → next-successful-deploy intervals |
+| Deployment frequency | Successful changes ÷ days in the range |
+| Lead time for changes | `deployments.finished_at` − `COALESCE(pipeline_runs.committed_at, pipeline_runs.created_at)` of successful changes with a run (median, p95) |
+| Change failure rate | Changes that failed or were rolled back later (a deployment with `rollback_of_id` = the change) ÷ changes |
+| Time to restore | Failed change → its automatic revert (`reverted`) or the next successful deployment to that environment; a rolled-back change from its `finished_at` (median; unrestored changes counted as open) |
+| Alert recovery (org-wide) | `alerts.resolved_at − started_at` for alerts resolved in the range (median) |
 
 ## PostgreSQL roles (least privilege)
 
@@ -251,7 +259,8 @@ mirror production.
 users `owner@demo.opshub.local`, `admin@…`, `dev@…`, `viewer@…` (one per role; one with `locale=km`),
 project **Payments API / API ទូទាត់ប្រាក់** with dev/staging/production environments (production
 protected), a sample `.opshub.yml`, one successful and one failed run, deployments incl. a rollback,
-infra assets, monitors and a firing alert, and a log ingest token with recent checkout-service lines. Descriptions are stored in both languages
+infra assets, monitors and a firing alert, a log ingest token with recent checkout-service lines, and the `checkout-web` project with 60 days
+of runs and production deployments for the dashboard. Descriptions are stored in both languages
 (`"description": {"en": "…", "km": "…"}` in seed files; the UI shows the active language). Demo
 passwords are printed once and only in development.
 

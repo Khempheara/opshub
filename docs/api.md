@@ -237,12 +237,17 @@ Accept-Language language.
 | GET | `/orgs/{orgId}/audit-log/export` | JWT | `audit.export` | The same filters, all matching rows as a streamed CSV (UTF-8 with BOM so Excel shows Khmer correctly; formula-like cells escaped); the export is audited before the file is sent |
 | GET | `/me/activity` | JWT (session) | | The caller's own account events: sign-ins, 2FA, password, tokens, sessions |
 
-## 12. Dashboard
+## 12. Dashboard **(✓ Module 12)**
+
+See [dashboard.md](dashboard.md). Both endpoints take `from`/`to` (default the last 30 days, at
+most 366), `project` and `tz` (IANA time zone for the daily or weekly periods, default UTC).
+They cover the projects the caller can view; a project the caller can't view answers 404
+`PROJECT_NOT_FOUND`.
 
 | Method | Path | Auth | Action | Description |
 |---|---|---|---|---|
-| GET | `/orgs/{orgId}/dashboard/pipelines` | JWT | `project.view` | Success rate, duration trend (p50/p95), `?project_id&from&to` |
-| GET | `/orgs/{orgId}/dashboard/dora` | JWT | `project.view` | Deployment frequency, lead time, change failure rate, MTTR `?project_id&environment&from&to` |
+| GET | `/orgs/{orgId}/dashboard/pipelines` | JWT | `org.view` | Runs, success rate, duration p50/p95; trend per day or week; busiest projects |
+| GET | `/orgs/{orgId}/dashboard/dora` | JWT | `org.view` | Deployment frequency, lead time (median, p95), change failure rate, time to restore (median, open), org-wide alert recovery; trend; per project. `environment` replaces "every production environment" |
 
 ## Error codes (planned, by module)
 

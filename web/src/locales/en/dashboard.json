@@ -1,0 +1,99 @@
+{
+  "filters": {
+    "project": "Project",
+    "allProjects": "All projects",
+    "period": "Time range"
+  },
+  "periods": {
+    "7d": "Last 7 days",
+    "30d": "Last 30 days",
+    "90d": "Last 90 days",
+    "365d": "Last 12 months"
+  },
+  "levels": {
+    "label": "DORA performance level",
+    "elite": "Elite",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "dora": {
+    "title": "Delivery performance",
+    "description": "How often and how safely changes reach production (DORA metrics).",
+    "frequency": {
+      "title": "Deployment frequency",
+      "perDay": "{{value}} per day",
+      "perWeek": "{{value}} per week",
+      "perMonth": "{{value}} per month",
+      "detail_one": "{{count}} successful production deployment",
+      "detail_other": "{{count}} successful production deployments",
+      "none": "No production deployments"
+    },
+    "leadTime": {
+      "title": "Lead time for changes",
+      "detail_one": "Median from commit to production · {{count}} change",
+      "detail_other": "Median from commit to production · {{count}} changes",
+      "none": "No pipeline deployments to production yet"
+    },
+    "failureRate": {
+      "title": "Change failure rate",
+      "detail_one": "{{failed}} of {{count}} change failed or was rolled back",
+      "detail_other": "{{failed}} of {{count}} changes failed or were rolled back",
+      "none": "No production changes"
+    },
+    "restore": {
+      "title": "Time to restore",
+      "detail_one": "Median after a failed change · {{count}} restored",
+      "detail_other": "Median after a failed change · {{count}} restored",
+      "open_one": "{{count}} not restored yet",
+      "open_other": "{{count}} not restored yet",
+      "none": "No failed changes",
+      "noneOpen": "Nothing restored yet"
+    },
+    "alerts": {
+      "title": "Alert recovery",
+      "detail_one": "Median time to resolve · {{count}} alert, whole organization",
+      "detail_other": "Median time to resolve · {{count}} alerts, whole organization",
+      "none": "No resolved alerts"
+    },
+    "chart": {
+      "title": "Production changes",
+      "succeeded": "Successful",
+      "failed": "Failed or rolled back",
+      "summary": "{{succeeded}} successful and {{failed}} failed changes in this period."
+    }
+  },
+  "pipelines": {
+    "title": "Pipelines",
+    "description": "Runs of every pipeline in the projects you can see.",
+    "runs": "Runs",
+    "successRate": "Success rate",
+    "successDetail": "{{succeeded}} succeeded, {{failed}} failed, {{canceled}} canceled",
+    "duration": "Median duration",
+    "durationDetail": "95th percentile {{value}}",
+    "noDuration": "No finished runs",
+    "chartRuns": "Runs",
+    "chartSucceeded": "Succeeded",
+    "chartFailed": "Failed",
+    "chartOther": "Canceled or running",
+    "runsSummary": "{{runs}} runs, {{succeeded}} succeeded and {{failed}} failed.",
+    "chartDuration": "Run duration",
+    "median": "Median",
+    "p95": "95th percentile",
+    "durationSummary": "Median run duration {{value}}."
+  },
+  "projects": {
+    "title": "Projects",
+    "project": "Project",
+    "runs": "Runs",
+    "successRate": "Pipeline success",
+    "duration": "Median run",
+    "changes": "Production changes",
+    "failureRate": "Change failure",
+    "leadTime": "Lead time",
+    "lastActivity": "Last activity"
+  },
+  "empty": "Nothing happened in this period",
+  "emptyHint": "Runs and deployments appear here once pipelines run in your projects.",
+  "secondsUnit": "s"
+}

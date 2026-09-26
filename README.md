@@ -203,8 +203,16 @@ read it in **Organization → Audit log** as sentences in English or Khmer, filt
 as CSV that opens correctly in Excel. Everyone sees their own sign-ins and account changes in
 **Settings → Security** ([audit guide](docs/audit.md)).
 
+## Dashboard
+
+The organization's **Overview** shows how you deliver: the four DORA metrics (deployment
+frequency, lead time, change failure rate, time to restore) with their performance level, alert
+recovery, pipeline success rate and run durations, and a per-project table, for any project and
+range up to a year ([dashboard guide](docs/dashboard.md)). The demo data includes 60 days of
+history in the `checkout-web` project.
+
 ## Roadmap
 
 1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. ✅ CI/CD pipelines · 5. ✅ Runner agent ·
 6. ✅ Deployments · 7. ✅ Infrastructure · 8. ✅ Secrets · 9. ✅ Monitoring & alerts · 10. ✅ Logs ·
-11. ✅ Audit log · 12. Dashboard & DORA metrics
+11. ✅ Audit log · 12. Dashboard & DORA metrics (✅ dashboard; operations next)

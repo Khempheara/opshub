@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpsHub API
-  version: 0.12.0
+  version: 0.13.0
   summary: All-in-One DevOps Platform
   description: |
     REST API for OpsHub. All resource endpoints are versioned under `/api/v1`.
@@ -88,6 +88,11 @@ tags:
       sentence in the requested language (`locale`, else Accept-Language), with the raw
       before/after values. Owners and Admins read and export an organization's log; everyone
       sees their own account activity.
+  - name: dashboard
+    description: |
+      Pipeline statistics and the four DORA metrics (docs/dashboard.md), computed on request
+      for the projects the caller can see. DORA metrics use production environments (or one
+      environment); alert recovery is organization-wide.
   - name: logs
     description: |
       Searchable logs (docs/logs.md): services send NDJSON lines with organization ingest
@@ -2768,6 +2773,54 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /api/v1/orgs/{orgId}/dashboard/pipelines:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [dashboard]
+      operationId: getPipelineStats
+      summary: "Pipeline runs, success rate and durations (org.view; visible projects only)"
+      parameters:
+        - $ref: "#/components/parameters/DashboardFrom"
+        - $ref: "#/components/parameters/DashboardTo"
+        - $ref: "#/components/parameters/DashboardProject"
+        - $ref: "#/components/parameters/DashboardTZ"
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PipelineStats" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/dashboard/dora:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [dashboard]
+      operationId: getDoraMetrics
+      summary: "Deployment frequency, lead time, change failure rate and time to restore (org.view)"
+      description: |
+        Changes are finished deployments to production environments (or `environment`) that
+        aren't rollbacks. A change failed when it failed or was rolled back later. Lead time
+        runs from the commit to the successful deployment of a pipeline's change. Time to
+        restore runs from a failed change until the environment works again.
+      parameters:
+        - $ref: "#/components/parameters/DashboardFrom"
+        - $ref: "#/components/parameters/DashboardTo"
+        - $ref: "#/components/parameters/DashboardProject"
+        - { name: environment, in: query, description: "Environment id instead of every production environment", schema: { type: string, format: uuid } }
+        - $ref: "#/components/parameters/DashboardTZ"
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DoraMetrics" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /api/v1/orgs/{orgId}/logs:
     parameters:
       - $ref: "#/components/parameters/OrgID"
@@ -3330,6 +3383,25 @@ components:
       in: path
       required: true
       schema: { type: string, enum: [github, google, keycloak] }
+    DashboardFrom:
+      name: from
+      in: query
+      description: "Start (RFC 3339); default 30 days before `to`; at most 366 days"
+      schema: { type: string, format: date-time }
+    DashboardTo:
+      name: to
+      in: query
+      description: "End (RFC 3339), exclusive; default now"
+      schema: { type: string, format: date-time }
+    DashboardProject:
+      name: project
+      in: query
+      schema: { type: string, format: uuid }
+    DashboardTZ:
+      name: tz
+      in: query
+      description: "IANA time zone for the daily or weekly periods; default UTC"
+      schema: { type: string, examples: [Asia/Phnom_Penh] }
     AuditArea:
       name: area
       in: query
@@ -5117,6 +5189,131 @@ components:
         ok: { type: boolean }
         error: { type: string, description: "Why it failed, without credentials." }
 
+    DashboardRange:
+      type: object
+      required: [from, to, bucket, tz]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        bucket: { type: string, enum: [day, week], description: "Periods are days up to 92 days, else weeks (from Monday)." }
+        tz: { type: string }
+    Seconds:
+      type: [number, "null"]
+      description: "Seconds, or null when there is nothing to measure."
+    Rate:
+      type: [number, "null"]
+      description: "0–1, or null without data."
+    PipelineSummary:
+      type: object
+      required: [runs, succeeded, failed, canceled, success_rate, duration_p50_s, duration_p95_s]
+      properties:
+        runs: { type: integer }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        canceled: { type: integer }
+        success_rate: { $ref: "#/components/schemas/Rate" }
+        duration_p50_s: { $ref: "#/components/schemas/Seconds" }
+        duration_p95_s: { $ref: "#/components/schemas/Seconds" }
+    PipelinePoint:
+      type: object
+      required: [period, runs, succeeded, failed, success_rate, duration_p50_s, duration_p95_s]
+      properties:
+        period: { type: string, format: date }
+        runs: { type: integer }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        success_rate: { $ref: "#/components/schemas/Rate" }
+        duration_p50_s: { $ref: "#/components/schemas/Seconds" }
+        duration_p95_s: { $ref: "#/components/schemas/Seconds" }
+    ProjectPipelines:
+      type: object
+      required: [id, name, slug, runs, success_rate, duration_p50_s, last_status, last_run_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        runs: { type: integer }
+        success_rate: { $ref: "#/components/schemas/Rate" }
+        duration_p50_s: { $ref: "#/components/schemas/Seconds" }
+        last_status: { $ref: "#/components/schemas/RunStatus" }
+        last_run_at: { type: string, format: date-time }
+    PipelineStats:
+      type: object
+      required: [range, summary, trend, projects]
+      properties:
+        range: { $ref: "#/components/schemas/DashboardRange" }
+        summary: { $ref: "#/components/schemas/PipelineSummary" }
+        trend:
+          type: array
+          items: { $ref: "#/components/schemas/PipelinePoint" }
+        projects:
+          type: array
+          description: "Busiest first, at most 50."
+          items: { $ref: "#/components/schemas/ProjectPipelines" }
+    DeploymentPoint:
+      type: object
+      required: [period, succeeded, failed_changes]
+      properties:
+        period: { type: string, format: date }
+        succeeded: { type: integer, description: "Changes that succeeded and weren't rolled back." }
+        failed_changes: { type: integer }
+    ProjectDora:
+      type: object
+      required: [id, name, slug, changes, change_failure_rate, lead_time_median_s, last_deployed_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        changes: { type: integer }
+        change_failure_rate: { $ref: "#/components/schemas/Rate" }
+        lead_time_median_s: { $ref: "#/components/schemas/Seconds" }
+        last_deployed_at: { type: string, format: date-time }
+    DoraMetrics:
+      type: object
+      required: [range, deployments, change_failure_rate, lead_time, time_to_restore, alerts, trend, projects]
+      properties:
+        range: { $ref: "#/components/schemas/DashboardRange" }
+        deployments:
+          type: object
+          required: [succeeded, per_day]
+          properties:
+            succeeded: { type: integer }
+            per_day: { type: number }
+        change_failure_rate:
+          type: object
+          required: [failed, changes, rate]
+          properties:
+            failed: { type: integer }
+            changes: { type: integer }
+            rate: { $ref: "#/components/schemas/Rate" }
+        lead_time:
+          type: object
+          required: [median_s, p95_s, samples]
+          properties:
+            median_s: { $ref: "#/components/schemas/Seconds" }
+            p95_s: { $ref: "#/components/schemas/Seconds" }
+            samples: { type: integer }
+        time_to_restore:
+          type: object
+          required: [median_s, restored, open]
+          properties:
+            median_s: { $ref: "#/components/schemas/Seconds" }
+            restored: { type: integer }
+            open: { type: integer, description: "Failed changes not restored yet." }
+        alerts:
+          type: object
+          description: "Organization-wide: alerts resolved in the range."
+          required: [resolved, median_s]
+          properties:
+            resolved: { type: integer }
+            median_s: { $ref: "#/components/schemas/Seconds" }
+        trend:
+          type: array
+          items: { $ref: "#/components/schemas/DeploymentPoint" }
+        projects:
+          type: array
+          description: "Busiest first, at most 50."
+          items: { $ref: "#/components/schemas/ProjectDora" }
     AuditActor:
       type: object
       required: [type, user_id, name, email]

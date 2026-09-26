@@ -213,6 +213,7 @@ func (s *Service) TriggerManual(ctx context.Context, projectID uuid.UUID, in Man
 		run, err := s.createRun(ctx, tx, q, newRun{
 			project: acc.Project, trigger: store.RunTriggerManual, ref: fullRef, sha: commit.SHA,
 			title: firstLine(commit.Message), createdBy: &acc.UserID, def: def, variables: in.Variables,
+			committedAt: commitTime(commit),
 		})
 		if err != nil {
 			return err
@@ -381,6 +382,7 @@ func (s *Service) Rerun(ctx context.Context, runID uuid.UUID, failedOnly bool) (
 			if target, err = s.createRun(ctx, tx, q, newRun{
 				project: acc.Project, trigger: r.Trigger, ref: r.Ref, sha: r.CommitSha, title: r.Title,
 				actor: r.ActorName, createdBy: &acc.UserID, rerunOf: &r.ID, def: &def, variables: vars,
+				committedAt: r.CommittedAt,
 			}); err != nil {
 				return err
 			}

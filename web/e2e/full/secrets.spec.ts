@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { expectKhmerLayoutOK } from '../khmer';
-import { SEED_PASSWORD, signIn, switchLanguage } from './helpers';
+import { demoProjectLink, SEED_PASSWORD, signIn, switchLanguage } from './helpers';
 
 // Runs against the demo project from `make seed`: SENTRY_DSN for all environments and
 // DATABASE_URL for staging and (protected) production. Each run adds uniquely named secrets
@@ -10,7 +10,7 @@ test.describe.configure({ mode: 'serial' });
 
 async function openSecrets(page: Page, tab = 'Secrets') {
   await page.goto('/o/angkor-tech/projects');
-  await page.getByTestId('project-list').getByRole('link').first().click();
+  await demoProjectLink(page).click();
   await page.getByRole('link', { name: tab, exact: true }).click();
   await expect(page.getByTestId('secrets-table')).toBeVisible();
 }
@@ -144,7 +144,7 @@ test("viewers don't get the Secrets tab", async ({ page }) => {
   await signIn(page, 'viewer@demo.opshub.local', SEED_PASSWORD);
   await switchLanguage(page, 'en');
   await page.goto('/o/angkor-tech/projects');
-  await page.getByTestId('project-list').getByRole('link').first().click();
+  await demoProjectLink(page).click();
   await expect(page.getByRole('link', { name: 'Deployments', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Secrets', exact: true })).toHaveCount(0);
 });

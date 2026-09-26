@@ -250,6 +250,8 @@ type newRun struct {
 	def       *spec.Definition
 	problems  spec.Problems
 	variables map[string]string
+	// committedAt is when the commit was made, for lead time (nil when unknown).
+	committedAt *time.Time
 }
 
 // createRun inserts a run and its jobs and advances the graph. A run for an invalid
@@ -270,7 +272,7 @@ func (s *Service) createRun(ctx context.Context, tx pgx.Tx, q *store.Queries, nr
 	params := store.InsertRunParams{
 		OrganizationID: nr.project.OrganizationID, ProjectID: nr.project.ID, Number: number, Status: store.RunStatusQueued,
 		Trigger: nr.trigger, Ref: nr.ref, CommitSha: nr.sha, Title: clip(nr.title, 200), ActorName: clip(nr.actor, 100),
-		CreatedBy: nr.createdBy, RerunOf: nr.rerunOf, Variables: varsJSON,
+		CreatedBy: nr.createdBy, RerunOf: nr.rerunOf, Variables: varsJSON, CommittedAt: nr.committedAt,
 	}
 	if len(nr.problems) > 0 || nr.def == nil {
 		now := s.now()

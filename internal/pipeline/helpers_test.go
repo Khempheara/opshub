@@ -33,6 +33,9 @@ import (
 
 const token = "ghp_pipeline-test"
 
+// commitDate is the committer date the fake Git host reports for every commit.
+var commitDate = time.Date(2026, 9, 20, 3, 30, 0, 0, time.UTC)
+
 // fakeGit serves commits and `.opshub.yml` contents per commit SHA.
 type fakeGit struct {
 	mu      sync.Mutex
@@ -44,7 +47,8 @@ type fakeGit struct {
 func (f *fakeGit) set(ref, sha, file string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.commits[ref] = gitprovider.Commit{SHA: sha, Message: "Commit " + sha + "\n\nbody"}
+	c := gitprovider.Commit{SHA: sha, Message: "Commit " + sha + "\n\nbody", Time: commitDate}
+	f.commits[ref], f.commits[sha] = c, c
 	f.files[sha] = file
 }
 
@@ -72,7 +76,9 @@ func (f *fakeGit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnprocessableEntity)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"sha": c.SHA, "commit": map[string]string{"message": c.Message}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"sha": c.SHA, "commit": map[string]any{
+			"message": c.Message, "committer": map[string]any{"date": c.Time.Format(time.RFC3339)},
+		}})
 	case path == "/repos/acme/api/contents/.opshub.yml":
 		content, ok := f.files[r.URL.Query().Get("ref")]
 		if !ok || content == "" {

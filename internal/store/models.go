@@ -1375,6 +1375,7 @@ type PipelineRun struct {
 	FinishedAt     *time.Time `json:"finished_at"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+	CommittedAt    *time.Time `json:"committed_at"`
 }
 
 type PipelineSchedule struct {

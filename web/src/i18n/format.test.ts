@@ -112,6 +112,9 @@ describe('Khmer fallback for engines without Khmer locale data', () => {
     expect(formatRelative('2026-01-03T12:00:00Z', km, now, false)).toBe('ក្នុងរយៈពេល 2 ថ្ងៃ');
     expect(formatRelative('2026-01-01T11:59:58Z', km, now, false)).toBe('ឥឡូវនេះ');
     expect(formatDuration(83_000, kmDigits, false)).toBe('១ នាទី ២៣ វិនាទី');
+    expect(formatDuration(0, km, false)).toBe('0 វិនាទី');
+    expect(formatDuration((2 * 86400 + 3 * 3600 + 5) * 1000, km, false)).toBe('2 ថ្ងៃ 3 ម៉ោង');
+    expect(formatDuration(90 * 60_000, km, false)).toBe('1 ម៉ោង 30 នាទី');
   });
 
   it('leaves English untouched', () => {
