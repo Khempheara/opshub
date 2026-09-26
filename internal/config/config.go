@@ -89,6 +89,9 @@ type Config struct {
 	// (root-equivalent on that host; for single-machine setups and development).
 	DeployLocalDocker bool `env:"OPSHUB_DEPLOY_LOCAL_DOCKER" envDefault:"false"`
 
+	// LogRetentionDays is how long searchable logs are kept (whole days are dropped).
+	LogRetentionDays int `env:"OPSHUB_LOG_RETENTION_DAYS" envDefault:"30"`
+
 	SMTP SMTPConfig
 	SSO  SSOConfig
 }
@@ -178,6 +181,9 @@ func (c Config) Validate() error {
 		if v < 1 {
 			errs = append(errs, fmt.Errorf("%s must be positive", name))
 		}
+	}
+	if c.LogRetentionDays < 1 || c.LogRetentionDays > 365 {
+		errs = append(errs, fmt.Errorf("OPSHUB_LOG_RETENTION_DAYS must be between 1 and 365, got %d", c.LogRetentionDays))
 	}
 	if c.DBMaxConns < 1 {
 		errs = append(errs, errors.New("OPSHUB_DB_MAX_CONNS must be >= 1"))

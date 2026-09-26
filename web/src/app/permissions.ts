@@ -23,6 +23,8 @@ export const OrgAction = {
   alertAck: 'alert.ack',
   channelView: 'channel.view',
   channelManage: 'channel.manage',
+  logsView: 'logs.view',
+  logsManage: 'logs.manage',
 } as const;
 
 /**

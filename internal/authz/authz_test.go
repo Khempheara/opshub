@@ -37,6 +37,7 @@ func TestOrgPermissionMatrix(t *testing.T) {
 		AuditView:        {true, true, false, false},
 		AuditExport:      {true, true, false, false},
 		LogsView:         {true, true, true, true},
+		LogsManage:       {true, true, false, false},
 	}
 	assert.Len(t, OrgActions(), len(matrix), "every action in the matrix is covered by this test")
 	for action, want := range matrix {

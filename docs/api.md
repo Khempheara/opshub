@@ -213,12 +213,17 @@ See [monitoring.md](monitoring.md).
 | PATCH / DELETE | `/notification-channels/{channelId}` | JWT | `channel.manage` | **(IM)**; empty secrets keep the stored ones; DELETE refused while rules use it (`CHANNEL_IN_USE`) |
 | POST | `/notification-channels/{channelId}/test` | JWT | `channel.manage` | Sends a test message in the channel or recipient locale → `{ok, error}` |
 
-## 10. Logs
+## 10. Logs **(✓ Module 10)**
+
+See [logs.md](logs.md).
 
 | Method | Path | Auth | Action | Description |
 |---|---|---|---|---|
-| GET | `/orgs/{orgId}/logs` | JWT | `logs.view` | `?q=` full-text, `source`, `source_id`, `level`, `from`, `to` |
-| POST | `/ingest/logs` | Agent or API token (`logs:write` scope) | | Batch ingest (NDJSON, 1 MiB) |
+| GET | `/orgs/{orgId}/logs` | JWT | `logs.view` | Newest first. `from`, `to` (≤ 31 days, default last hour), `q` (full text; Khmer script matches as a substring), `source`, `service`, `level` (minimum), `before` / `after` cursors, `limit` ≤ 500. Job and deployment lines only for projects the caller sees |
+| GET | `/orgs/{orgId}/logs/services` | JWT | `logs.view` | Service names seen in the last day |
+| GET / POST | `/orgs/{orgId}/log-ingest-tokens` | JWT | `logs.manage` | One token (`ohl_…`) per service name; shown once |
+| DELETE | `/log-ingest-tokens/{tokenId}` | JWT | `logs.manage` | Revoke |
+| POST | `/ingest/logs` | Ingest token | | NDJSON, ≤ 1 MiB and 5,000 lines → `{accepted, rejected, errors[≤20]}` |
 
 ## 11. Audit log
 

@@ -25,7 +25,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.10.0
+ * OpenAPI spec version: 0.11.0
  */
 
 export * from './agentHeartbeat';
@@ -130,6 +130,12 @@ export * from './healthResult';
 export * from './idempotencyKeyParameter';
 export * from './identity';
 export * from './ifMatchParameter';
+export * from './ingestLineError';
+export * from './ingestLineErrorRule';
+export * from './ingestResult';
+export * from './ingestToken';
+export * from './ingestTokenList';
+export * from './ingestTokenRequest';
 export * from './invitation';
 export * from './invitationPage';
 export * from './invitationPreview';
@@ -164,11 +170,17 @@ export * from './listTeamsParams';
 export * from './listWebhookDeliveriesParams';
 export * from './locale';
 export * from './logChunk';
+export * from './logEntry';
+export * from './logEntryAttributes';
 export * from './loginRequest';
 export * from './loginResponse';
 export * from './loginResponseStatus';
 export * from './loginTwoFactorRequest';
+export * from './logLevel';
 export * from './logPage';
+export * from './logSearchResult';
+export * from './logServiceList';
+export * from './logSource';
 export * from './member';
 export * from './memberPage';
 export * from './meta';
@@ -229,6 +241,7 @@ export * from './runPage';
 export * from './runStatus';
 export * from './runTrigger';
 export * from './runVariables';
+export * from './searchLogsParams';
 export * from './secret';
 export * from './secretCreateRequest';
 export * from './secretList';

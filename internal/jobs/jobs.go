@@ -182,6 +182,11 @@ type MonitoringMaintenanceArgs struct{}
 
 func (MonitoringMaintenanceArgs) Kind() string { return "monitoring_maintenance" }
 
+// LogMaintenanceArgs runs hourly: creates upcoming log partitions and drops expired ones.
+type LogMaintenanceArgs struct{}
+
+func (LogMaintenanceArgs) Kind() string { return "log_maintenance" }
+
 // NotifyArgs sends one alert message (Event "firing" or "resolved") to one channel. It is
 // inserted in the transaction that fires, escalates or resolves the alert.
 type NotifyArgs struct {

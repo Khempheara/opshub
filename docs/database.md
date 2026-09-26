@@ -186,14 +186,23 @@ Every value a runner receives writes an `audit_log` row with action `secret.read
 `opshub_maintain_monitor_partitions(keep_months)` is the monitor counterpart of the
 metric-partition function (`SECURITY DEFINER`, `EXECUTE` granted to `opshub_app` only).
 
-### 10. Logs
+### 10. Logs **(✓ 000010)**
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `log_entries` | `organization_id`, `source (service\|deployment\|job)`, `source_id`, `level`, `ts`, `message`, `attributes jsonb`, `search tsvector GENERATED` | Range-partitioned by day; GIN index on `search`; retention job drops partitions older than the configured window (default 30 days) |
+| `log_entries` | `(ts, id)`, `organization_id`, `source (service\|job\|deployment)`, `source_id`, `project_id`, `service`, `level (debug\|info\|warn\|error)`, `message`, `attributes jsonb`, `search tsvector GENERATED` | `PARTITION BY RANGE (ts)`, one partition per UTC day; index `(organization_id, ts DESC, id DESC)` and GIN on `search`; partitions older than `OPSHUB_LOG_RETENTION_DAYS` are dropped |
+| `log_ingest_tokens` | `organization_id`, `name` (unique), `service`, `token_hash` (unique), `token_prefix`, `created_by`, `last_used_at` | Only the hash is stored; `last_used_at` is written at most once a minute |
 
-Full-text search uses the `simple` configuration (language-agnostic, so Khmer and English content are
-both indexed as tokens; log content is never translated).
+Full-text search uses the `simple` configuration (language-agnostic, never stemmed; log content is
+never translated) over `service` and `message`, with `/ : = .` turned into spaces so paths, hosts
+and `key=value` pairs are searchable by their parts. Khmer has no spaces between words, so queries
+in Khmer script use `ILIKE` on `message` instead.
+
+Triggers on `job_log_chunks` and `deployment_log_chunks` copy each non-empty line into
+`log_entries` (ANSI colours removed; red lines are `error`). Errors in the copy are caught and
+raised as warnings, so the original insert always succeeds.
+`opshub_maintain_log_partitions(keep_days)` creates partitions from 7 days back to 2 days ahead
+and drops expired ones (`SECURITY DEFINER`, `EXECUTE` granted to `opshub_app` only).
 
 ### 11. Audit log **(✓ 000001)**
 
@@ -223,7 +232,7 @@ Computed from existing tables (no new source of truth), materialized daily by a 
 | Role | Privileges | Used by |
 |---|---|---|
 | `opshub_migrator` | Owns schema; DDL | `cmd/api migrate` (Helm pre-upgrade Job / `make migrate-up`) |
-| `opshub_app` | `SELECT, INSERT, UPDATE, DELETE` on app tables; `INSERT, SELECT` only on `audit_log`; no `TRUNCATE`, no DDL (metric and monitor partitions via `SECURITY DEFINER` functions, §7 and §9) | API + workers |
+| `opshub_app` | `SELECT, INSERT, UPDATE, DELETE` on app tables; `INSERT, SELECT` only on `audit_log`; no `TRUNCATE`, no DDL (metric, monitor and log partitions via `SECURITY DEFINER` functions, §7, §9 and §10) | API + workers |
 | `opshub_backup` | `pg_read_all_data` | Backup job |
 
 In local dev a single superuser is used for convenience; `docker-compose.yml` creates the three roles to
@@ -235,7 +244,7 @@ mirror production.
 users `owner@demo.opshub.local`, `admin@…`, `dev@…`, `viewer@…` (one per role; one with `locale=km`),
 project **Payments API / API ទូទាត់ប្រាក់** with dev/staging/production environments (production
 protected), a sample `.opshub.yml`, one successful and one failed run, deployments incl. a rollback,
-infra assets, monitors and a firing alert. Descriptions are stored in both languages
+infra assets, monitors and a firing alert, and a log ingest token with recent checkout-service lines. Descriptions are stored in both languages
 (`"description": {"en": "…", "km": "…"}` in seed files; the UI shows the active language). Demo
 passwords are printed once and only in development.
 

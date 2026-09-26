@@ -189,8 +189,15 @@ acknowledges them; silences mute them during maintenance ([monitoring guide](doc
 The demo data includes an unreachable database monitor, so an alert fires a minute after
 `make seed` (the email arrives in Mailpit).
 
+## Logs
+
+**Organization → Logs** searches what your services send and what pipeline jobs and
+deployments print, in English or Khmer, with filters, paging and a follow mode. Admins create
+an ingest token per service, which sends newline-delimited JSON to `POST /api/v1/ingest/logs`.
+Lines are kept for `OPSHUB_LOG_RETENTION_DAYS` (default 30) ([logs guide](docs/logs.md)).
+
 ## Roadmap
 
 1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. ✅ CI/CD pipelines · 5. ✅ Runner agent ·
-6. ✅ Deployments · 7. ✅ Infrastructure · 8. ✅ Secrets · 9. ✅ Monitoring & alerts · 10. Logs ·
+6. ✅ Deployments · 7. ✅ Infrastructure · 8. ✅ Secrets · 9. ✅ Monitoring & alerts · 10. ✅ Logs ·
 11. Audit log · 12. Dashboard & DORA metrics

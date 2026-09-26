@@ -1,0 +1,81 @@
+{
+  "title": "Logs",
+  "description": "Search what your services, pipeline jobs and deployments write.",
+  "tabs": {
+    "label": "Logs sections",
+    "search": "Search",
+    "tokens": "Ingest tokens"
+  },
+  "search": {
+    "label": "Search logs",
+    "placeholder": "Search words, \"a phrase\" or -exclude…",
+    "submit": "Search",
+    "level": "Minimum level",
+    "allLevels": "All levels",
+    "source": "Source",
+    "allSources": "All sources",
+    "service": "Service",
+    "allServices": "All services",
+    "range": "Time range",
+    "follow": "Follow",
+    "following": "Following new lines",
+    "refresh": "Refresh",
+    "loadOlder": "Load older lines",
+    "trimmed": "Older lines were dropped while following. Refresh to page back again.",
+    "empty": "No log lines in this range",
+    "emptyHint": "Widen the time range or change the filters. Services send lines with an ingest token.",
+    "count_one": "{{count}} line",
+    "count_other": "{{count}} lines",
+    "attributes": "Attributes",
+    "noAttributes": "No attributes"
+  },
+  "ranges": {
+    "15m": "Last 15 minutes",
+    "1h": "Last hour",
+    "6h": "Last 6 hours",
+    "24h": "Last 24 hours",
+    "7d": "Last 7 days"
+  },
+  "levels": {
+    "debug": "Debug",
+    "info": "Info",
+    "warn": "Warning",
+    "error": "Error"
+  },
+  "sources": {
+    "service": "Services",
+    "job": "Pipeline jobs",
+    "deployment": "Deployments"
+  },
+  "tokens": {
+    "description": "Each token sends lines for one service. Treat tokens like passwords.",
+    "add": "New ingest token",
+    "addTitle": "New ingest token",
+    "addDescription": "The token can send lines only for the service you name here.",
+    "name": "Name",
+    "service": "Service",
+    "serviceHint": "Lowercase letters, digits, and . _ - /, for example shop/api.",
+    "serviceInvalid": "Use lowercase letters, digits, and . _ - / (starting with a letter or digit).",
+    "create": "Create token",
+    "createdTitle": "Ingest token created",
+    "createdBody": "Copy the token now: it won't be shown again.",
+    "example": "Send a test line",
+    "copyCommand": "Copy command",
+    "limits": "Send newline-delimited JSON, up to 1 MiB and 5,000 lines per request. Lines need a message; ts and level are optional.",
+    "empty": "No ingest tokens yet",
+    "emptyHint": "Create a token for each service that should send logs.",
+    "columns": {
+      "name": "Name",
+      "service": "Service",
+      "createdBy": "Created by",
+      "lastUsed": "Last used"
+    },
+    "never": "Never",
+    "revoke": {
+      "buttonFor": "Revoke {{name}}",
+      "title": "Revoke {{name}}?",
+      "body": "Services using this token can no longer send lines. Lines already stored are kept.",
+      "done": "Ingest token revoked"
+    }
+  }
+}

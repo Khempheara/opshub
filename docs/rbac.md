@@ -100,12 +100,16 @@ Owners or other Admins. They may change their own role or leave. Owners manage e
 | Create / rotate / delete secrets | ✅ | ✅ | ⚠️³ | — |
 | Reveal secret value | — | — | — | — |
 | Search service logs | ✅ | ✅ | ✅ | ✅ |
+| Search job and deployment logs | ✅ | ✅ | ⚠️⁴ | ✅ |
+| Create / revoke log ingest tokens | ✅ | ✅ | — | — |
 
 ² Only if the environment's protection rule allows `developer` (allowed roles mean "this role or higher"). Protection rules can
 additionally require N approvals from distinct users; the approver may not be the person who triggered the run.
 
 ³ Secrets of unprotected environments only. A secret for all environments also reaches protected
 ones, so it counts as protected.
+
+⁴ Only for projects granted to them or their teams (the project visibility rule).
 
 **Secrets are write-only for everyone.** After creation, values are only ever decrypted for the runner
 executing a job that lists them (audited as `secret.read`); there is no "reveal" permission
@@ -135,7 +139,7 @@ Actions are named `<resource>.<verb>`. They are used by `authz.Require`, listed 
 | Approvals | `approval.decide` |
 | Deployments | `deployment.view`, `deployment.create`, `deployment.rollback` |
 | Secrets | `secret.list`, `secret.create`, `secret.update`, `secret.rotate`, `secret.delete`; runner fetch audited as `secret.read` |
-| Logs | `logs.view` |
+| Logs · ingest tokens | `logs.view`, `logs.manage` (Owner/Admin); token changes audited as `log_token.create`, `log_token.revoke` |
 
 Organization changes are audited as `org.create`, `org.update`, `org.delete`, `org.transfer`,
 `member.invite`, `member.invite_revoke`, `member.join`, `member.update_role`, `member.remove`,

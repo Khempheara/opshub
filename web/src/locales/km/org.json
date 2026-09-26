@@ -7,7 +7,8 @@
     "runners": "Runner",
     "deployTargets": "គោលដៅដាក់ឱ្យដំណើរការ",
     "infrastructure": "ហេដ្ឋារចនាសម្ព័ន្ធ",
-    "monitoring": "ការត្រួតពិនិត្យ"
+    "monitoring": "ការត្រួតពិនិត្យ",
+    "logs": "កំណត់ហេតុ"
   },
   "roleDescriptions": {
     "owner": "គ្រប់គ្រងទាំងស្រុង រួមទាំងការលុបអង្គភាព និងការគ្រប់គ្រង Owner។",
