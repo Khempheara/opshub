@@ -49,10 +49,12 @@ const (
 	TemplateTwoFactorEnabled  = "two_factor_enabled"
 	TemplateTwoFactorDisabled = "two_factor_disabled"
 	TemplateInvitation        = "invitation"
+	TemplateAlert             = "alert"
+	TemplateAlertTest         = "alert_test"
 )
 
 // Templates lists every template (used by tests to check both locales render).
-var Templates = []string{TemplateVerifyEmail, TemplateResetPassword, TemplatePasswordChanged, TemplateAccountExists, TemplateTwoFactorEnabled, TemplateTwoFactorDisabled, TemplateInvitation}
+var Templates = []string{TemplateVerifyEmail, TemplateResetPassword, TemplatePasswordChanged, TemplateAccountExists, TemplateTwoFactorEnabled, TemplateTwoFactorDisabled, TemplateInvitation, TemplateAlert, TemplateAlertTest}
 
 //go:embed templates/*
 var templateFS embed.FS

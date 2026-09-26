@@ -14,9 +14,12 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/opshub/opshub/api"
+	"github.com/opshub/opshub/internal/alert"
 	"github.com/opshub/opshub/internal/auth"
 	"github.com/opshub/opshub/internal/deploy"
 	"github.com/opshub/opshub/internal/infra"
+	"github.com/opshub/opshub/internal/monitor"
+	"github.com/opshub/opshub/internal/notify"
 	"github.com/opshub/opshub/internal/org"
 	"github.com/opshub/opshub/internal/pipeline"
 	"github.com/opshub/opshub/internal/project"
@@ -56,6 +59,9 @@ func TestOpenAPIMatchesRoutes(t *testing.T) {
 		deploy.NewHandler(nil, nil, func(h http.Handler) http.Handler { return h }),
 		infra.NewHandler(nil),
 		secret.NewHandler(nil),
+		monitor.NewHandler(nil),
+		alert.NewHandler(nil),
+		notify.NewHandler(nil),
 	} {
 		m.Mount(r)
 	}

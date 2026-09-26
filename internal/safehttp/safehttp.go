@@ -32,6 +32,8 @@ type Options struct {
 	AllowedCIDRs []netip.Prefix
 	// Timeout bounds the whole request, including reading the body. Default 15 s.
 	Timeout time.Duration
+	// ResponseHeaderTimeout bounds the wait for response headers. Default 10 s.
+	ResponseHeaderTimeout time.Duration
 }
 
 // blocked lists ranges that are never reachable unless allow-listed. netip's IsPrivate,
@@ -98,6 +100,9 @@ func NewClient(o Options) *http.Client {
 	if o.Timeout == 0 {
 		o.Timeout = 15 * time.Second
 	}
+	if o.ResponseHeaderTimeout == 0 {
+		o.ResponseHeaderTimeout = 10 * time.Second
+	}
 	dialer := o.Dialer()
 	transport := &http.Transport{
 		Proxy:                 nil, // a proxy would hide the real destination from the check
@@ -106,7 +111,7 @@ func NewClient(o Options) *http.Client {
 		MaxIdleConns:          20,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,
-		ResponseHeaderTimeout: 10 * time.Second,
+		ResponseHeaderTimeout: o.ResponseHeaderTimeout,
 	}
 	return &http.Client{
 		Transport: transport,

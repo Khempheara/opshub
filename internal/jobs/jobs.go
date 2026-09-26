@@ -155,11 +155,56 @@ type CertificateChecksArgs struct{}
 
 func (CertificateChecksArgs) Kind() string { return "certificate_checks" }
 
+// MonitorChecksArgs runs the uptime checks that are due (every 15 s).
+type MonitorChecksArgs struct{}
+
+func (MonitorChecksArgs) Kind() string { return "monitor_checks" }
+
+func (MonitorChecksArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{Queue: QueueMonitoring, UniqueOpts: river.UniqueOpts{ByState: []rivertype.JobState{
+		rivertype.JobStateAvailable, rivertype.JobStatePending, rivertype.JobStateRunning, rivertype.JobStateRetryable, rivertype.JobStateScheduled,
+	}}}
+}
+
+// AlertEvaluationArgs evaluates alert rules and sends due escalation steps (every 30 s).
+type AlertEvaluationArgs struct{}
+
+func (AlertEvaluationArgs) Kind() string { return "alert_evaluation" }
+
+func (AlertEvaluationArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{Queue: QueueMonitoring, UniqueOpts: river.UniqueOpts{ByState: []rivertype.JobState{
+		rivertype.JobStateAvailable, rivertype.JobStatePending, rivertype.JobStateRunning, rivertype.JobStateRetryable, rivertype.JobStateScheduled,
+	}}}
+}
+
+// MonitoringMaintenanceArgs runs hourly: result rollups, retention and partitions.
+type MonitoringMaintenanceArgs struct{}
+
+func (MonitoringMaintenanceArgs) Kind() string { return "monitoring_maintenance" }
+
+// NotifyArgs sends one alert message (Event "firing" or "resolved") to one channel. It is
+// inserted in the transaction that fires, escalates or resolves the alert.
+type NotifyArgs struct {
+	AlertID   uuid.UUID `json:"alert_id"`
+	ChannelID uuid.UUID `json:"channel_id"`
+	Event     string    `json:"event"`
+	Step      int       `json:"step"`
+}
+
+func (NotifyArgs) Kind() string { return "notify" }
+
+func (NotifyArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{Queue: QueueMonitoring, MaxAttempts: 5, UniqueOpts: river.UniqueOpts{ByArgs: true}}
+}
+
 const (
 	QueueDeploys   = "deploys"
 	QueuePipelines = "pipelines"
 	QueueDefault   = river.QueueDefault
 	QueueEmail     = "email"
+	// QueueMonitoring runs uptime checks, alert evaluation and notifications, so slow
+	// endpoints or webhooks never hold up other work.
+	QueueMonitoring = "monitoring"
 )
 
 // Deps are the collaborators workers need.
@@ -187,10 +232,11 @@ func NewClient(d Deps) (*river.Client[pgx.Tx], error) {
 	client, err := river.NewClient(riverpgxv5.New(d.Pool), &river.Config{
 		Logger: d.Logger,
 		Queues: map[string]river.QueueConfig{
-			QueueDefault:   {MaxWorkers: 20},
-			QueueEmail:     {MaxWorkers: 5},
-			QueuePipelines: {MaxWorkers: 10},
-			QueueDeploys:   {MaxWorkers: 10},
+			QueueDefault:    {MaxWorkers: 20},
+			QueueEmail:      {MaxWorkers: 5},
+			QueuePipelines:  {MaxWorkers: 10},
+			QueueDeploys:    {MaxWorkers: 10},
+			QueueMonitoring: {MaxWorkers: 10},
 		},
 		Workers: workers,
 		PeriodicJobs: append([]*river.PeriodicJob{

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpsHub API
-  version: 0.9.0
+  version: 0.10.0
   summary: All-in-One DevOps Platform
   description: |
     REST API for OpsHub. All resource endpoints are versioned under `/api/v1`.
@@ -76,6 +76,12 @@ tags:
       The organization's asset inventory (servers, clusters, databases, domains), metrics from
       infra agents and TLS certificates probed on domains (docs/infrastructure.md). Assets the
       caller can't see answer 404 ASSET_NOT_FOUND.
+  - name: monitoring
+    description: |
+      Uptime monitors (HTTP, TCP, SSL) checked by OpsHub, alert rules over monitors and the
+      infrastructure of Module 7, alerts with escalation and acknowledgement, silences, and
+      notification channels (Telegram, Slack, email, webhooks) with write-only credentials
+      (docs/monitoring.md).
   - name: secrets
     description: |
       Write-only project secrets (docs/secrets.md): no endpoint returns a value. Values are
@@ -2277,6 +2283,399 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /api/v1/orgs/{orgId}/monitors:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [monitoring]
+      operationId: listMonitors
+      summary: "Uptime monitors with their state and 24-hour uptime (monitor.view)"
+      parameters:
+        - { name: label, in: query, schema: { type: string } }
+        - { name: q, in: query, description: "Name or target contains", schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [up, down, pending, paused] } }
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MonitorList" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [monitoring]
+      operationId: createMonitor
+      summary: "Create a monitor; its first check runs within 15 seconds (monitor.manage)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MonitorRequest" }
+      responses:
+        "201":
+          description: "Created."
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Monitor" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/monitors/{monitorId}:
+    parameters:
+      - $ref: "#/components/parameters/MonitorID"
+    get:
+      tags: [monitoring]
+      operationId: getMonitor
+      summary: "One monitor (monitor.view)"
+      responses:
+        "200":
+          description: "OK."
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Monitor" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [monitoring]
+      operationId: updateMonitor
+      summary: "Replace a monitor; enabled=false pauses it (monitor.manage)"
+      description: "The kind can't change. Changing the target or settings forgets the last state and checks again."
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MonitorRequest" }
+      responses:
+        "200":
+          description: "Updated."
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Monitor" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "428": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [monitoring]
+      operationId: deleteMonitor
+      summary: "Delete a monitor with its results (monitor.manage)"
+      responses:
+        "204": { description: "Deleted." }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/monitors/{monitorId}/results:
+    parameters:
+      - $ref: "#/components/parameters/MonitorID"
+    get:
+      tags: [monitoring]
+      operationId: getMonitorResults
+      summary: "Uptime and latency per step, and the latest checks (monitor.view)"
+      description: "Raw results cover the last 30 days; older ranges use hourly rollups (kept 400 days). The step is chosen for at most ~300 points unless given (at most 1000)."
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: step, in: query, description: "Go duration such as 5m or 1h", schema: { type: string } }
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MonitorResults" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/alert-rules:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [monitoring]
+      operationId: listAlertRules
+      summary: "Alert rules with the number of firing alerts (monitor.view)"
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRuleList" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [monitoring]
+      operationId: createAlertRule
+      summary: "Create an alert rule (monitor.manage)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertRuleRequest" }
+      responses:
+        "201":
+          description: "Created."
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRule" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/alert-rules/{ruleId}:
+    parameters:
+      - $ref: "#/components/parameters/RuleID"
+    get:
+      tags: [monitoring]
+      operationId: getAlertRule
+      summary: "One alert rule (monitor.view)"
+      responses:
+        "200":
+          description: "OK."
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRule" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [monitoring]
+      operationId: updateAlertRule
+      summary: "Replace an alert rule (monitor.manage)"
+      description: "The kind can't change. Disabling a rule resolves its alerts."
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertRuleRequest" }
+      responses:
+        "200":
+          description: "Updated."
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRule" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "428": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [monitoring]
+      operationId: deleteAlertRule
+      summary: "Delete an alert rule; its alerts are resolved and kept as history (monitor.manage)"
+      responses:
+        "204": { description: "Deleted." }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/alerts:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [monitoring]
+      operationId: listAlerts
+      summary: "Firing alerts first, then resolved ones, newest first; 100 at most (monitor.view)"
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [firing, resolved] } }
+        - { name: severity, in: query, schema: { $ref: "#/components/schemas/AlertSeverity" } }
+        - { name: before, in: query, description: "Paging: alerts that started before this time", schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertList" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/alerts/{alertId}:
+    parameters:
+      - $ref: "#/components/parameters/AlertID"
+    get:
+      tags: [monitoring]
+      operationId: getAlert
+      summary: "An alert with its timeline (monitor.view)"
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/alerts/{alertId}/acknowledge:
+    parameters:
+      - $ref: "#/components/parameters/AlertID"
+    post:
+      tags: [monitoring]
+      operationId: acknowledgeAlert
+      summary: "Acknowledge a firing alert: no further escalation steps (alert.ack)"
+      description: "The alert keeps firing until its condition clears. ALERT_NOT_FIRING when resolved or already acknowledged."
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertDetail" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/silences:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [monitoring]
+      operationId: listSilences
+      summary: "Active and upcoming silences (monitor.view)"
+      parameters:
+        - { name: include_expired, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SilenceList" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [monitoring]
+      operationId: createSilence
+      summary: "Mute notifications of matching alerts for a while (monitor.manage)"
+      description: "Every matcher that is set must match; at least one is required. At most 90 days."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SilenceRequest" }
+      responses:
+        "201":
+          description: "Created."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Silence" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/silences/{silenceId}:
+    parameters:
+      - $ref: "#/components/parameters/SilenceID"
+    delete:
+      tags: [monitoring]
+      operationId: expireSilence
+      summary: "End a silence now (monitor.manage)"
+      responses:
+        "204": { description: "Ended." }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/notification-channels:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [monitoring]
+      operationId: listNotificationChannels
+      summary: "Notification channels (channel.view); credentials are never returned"
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationChannelList" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [monitoring]
+      operationId: createNotificationChannel
+      summary: "Create a notification channel (channel.manage)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationChannelRequest" }
+      responses:
+        "201":
+          description: "Created."
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationChannel" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/notification-channels/{channelId}:
+    parameters:
+      - $ref: "#/components/parameters/ChannelID"
+    patch:
+      tags: [monitoring]
+      operationId: updateNotificationChannel
+      summary: "Replace a channel; empty secrets keep the stored ones (channel.manage)"
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationChannelRequest" }
+      responses:
+        "200":
+          description: "Updated."
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationChannel" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "428": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [monitoring]
+      operationId: deleteNotificationChannel
+      summary: "Delete a channel (channel.manage)"
+      description: "CHANNEL_IN_USE (details.rules) while alert rules notify it."
+      responses:
+        "204": { description: "Deleted." }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/v1/notification-channels/{channelId}/test:
+    parameters:
+      - $ref: "#/components/parameters/ChannelID"
+    post:
+      tags: [monitoring]
+      operationId: testNotificationChannel
+      summary: "Send a test message in the channel or recipient language (channel.manage)"
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelTestResult" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /api/v1/agent/heartbeat:
     post:
       tags: [infrastructure]
@@ -2623,6 +3022,31 @@ components:
       schema: { type: string, format: uuid }
     JobID:
       name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    MonitorID:
+      name: monitorId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RuleID:
+      name: ruleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AlertID:
+      name: alertId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SilenceID:
+      name: silenceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ChannelID:
+      name: channelId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -4164,6 +4588,269 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/SecretVersion" }
+
+    MonitorKind: { type: string, enum: [http, tcp, ssl] }
+    MonitorSettings:
+      type: object
+      description: "By kind. http: method, expected_status (empty = 200–399), keyword. ssl: expiry_days."
+      properties:
+        method: { type: string, enum: [GET, HEAD] }
+        expected_status: { type: array, maxItems: 20, items: { type: integer, minimum: 100, maximum: 599 } }
+        keyword: { type: string, maxLength: 200 }
+        expiry_days: { type: integer, minimum: 1, maximum: 90 }
+    Monitor:
+      type: object
+      required: [id, name, kind, target, interval_seconds, timeout_ms, settings, labels, enabled, status, last_checked_at, last_latency_ms, last_error, down_since, uptime_24h, version, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/MonitorKind" }
+        target: { type: string, description: "A URL for http; host:port for tcp and ssl." }
+        interval_seconds: { type: integer }
+        timeout_ms: { type: integer }
+        settings: { $ref: "#/components/schemas/MonitorSettings" }
+        labels: { type: array, items: { type: string } }
+        enabled: { type: boolean }
+        status: { type: string, enum: [up, down, pending, paused] }
+        last_checked_at: { type: [string, "null"], format: date-time }
+        last_latency_ms: { type: [integer, "null"] }
+        last_error: { type: string }
+        down_since: { type: [string, "null"], format: date-time }
+        uptime_24h: { type: [number, "null"], description: "Percent of successful checks in the last 24 hours." }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    MonitorList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Monitor" } }
+    MonitorRequest:
+      type: object
+      additionalProperties: false
+      required: [name, target]
+      properties:
+        name: { type: string, maxLength: 100 }
+        kind: { $ref: "#/components/schemas/MonitorKind" }
+        target: { type: string, maxLength: 2048 }
+        interval_seconds: { type: integer, minimum: 30, maximum: 3600, description: "Default 60." }
+        timeout_ms: { type: integer, minimum: 1000, maximum: 30000, description: "Default 10000; less than the interval." }
+        settings: { $ref: "#/components/schemas/MonitorSettings" }
+        labels: { type: array, maxItems: 20, items: { type: string, pattern: "^[a-z0-9][a-z0-9._:-]{0,62}$" } }
+        enabled: { type: boolean, description: "Default true; false pauses the monitor." }
+    MonitorPoint:
+      type: object
+      required: [t, checks, up_checks, latency_avg, latency_max]
+      properties:
+        t: { type: string, format: date-time }
+        checks: { type: integer }
+        up_checks: { type: integer }
+        latency_avg: { type: [number, "null"] }
+        latency_max: { type: [integer, "null"] }
+    MonitorCheck:
+      type: object
+      required: [at, up, latency_ms, status_code, error]
+      properties:
+        at: { type: string, format: date-time }
+        up: { type: boolean }
+        latency_ms: { type: [integer, "null"] }
+        status_code: { type: [integer, "null"] }
+        error: { type: string }
+    MonitorResults:
+      type: object
+      required: [from, to, step_seconds, source, uptime, points, recent]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        step_seconds: { type: integer }
+        source: { type: string, enum: [raw, hourly] }
+        uptime: { type: [number, "null"], description: "Percent of successful checks in the range." }
+        points: { type: array, items: { $ref: "#/components/schemas/MonitorPoint" } }
+        recent: { type: array, items: { $ref: "#/components/schemas/MonitorCheck" }, description: "The latest 20 checks, newest first." }
+    AlertRuleKind: { type: string, enum: [monitor_down, monitor_latency, asset_metric, asset_offline, certificate] }
+    AlertSeverity: { type: string, enum: [info, warning, critical] }
+    EscalationStep:
+      type: object
+      required: [after_minutes, channel_ids]
+      properties:
+        after_minutes: { type: integer, minimum: 0, maximum: 1440, description: "0 for the first step; increasing after that." }
+        channel_ids: { type: array, minItems: 1, maxItems: 10, items: { type: string, format: uuid } }
+    AlertRule:
+      type: object
+      required: [id, name, kind, target_id, label, threshold, metric, for_seconds, severity, escalation, enabled, firing, version, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/AlertRuleKind" }
+        target_id: { type: [string, "null"], format: uuid, description: "One monitor or asset; null = all of them." }
+        label: { type: [string, "null"], description: "Only monitors with this label or assets with this tag." }
+        threshold: { type: [number, "null"], description: "monitor_latency: ms; asset_metric: percent; certificate: days." }
+        metric: { type: [string, "null"], enum: [cpu, mem, disk, null] }
+        for_seconds: { type: integer, description: "How long the condition must hold before the alert fires." }
+        severity: { $ref: "#/components/schemas/AlertSeverity" }
+        escalation: { type: array, items: { $ref: "#/components/schemas/EscalationStep" } }
+        enabled: { type: boolean }
+        firing: { type: integer }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AlertRuleList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AlertRule" } }
+    AlertRuleRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 100 }
+        kind: { $ref: "#/components/schemas/AlertRuleKind" }
+        target_id: { type: [string, "null"], format: uuid }
+        label: { type: [string, "null"] }
+        threshold: { type: [number, "null"] }
+        metric: { type: [string, "null"], enum: [cpu, mem, disk, null] }
+        for_seconds: { type: integer, minimum: 0, maximum: 86400 }
+        severity: { $ref: "#/components/schemas/AlertSeverity" }
+        escalation: { type: array, maxItems: 5, items: { $ref: "#/components/schemas/EscalationStep" } }
+        enabled: { type: boolean }
+    AlertDetails:
+      type: object
+      description: "What the rule observed; only the fields of its kind are set."
+      properties:
+        value: { type: number }
+        threshold: { type: number }
+        metric: { type: string }
+        error: { type: string }
+        since: { type: string, format: date-time }
+        not_after: { type: string, format: date-time }
+        days: { type: integer }
+    Alert:
+      type: object
+      required: [id, rule_id, rule_name, rule_kind, severity, subject_type, subject_id, subject_name, subject_labels, status, details, started_at, resolved_at, acknowledged_at, acknowledged_by_name, silenced]
+      properties:
+        id: { type: string, format: uuid }
+        rule_id: { type: [string, "null"], format: uuid, description: "null once the rule was deleted." }
+        rule_name: { type: string }
+        rule_kind: { $ref: "#/components/schemas/AlertRuleKind" }
+        severity: { $ref: "#/components/schemas/AlertSeverity" }
+        subject_type: { type: string, enum: [monitor, asset] }
+        subject_id: { type: string, format: uuid }
+        subject_name: { type: string }
+        subject_labels: { type: array, items: { type: string } }
+        status: { type: string, enum: [firing, resolved] }
+        details: { $ref: "#/components/schemas/AlertDetails" }
+        started_at: { type: [string, "null"], format: date-time }
+        resolved_at: { type: [string, "null"], format: date-time }
+        acknowledged_at: { type: [string, "null"], format: date-time }
+        acknowledged_by_name: { type: [string, "null"] }
+        silenced: { type: boolean, description: "An active silence mutes it now." }
+    AlertList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Alert" } }
+    AlertEvent:
+      type: object
+      required: [at, kind, channel_id, channel_name, user_name, detail]
+      properties:
+        at: { type: string, format: date-time }
+        kind: { type: string, enum: [fired, notified, notify_failed, escalated, acknowledged, silenced, resolved] }
+        channel_id: { type: [string, "null"], format: uuid }
+        channel_name: { type: string }
+        user_name: { type: [string, "null"] }
+        detail: { type: string }
+    AlertDetail:
+      allOf:
+        - $ref: "#/components/schemas/Alert"
+        - type: object
+          required: [events]
+          properties:
+            events: { type: array, items: { $ref: "#/components/schemas/AlertEvent" } }
+    Silence:
+      type: object
+      required: [id, rule_id, rule_name, subject_id, label, severity, comment, starts_at, ends_at, active, created_by_name, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        rule_id: { type: [string, "null"], format: uuid }
+        rule_name: { type: [string, "null"] }
+        subject_id: { type: [string, "null"], format: uuid }
+        label: { type: [string, "null"] }
+        severity: { oneOf: [{ $ref: "#/components/schemas/AlertSeverity" }, { type: "null" }] }
+        comment: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        active: { type: boolean }
+        created_by_name: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    SilenceList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Silence" } }
+    SilenceRequest:
+      type: object
+      additionalProperties: false
+      required: [ends_at]
+      properties:
+        rule_id: { type: [string, "null"], format: uuid }
+        subject_id: { type: [string, "null"], format: uuid, description: "A monitor or asset." }
+        label: { type: [string, "null"] }
+        severity: { oneOf: [{ $ref: "#/components/schemas/AlertSeverity" }, { type: "null" }] }
+        comment: { type: string, maxLength: 500 }
+        starts_at: { type: [string, "null"], format: date-time, description: "Default now." }
+        ends_at: { type: string, format: date-time }
+    ChannelKind: { type: string, enum: [telegram, slack, email, webhook] }
+    ChannelConfig:
+      type: object
+      description: "Non-secret settings by kind. telegram: chat_id. email: addresses. webhook: url."
+      properties:
+        chat_id: { type: string }
+        addresses: { type: array, maxItems: 20, items: { type: string, format: email } }
+        url: { type: string }
+    ChannelSecrets:
+      type: object
+      description: "Write-only by kind. telegram: bot_token. slack: webhook_url (https). webhook: signing_secret (optional; X-OpsHub-Signature is sha256= HMAC of the body)."
+      properties:
+        bot_token: { type: string }
+        webhook_url: { type: string }
+        signing_secret: { type: string, minLength: 16, maxLength: 256 }
+    NotificationChannel:
+      type: object
+      required: [id, name, kind, config, secrets, locale, last_test_at, last_test_ok, version, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/ChannelKind" }
+        config: { $ref: "#/components/schemas/ChannelConfig" }
+        secrets: { type: array, items: { type: string }, description: "Names of the credentials that are set." }
+        locale: { type: [string, "null"], enum: [en, km, null], description: "null = each member recipient's language, else the default." }
+        last_test_at: { type: [string, "null"], format: date-time }
+        last_test_ok: { type: [boolean, "null"] }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    NotificationChannelList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/NotificationChannel" } }
+    NotificationChannelRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 100 }
+        kind: { $ref: "#/components/schemas/ChannelKind" }
+        config: { $ref: "#/components/schemas/ChannelConfig" }
+        secrets: { $ref: "#/components/schemas/ChannelSecrets" }
+        locale: { type: [string, "null"], description: "en, km, or empty/null for the recipient's language." }
+    ChannelTestResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        error: { type: string, description: "Why it failed, without credentials." }
 
     ErrorCode:
       type: string

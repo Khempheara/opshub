@@ -170,16 +170,21 @@ Every value a runner receives writes an `audit_log` row with action `secret.read
 `opshub-api keys rotate` re-encrypts every key-ring column under the active master key
 ([secrets.md](secrets.md#rotating-the-master-key)).
 
-### 9. Monitoring & alerts
+### 9. Monitoring & alerts **(✓ 000009)**
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `monitors` | `organization_id`, `kind (http\|tcp\|ssl)`, `target`, `interval_seconds`, `timeout_ms`, `expected jsonb` | Scheduled by River periodic jobs |
-| `monitor_results` | `monitor_id`, `ts`, `up bool`, `latency_ms`, `error` | Partitioned by month |
-| `alert_rules` | `organization_id`, `source (monitor\|metric)`, `condition jsonb`, `threshold`, `for_seconds`, `severity`, `escalation jsonb` | |
-| `alerts` | `rule_id`, `status (firing\|resolved)`, `started_at`, `resolved_at`, `silenced_until`, `acknowledged_by` | Also feeds MTTR |
-| `silences` | `organization_id`, `matchers jsonb`, `starts_at`, `ends_at`, `created_by` | |
-| `notification_channels` | `organization_id`, `kind (telegram\|slack\|email\|webhook)`, `config_enc`, `locale NULL` | Channel locale overrides recipient locale |
+| `monitors` | `organization_id`, `name` (unique), `kind (http\|tcp\|ssl)`, `target`, `interval_seconds`, `timeout_ms`, `config jsonb`, `labels`, `enabled`, `last_up`, `last_latency_ms`, `last_error`, `down_since`, `next_check_at`, `version` | Due checks are claimed with `FOR UPDATE SKIP LOCKED` and rescheduled in one statement; `updated_at` changes only with `version` |
+| `monitor_results` | `(monitor_id, ts)`, `up`, `latency_ms`, `status_code`, `error` | `PARTITION BY RANGE (ts)`, monthly; current + previous month kept |
+| `monitor_results_hourly` | `(monitor_id, hour)`, `checks`, `up_checks`, `latency_avg`, `latency_max` | Kept 400 days |
+| `alert_rules` | `organization_id`, `name` (unique), `kind (monitor_down\|monitor_latency\|asset_metric\|asset_offline\|certificate)`, `target_id`, `label`, `threshold`, `metric`, `for_seconds`, `severity (info\|warning\|critical)`, `escalation jsonb`, `enabled` | Escalation: `[{after_minutes, channel_ids[]}]` |
+| `alerts` | `rule_id` (`SET NULL`), `rule_name`, `rule_kind`, `severity`, `subject_type (monitor\|asset)`, `subject_id`, `subject_name`, `subject_labels`, `status (pending\|firing\|resolved)`, `details jsonb`, `pending_since`, `started_at`, `resolved_at`, `acknowledged_by/at`, `next_step`, `next_step_at` | One open alert per rule and subject (partial unique index); resolved alerts are history (MTTR in Module 12) |
+| `alert_events` | `alert_id`, `at`, `kind`, `channel_id`, `channel_name`, `user_id`, `detail` | The alert's timeline |
+| `silences` | `organization_id`, `rule_id`, `subject_id`, `label`, `severity`, `comment`, `starts_at`, `ends_at`, `created_by` | At least one matcher (CHECK) |
+| `notification_channels` | `organization_id`, `name` (unique), `kind (telegram\|slack\|email\|webhook)`, `config jsonb`, `secrets_enc`, `locale NULL`, `last_test_at/ok`, `version` | Credentials sealed by the key ring (aad = id); channel locale overrides the recipient's |
+
+`opshub_maintain_monitor_partitions(keep_months)` is the monitor counterpart of the
+metric-partition function (`SECURITY DEFINER`, `EXECUTE` granted to `opshub_app` only).
 
 ### 10. Logs
 
@@ -218,7 +223,7 @@ Computed from existing tables (no new source of truth), materialized daily by a 
 | Role | Privileges | Used by |
 |---|---|---|
 | `opshub_migrator` | Owns schema; DDL | `cmd/api migrate` (Helm pre-upgrade Job / `make migrate-up`) |
-| `opshub_app` | `SELECT, INSERT, UPDATE, DELETE` on app tables; `INSERT, SELECT` only on `audit_log`; no `TRUNCATE`, no DDL (metric partitions via one `SECURITY DEFINER` function, §7) | API + workers |
+| `opshub_app` | `SELECT, INSERT, UPDATE, DELETE` on app tables; `INSERT, SELECT` only on `audit_log`; no `TRUNCATE`, no DDL (metric and monitor partitions via `SECURITY DEFINER` functions, §7 and §9) | API + workers |
 | `opshub_backup` | `pg_read_all_data` | Backup job |
 
 In local dev a single superuser is used for convenience; `docker-compose.yml` creates the three roles to

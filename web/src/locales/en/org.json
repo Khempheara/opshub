@@ -6,7 +6,8 @@
     "group": "Organization",
     "runners": "Runners",
     "deployTargets": "Deploy targets",
-    "infrastructure": "Infrastructure"
+    "infrastructure": "Infrastructure",
+    "monitoring": "Monitoring"
   },
   "roleDescriptions": {
     "owner": "Full control, including deleting the organization and managing owners.",

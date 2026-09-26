@@ -13,6 +13,137 @@ import (
 	"github.com/google/uuid"
 )
 
+type AlertRuleKind string
+
+const (
+	AlertRuleKindMonitorDown    AlertRuleKind = "monitor_down"
+	AlertRuleKindMonitorLatency AlertRuleKind = "monitor_latency"
+	AlertRuleKindAssetMetric    AlertRuleKind = "asset_metric"
+	AlertRuleKindAssetOffline   AlertRuleKind = "asset_offline"
+	AlertRuleKindCertificate    AlertRuleKind = "certificate"
+)
+
+func (e *AlertRuleKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AlertRuleKind(s)
+	case string:
+		*e = AlertRuleKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AlertRuleKind: %T", src)
+	}
+	return nil
+}
+
+type NullAlertRuleKind struct {
+	AlertRuleKind AlertRuleKind `json:"alert_rule_kind"`
+	Valid         bool          `json:"valid"` // Valid is true if AlertRuleKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAlertRuleKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.AlertRuleKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AlertRuleKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAlertRuleKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AlertRuleKind), nil
+}
+
+type AlertSeverity string
+
+const (
+	AlertSeverityInfo     AlertSeverity = "info"
+	AlertSeverityWarning  AlertSeverity = "warning"
+	AlertSeverityCritical AlertSeverity = "critical"
+)
+
+func (e *AlertSeverity) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AlertSeverity(s)
+	case string:
+		*e = AlertSeverity(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AlertSeverity: %T", src)
+	}
+	return nil
+}
+
+type NullAlertSeverity struct {
+	AlertSeverity AlertSeverity `json:"alert_severity"`
+	Valid         bool          `json:"valid"` // Valid is true if AlertSeverity is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAlertSeverity) Scan(value interface{}) error {
+	if value == nil {
+		ns.AlertSeverity, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AlertSeverity.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAlertSeverity) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AlertSeverity), nil
+}
+
+type AlertStatus string
+
+const (
+	AlertStatusPending  AlertStatus = "pending"
+	AlertStatusFiring   AlertStatus = "firing"
+	AlertStatusResolved AlertStatus = "resolved"
+)
+
+func (e *AlertStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AlertStatus(s)
+	case string:
+		*e = AlertStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AlertStatus: %T", src)
+	}
+	return nil
+}
+
+type NullAlertStatus struct {
+	AlertStatus AlertStatus `json:"alert_status"`
+	Valid       bool        `json:"valid"` // Valid is true if AlertStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAlertStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.AlertStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AlertStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAlertStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AlertStatus), nil
+}
+
 type ApprovalDecision string
 
 const (
@@ -97,6 +228,50 @@ func (ns NullAssetKind) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.AssetKind), nil
+}
+
+type ChannelKind string
+
+const (
+	ChannelKindTelegram ChannelKind = "telegram"
+	ChannelKindSlack    ChannelKind = "slack"
+	ChannelKindEmail    ChannelKind = "email"
+	ChannelKindWebhook  ChannelKind = "webhook"
+)
+
+func (e *ChannelKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ChannelKind(s)
+	case string:
+		*e = ChannelKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ChannelKind: %T", src)
+	}
+	return nil
+}
+
+type NullChannelKind struct {
+	ChannelKind ChannelKind `json:"channel_kind"`
+	Valid       bool        `json:"valid"` // Valid is true if ChannelKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullChannelKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.ChannelKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ChannelKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullChannelKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ChannelKind), nil
 }
 
 type DeployStrategy string
@@ -447,6 +622,49 @@ func (ns NullMemberRole) Value() (driver.Value, error) {
 	return string(ns.MemberRole), nil
 }
 
+type MonitorKind string
+
+const (
+	MonitorKindHttp MonitorKind = "http"
+	MonitorKindTcp  MonitorKind = "tcp"
+	MonitorKindSsl  MonitorKind = "ssl"
+)
+
+func (e *MonitorKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = MonitorKind(s)
+	case string:
+		*e = MonitorKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for MonitorKind: %T", src)
+	}
+	return nil
+}
+
+type NullMonitorKind struct {
+	MonitorKind MonitorKind `json:"monitor_kind"`
+	Valid       bool        `json:"valid"` // Valid is true if MonitorKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullMonitorKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.MonitorKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.MonitorKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullMonitorKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.MonitorKind), nil
+}
+
 type RunStatus string
 
 const (
@@ -624,6 +842,58 @@ func (ns NullWebhookMode) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.WebhookMode), nil
+}
+
+type Alert struct {
+	ID             uuid.UUID     `json:"id"`
+	OrganizationID uuid.UUID     `json:"organization_id"`
+	RuleID         *uuid.UUID    `json:"rule_id"`
+	RuleName       string        `json:"rule_name"`
+	RuleKind       AlertRuleKind `json:"rule_kind"`
+	Severity       AlertSeverity `json:"severity"`
+	SubjectType    string        `json:"subject_type"`
+	SubjectID      uuid.UUID     `json:"subject_id"`
+	SubjectName    string        `json:"subject_name"`
+	SubjectLabels  []string      `json:"subject_labels"`
+	Status         AlertStatus   `json:"status"`
+	Details        []byte        `json:"details"`
+	PendingSince   time.Time     `json:"pending_since"`
+	StartedAt      *time.Time    `json:"started_at"`
+	ResolvedAt     *time.Time    `json:"resolved_at"`
+	AcknowledgedBy *uuid.UUID    `json:"acknowledged_by"`
+	AcknowledgedAt *time.Time    `json:"acknowledged_at"`
+	NextStep       int32         `json:"next_step"`
+	NextStepAt     *time.Time    `json:"next_step_at"`
+}
+
+type AlertEvent struct {
+	ID          int64      `json:"id"`
+	AlertID     uuid.UUID  `json:"alert_id"`
+	At          time.Time  `json:"at"`
+	Kind        string     `json:"kind"`
+	ChannelID   *uuid.UUID `json:"channel_id"`
+	ChannelName string     `json:"channel_name"`
+	UserID      *uuid.UUID `json:"user_id"`
+	Detail      string     `json:"detail"`
+}
+
+type AlertRule struct {
+	ID             uuid.UUID     `json:"id"`
+	OrganizationID uuid.UUID     `json:"organization_id"`
+	Name           string        `json:"name"`
+	Kind           AlertRuleKind `json:"kind"`
+	TargetID       *uuid.UUID    `json:"target_id"`
+	Label          *string       `json:"label"`
+	Threshold      *float64      `json:"threshold"`
+	Metric         *string       `json:"metric"`
+	ForSeconds     int32         `json:"for_seconds"`
+	Severity       AlertSeverity `json:"severity"`
+	Escalation     []byte        `json:"escalation"`
+	Enabled        bool          `json:"enabled"`
+	CreatedBy      *uuid.UUID    `json:"created_by"`
+	Version        int32         `json:"version"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
 }
 
 type ApiToken struct {
@@ -868,6 +1138,63 @@ type MfaChallenge struct {
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
+type Monitor struct {
+	ID              uuid.UUID   `json:"id"`
+	OrganizationID  uuid.UUID   `json:"organization_id"`
+	Name            string      `json:"name"`
+	Kind            MonitorKind `json:"kind"`
+	Target          string      `json:"target"`
+	IntervalSeconds int32       `json:"interval_seconds"`
+	TimeoutMs       int32       `json:"timeout_ms"`
+	Config          []byte      `json:"config"`
+	Labels          []string    `json:"labels"`
+	Enabled         bool        `json:"enabled"`
+	LastUp          *bool       `json:"last_up"`
+	LastCheckedAt   *time.Time  `json:"last_checked_at"`
+	LastLatencyMs   *int32      `json:"last_latency_ms"`
+	LastError       string      `json:"last_error"`
+	DownSince       *time.Time  `json:"down_since"`
+	NextCheckAt     time.Time   `json:"next_check_at"`
+	CreatedBy       *uuid.UUID  `json:"created_by"`
+	Version         int32       `json:"version"`
+	CreatedAt       time.Time   `json:"created_at"`
+	UpdatedAt       time.Time   `json:"updated_at"`
+}
+
+type MonitorResult struct {
+	MonitorID  uuid.UUID `json:"monitor_id"`
+	Ts         time.Time `json:"ts"`
+	Up         bool      `json:"up"`
+	LatencyMs  *int32    `json:"latency_ms"`
+	StatusCode *int32    `json:"status_code"`
+	Error      string    `json:"error"`
+}
+
+type MonitorResultsHourly struct {
+	MonitorID  uuid.UUID `json:"monitor_id"`
+	Hour       time.Time `json:"hour"`
+	Checks     int32     `json:"checks"`
+	UpChecks   int32     `json:"up_checks"`
+	LatencyAvg *float32  `json:"latency_avg"`
+	LatencyMax *int32    `json:"latency_max"`
+}
+
+type NotificationChannel struct {
+	ID             uuid.UUID   `json:"id"`
+	OrganizationID uuid.UUID   `json:"organization_id"`
+	Name           string      `json:"name"`
+	Kind           ChannelKind `json:"kind"`
+	Config         []byte      `json:"config"`
+	SecretsEnc     []byte      `json:"secrets_enc"`
+	Locale         *string     `json:"locale"`
+	LastTestAt     *time.Time  `json:"last_test_at"`
+	LastTestOk     *bool       `json:"last_test_ok"`
+	CreatedBy      *uuid.UUID  `json:"created_by"`
+	Version        int32       `json:"version"`
+	CreatedAt      time.Time   `json:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at"`
+}
+
 type Organization struct {
 	ID        uuid.UUID  `json:"id"`
 	Slug      string     `json:"slug"`
@@ -1080,6 +1407,20 @@ type Session struct {
 	RevokedAt    *time.Time  `json:"revoked_at"`
 	RevokeReason *string     `json:"revoke_reason"`
 	CreatedAt    time.Time   `json:"created_at"`
+}
+
+type Silence struct {
+	ID             uuid.UUID      `json:"id"`
+	OrganizationID uuid.UUID      `json:"organization_id"`
+	RuleID         *uuid.UUID     `json:"rule_id"`
+	SubjectID      *uuid.UUID     `json:"subject_id"`
+	Label          *string        `json:"label"`
+	Severity       *AlertSeverity `json:"severity"`
+	Comment        string         `json:"comment"`
+	StartsAt       time.Time      `json:"starts_at"`
+	EndsAt         time.Time      `json:"ends_at"`
+	CreatedBy      *uuid.UUID     `json:"created_by"`
+	CreatedAt      time.Time      `json:"created_at"`
 }
 
 type SslCertificate struct {
