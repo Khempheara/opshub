@@ -116,3 +116,7 @@ recorded; zero HIGH/CRITICAL findings; short changelog.
 | M10-3 | 10 | Retention is operator-wide (`OPSHUB_LOG_RETENTION_DAYS`, default 30, 1–365): daily partitions dropped by a third `SECURITY DEFINER` function; ingest accepts timestamps up to 7 days old and replaces those more than 5 minutes ahead |
 | M10-4 | 10 | Full text uses the `simple` configuration with `/ : = .` treated as spaces; queries in Khmer script (no spaces between words) match as a substring instead |
 | M10-5 | 10 | Follow mode polls for lines after the newest cursor every 3 s (no SSE); the page keeps at most 2,000 lines |
+| M11-1 | 11 | Entries are shown as sentences in EN and KM (Go bundle `audit.<action>`, rendered by the API in `?locale` or Accept-Language, so the page and the CSV share one source) with the raw action code alongside; tests fail when a recorded action has no sentence |
+| M11-2 | 11 | Account events (no organization) are each person's own "Recent account activity" in Settings → Security, never part of an organization's log |
+| M11-3 | 11 | The audit log is kept forever (append-only, no purge); operators archive it with backups |
+| M11-4 | 11 | CSV export streams every matching row with before/after/metadata JSON, UTF-8 BOM, formula-like cells escaped; the export is recorded with its filter before the file is sent |

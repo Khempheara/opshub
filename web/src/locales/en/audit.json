@@ -1,0 +1,67 @@
+{
+  "title": "Audit log",
+  "description": "Every change and security event in this organization: who did what, when and from where.",
+  "filters": {
+    "category": "Area",
+    "allCategories": "All areas",
+    "actor": "Person",
+    "allActors": "Everyone",
+    "project": "Project",
+    "allProjects": "All projects",
+    "period": "Time range"
+  },
+  "periods": {
+    "24h": "Last 24 hours",
+    "7d": "Last 7 days",
+    "30d": "Last 30 days",
+    "90d": "Last 90 days",
+    "all": "All time"
+  },
+  "categories": {
+    "organization": "Organization & members",
+    "projects": "Projects",
+    "pipelines": "Pipelines",
+    "runners": "Runners",
+    "deployments": "Deployments",
+    "infrastructure": "Infrastructure",
+    "secrets": "Secrets",
+    "monitoring": "Monitoring",
+    "logs": "Logs",
+    "audit": "Audit log"
+  },
+  "export": {
+    "button": "Export CSV",
+    "hint": "Downloads every entry that matches the filters. The export is recorded in the log.",
+    "failed": "The export failed. Try again."
+  },
+  "empty": "No entries for these filters",
+  "emptyHint": "Widen the time range or clear the filters.",
+  "loadMore": "Load older entries",
+  "entry": {
+    "time": "Time",
+    "action": "Action",
+    "actor": "Who",
+    "resource": "Resource",
+    "project": "Project",
+    "ip": "IP address",
+    "device": "Device",
+    "changes": "Changes",
+    "field": "Field",
+    "before": "Before",
+    "after": "After",
+    "details": "More details",
+    "noChanges": "No values recorded",
+    "actorTypes": {
+      "user": "Person",
+      "api_token": "API token",
+      "runner": "Runner",
+      "system": "OpsHub"
+    }
+  },
+  "activity": {
+    "title": "Recent account activity",
+    "description": "Sign-ins, two-factor changes, password changes, tokens and sessions on your account. If something looks wrong, change your password and sign out other devices.",
+    "empty": "No account activity yet",
+    "loadMore": "Show older activity"
+  }
+}

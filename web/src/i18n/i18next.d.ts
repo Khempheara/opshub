@@ -1,3 +1,4 @@
+import type audit from '@/locales/en/audit.json';
 import type auth from '@/locales/en/auth.json';
 import type common from '@/locales/en/common.json';
 import type deploy from '@/locales/en/deploy.json';
@@ -19,6 +20,7 @@ declare module 'i18next' {
   interface CustomTypeOptions {
     defaultNS: 'common';
     resources: {
+      audit: typeof audit;
       auth: typeof auth;
       common: typeof common;
       deploy: typeof deploy;

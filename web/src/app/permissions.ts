@@ -25,6 +25,8 @@ export const OrgAction = {
   channelManage: 'channel.manage',
   logsView: 'logs.view',
   logsManage: 'logs.manage',
+  auditView: 'audit.view',
+  auditExport: 'audit.export',
 } as const;
 
 /**

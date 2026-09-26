@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { expectKhmerLayoutOK } from '../khmer';
-import { SEED_PASSWORD, signIn } from './helpers';
+import { SEED_PASSWORD, signIn, switchLanguage } from './helpers';
 
 // Runs against the demo project from `make seed`: SENTRY_DSN for all environments and
 // DATABASE_URL for staging and (protected) production. Each run adds uniquely named secrets
@@ -23,7 +23,7 @@ test('create, rotate, edit and delete a secret; values are never shown', async (
   const name = `E2E_${randomUUID().slice(0, 8).toUpperCase()}`;
   const value = `sk_e2e_${randomUUID()}`;
   await signIn(page, 'admin@demo.opshub.local', SEED_PASSWORD);
-  await page.getByRole('button', { name: 'EN', exact: true }).click();
+  await switchLanguage(page, 'en');
   await openSecrets(page);
   await expect(row(page, 'SENTRY_DSN', 'All environments')).toBeVisible();
   await expect(row(page, 'DATABASE_URL', 'production')).toBeVisible();
@@ -142,7 +142,7 @@ test('developers manage only unprotected environments (Khmer UI)', async ({ page
 
 test("viewers don't get the Secrets tab", async ({ page }) => {
   await signIn(page, 'viewer@demo.opshub.local', SEED_PASSWORD);
-  await page.getByRole('button', { name: 'EN', exact: true }).click();
+  await switchLanguage(page, 'en');
   await page.goto('/o/angkor-tech/projects');
   await page.getByTestId('project-list').getByRole('link').first().click();
   await expect(page.getByRole('link', { name: 'Deployments', exact: true })).toBeVisible();

@@ -13,6 +13,177 @@ import (
 	"github.com/google/uuid"
 )
 
+const accountActivity = `-- name: AccountActivity :many
+SELECT a.id, a.created_at, a.actor_type, a.actor_user_id, a.action, a.resource_type, a.resource_id,
+       a.ip, a.user_agent, a.before, a.after, a.metadata,
+       au.display_name AS actor_name, COALESCE(au.email, '')::text AS actor_email
+FROM audit_log a
+LEFT JOIN users au ON au.id = a.actor_user_id
+WHERE a.organization_id IS NULL
+  AND (a.actor_user_id = $1 OR (a.resource_type = 'user' AND a.resource_id = $1::text))
+  AND ($2::timestamptz IS NULL
+       OR (a.created_at, a.id) < ($2::timestamptz, $3::uuid))
+ORDER BY a.created_at DESC, a.id DESC
+LIMIT $4
+`
+
+type AccountActivityParams struct {
+	UserID          *uuid.UUID `json:"user_id"`
+	BeforeCreatedAt *time.Time `json:"before_created_at"`
+	BeforeID        *uuid.UUID `json:"before_id"`
+	MaxRows         int32      `json:"max_rows"`
+}
+
+type AccountActivityRow struct {
+	ID           uuid.UUID   `json:"id"`
+	CreatedAt    time.Time   `json:"created_at"`
+	ActorType    string      `json:"actor_type"`
+	ActorUserID  *uuid.UUID  `json:"actor_user_id"`
+	Action       string      `json:"action"`
+	ResourceType string      `json:"resource_type"`
+	ResourceID   *string     `json:"resource_id"`
+	Ip           *netip.Addr `json:"ip"`
+	UserAgent    *string     `json:"user_agent"`
+	Before       []byte      `json:"before"`
+	After        []byte      `json:"after"`
+	Metadata     []byte      `json:"metadata"`
+	ActorName    *string     `json:"actor_name"`
+	ActorEmail   string      `json:"actor_email"`
+}
+
+// A user's own account events (sign-ins, 2FA, password, tokens, sessions): entries without
+// an organization that the user did or that are about the user. Newest first, keyset paging.
+func (q *Queries) AccountActivity(ctx context.Context, arg AccountActivityParams) ([]AccountActivityRow, error) {
+	rows, err := q.db.Query(ctx, accountActivity,
+		arg.UserID,
+		arg.BeforeCreatedAt,
+		arg.BeforeID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AccountActivityRow{}
+	for rows.Next() {
+		var i AccountActivityRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.ActorType,
+			&i.ActorUserID,
+			&i.Action,
+			&i.ResourceType,
+			&i.ResourceID,
+			&i.Ip,
+			&i.UserAgent,
+			&i.Before,
+			&i.After,
+			&i.Metadata,
+			&i.ActorName,
+			&i.ActorEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const auditAssetNames = `-- name: AuditAssetNames :many
+SELECT id, name FROM infra_assets WHERE id = ANY ($1::uuid[])
+`
+
+type AuditAssetNamesRow struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+// Names of infrastructure assets mentioned by audit entries.
+func (q *Queries) AuditAssetNames(ctx context.Context, ids []uuid.UUID) ([]AuditAssetNamesRow, error) {
+	rows, err := q.db.Query(ctx, auditAssetNames, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditAssetNamesRow{}
+	for rows.Next() {
+		var i AuditAssetNamesRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const auditTeamNames = `-- name: AuditTeamNames :many
+SELECT id, name FROM teams WHERE id = ANY ($1::uuid[])
+`
+
+type AuditTeamNamesRow struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+// Names of teams mentioned by audit entries (deleted teams included).
+func (q *Queries) AuditTeamNames(ctx context.Context, ids []uuid.UUID) ([]AuditTeamNamesRow, error) {
+	rows, err := q.db.Query(ctx, auditTeamNames, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditTeamNamesRow{}
+	for rows.Next() {
+		var i AuditTeamNamesRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const auditUserNames = `-- name: AuditUserNames :many
+SELECT id, display_name, email::text AS email FROM users WHERE id = ANY ($1::uuid[])
+`
+
+type AuditUserNamesRow struct {
+	ID          uuid.UUID `json:"id"`
+	DisplayName string    `json:"display_name"`
+	Email       string    `json:"email"`
+}
+
+// Names of users mentioned by audit entries.
+func (q *Queries) AuditUserNames(ctx context.Context, ids []uuid.UUID) ([]AuditUserNamesRow, error) {
+	rows, err := q.db.Query(ctx, auditUserNames, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditUserNamesRow{}
+	for rows.Next() {
+		var i AuditUserNamesRow
+		if err := rows.Scan(&i.ID, &i.DisplayName, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertAuditLog = `-- name: InsertAuditLog :one
 INSERT INTO audit_log (
   organization_id, actor_user_id, actor_type, action, resource_type, resource_id,
@@ -71,42 +242,96 @@ func (q *Queries) InsertAuditLog(ctx context.Context, arg InsertAuditLogParams) 
 	return i, err
 }
 
-const listAuditLog = `-- name: ListAuditLog :many
-SELECT id, organization_id, actor_user_id, actor_type, action, resource_type, resource_id, ip, user_agent, before, after, metadata, created_at FROM audit_log
-WHERE organization_id = $1
-  AND ($2::timestamptz IS NULL
-       OR (created_at, id) < ($2::timestamptz, $3::uuid))
-ORDER BY created_at DESC, id DESC
-LIMIT $4
+const searchAuditLog = `-- name: SearchAuditLog :many
+SELECT a.id, a.created_at, a.actor_type, a.actor_user_id, a.action, a.resource_type, a.resource_id,
+       a.ip, a.user_agent, a.before, a.after, a.metadata,
+       au.display_name AS actor_name, COALESCE(au.email, '')::text AS actor_email,
+       p.name AS project_name, ru.display_name AS resource_user_name, COALESCE(ru.email, '')::text AS resource_user_email
+FROM audit_log a
+LEFT JOIN users au ON au.id = a.actor_user_id
+LEFT JOIN projects p ON p.id = (a.metadata->>'project_id')::uuid
+LEFT JOIN users ru ON a.resource_type IN ('user', 'member') AND ru.id = (CASE WHEN a.resource_type IN ('user', 'member') THEN a.resource_id::uuid END)
+WHERE a.organization_id = $1
+  AND (cardinality($2::text[]) = 0 AND cardinality($3::text[]) = 0
+       OR split_part(a.action, '.', 1) = ANY ($2::text[]) OR a.action = ANY ($3::text[]))
+  AND ($4::uuid IS NULL OR a.actor_user_id = $4)
+  AND ($5::text IS NULL OR a.metadata->>'project_id' = $5)
+  AND ($6::text IS NULL OR a.resource_type = $6)
+  AND ($7::text IS NULL OR a.resource_id = $7)
+  AND ($8::timestamptz IS NULL OR a.created_at >= $8)
+  AND ($9::timestamptz IS NULL OR a.created_at < $9)
+  AND ($10::timestamptz IS NULL
+       OR (a.created_at, a.id) < ($10::timestamptz, $11::uuid))
+ORDER BY a.created_at DESC, a.id DESC
+LIMIT $12
 `
 
-type ListAuditLogParams struct {
+type SearchAuditLogParams struct {
 	OrganizationID  *uuid.UUID `json:"organization_id"`
+	Areas           []string   `json:"areas"`
+	Actions         []string   `json:"actions"`
+	ActorUserID     *uuid.UUID `json:"actor_user_id"`
+	ProjectID       *string    `json:"project_id"`
+	ResourceType    *string    `json:"resource_type"`
+	ResourceID      *string    `json:"resource_id"`
+	FromTs          *time.Time `json:"from_ts"`
+	ToTs            *time.Time `json:"to_ts"`
 	BeforeCreatedAt *time.Time `json:"before_created_at"`
 	BeforeID        *uuid.UUID `json:"before_id"`
-	PageSize        int32      `json:"page_size"`
+	MaxRows         int32      `json:"max_rows"`
 }
 
-// Keyset pagination on (created_at, id) newest first.
-func (q *Queries) ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error) {
-	rows, err := q.db.Query(ctx, listAuditLog,
+type SearchAuditLogRow struct {
+	ID                uuid.UUID   `json:"id"`
+	CreatedAt         time.Time   `json:"created_at"`
+	ActorType         string      `json:"actor_type"`
+	ActorUserID       *uuid.UUID  `json:"actor_user_id"`
+	Action            string      `json:"action"`
+	ResourceType      string      `json:"resource_type"`
+	ResourceID        *string     `json:"resource_id"`
+	Ip                *netip.Addr `json:"ip"`
+	UserAgent         *string     `json:"user_agent"`
+	Before            []byte      `json:"before"`
+	After             []byte      `json:"after"`
+	Metadata          []byte      `json:"metadata"`
+	ActorName         *string     `json:"actor_name"`
+	ActorEmail        string      `json:"actor_email"`
+	ProjectName       *string     `json:"project_name"`
+	ResourceUserName  *string     `json:"resource_user_name"`
+	ResourceUserEmail string      `json:"resource_user_email"`
+}
+
+// An organization's entries, newest first, with the actor, the project and (for user and
+// member resources) the user named by resource_id. Filters: areas (the action's part before
+// the dot) or exact actions, actor, project, resource, and [from_ts, to_ts). Keyset paging on
+// (created_at, id).
+func (q *Queries) SearchAuditLog(ctx context.Context, arg SearchAuditLogParams) ([]SearchAuditLogRow, error) {
+	rows, err := q.db.Query(ctx, searchAuditLog,
 		arg.OrganizationID,
+		arg.Areas,
+		arg.Actions,
+		arg.ActorUserID,
+		arg.ProjectID,
+		arg.ResourceType,
+		arg.ResourceID,
+		arg.FromTs,
+		arg.ToTs,
 		arg.BeforeCreatedAt,
 		arg.BeforeID,
-		arg.PageSize,
+		arg.MaxRows,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []AuditLog{}
+	items := []SearchAuditLogRow{}
 	for rows.Next() {
-		var i AuditLog
+		var i SearchAuditLogRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.OrganizationID,
-			&i.ActorUserID,
+			&i.CreatedAt,
 			&i.ActorType,
+			&i.ActorUserID,
 			&i.Action,
 			&i.ResourceType,
 			&i.ResourceID,
@@ -115,7 +340,11 @@ func (q *Queries) ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]A
 			&i.Before,
 			&i.After,
 			&i.Metadata,
-			&i.CreatedAt,
+			&i.ActorName,
+			&i.ActorEmail,
+			&i.ProjectName,
+			&i.ResourceUserName,
+			&i.ResourceUserEmail,
 		); err != nil {
 			return nil, err
 		}

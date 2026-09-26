@@ -73,6 +73,7 @@ Rules (Module 3):
 | Manage monitors, alert rules, silences | ✅ | ✅ | ✅ | — |
 | Manage notification channels | ✅ | ✅ | — | — |
 | View / export audit log | ✅ | ✅ | — | — |
+| See own account activity | ✅ | ✅ | ✅ | ✅ |
 | Configure SSO (OIDC) | ✅ | — | — | — |
 
 ¹ Admins can grant at most Developer (invitations and role changes), and cannot change or remove
@@ -132,7 +133,7 @@ Actions are named `<resource>.<verb>`. They are used by `authz.Require`, listed 
 | Infrastructure | `infra.view`, `infra.manage` |
 | Monitors, alert rules, silences · acknowledge | `monitor.view`, `monitor.manage`, `alert.ack` (Owner/Admin/Developer) |
 | Notification channels | `channel.view` (Owner/Admin/Developer), `channel.manage` |
-| Audit log | `audit.view`, `audit.export` |
+| Audit log | `audit.view`, `audit.export` (exports are audited as `audit.export`) |
 | Project view · update · delete · members | `project.view`, `project.update`, `project.delete`, `project.manage_members` |
 | Repository · environments | `repo.connect`, `environment.manage` |
 | Runs | `run.view`, `pipeline.trigger` (trigger, re-run, retry), `run.cancel` |

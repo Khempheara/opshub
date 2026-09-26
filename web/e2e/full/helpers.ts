@@ -77,3 +77,17 @@ export async function newOwnerWithOrg(page: Page, name: string): Promise<string>
   await expect(page).toHaveURL(new RegExp(`/o/${slug}$`));
   return slug;
 }
+
+/**
+ * Switches the UI language like a person would, then waits for a signed-in user's profile to
+ * save it (the switcher saves in the background): a page load right after the click could
+ * otherwise cancel the save and bring the old language back.
+ */
+export async function switchLanguage(page: Page, lng: 'en' | 'km') {
+  const saved = page
+    .waitForResponse((r) => r.url().endsWith('/api/v1/me') && r.request().method() === 'PATCH', { timeout: 3000 })
+    .catch(() => null); // not signed in, or the profile already had this language
+  await page.getByRole('button', lng === 'km' ? { name: 'ខ្មែរ' } : { name: 'EN', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', lng);
+  await saved;
+}

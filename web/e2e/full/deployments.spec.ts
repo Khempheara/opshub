@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expectKhmerLayoutOK } from '../khmer';
-import { SEED_PASSWORD, newOwnerWithOrg, signIn } from './helpers';
+import { newOwnerWithOrg, SEED_PASSWORD, signIn, switchLanguage } from './helpers';
 
 // Runs against the demo data from `make seed`: the demo-k8s target (a cluster that doesn't
 // resolve, so every deployment started here fails safely as "target unreachable") and a
@@ -135,7 +135,7 @@ test('manage deploy targets: validation, connection test, edit, delete', async (
 test('Khmer layout of the deployment pages on mobile and desktop', async ({ page }) => {
   await signIn(page, 'owner@demo.opshub.local', SEED_PASSWORD);
   await page.goto('/o/angkor-tech/projects');
-  await page.getByRole('button', { name: 'ខ្មែរ' }).click();
+  await switchLanguage(page, 'km');
   await expect(page.locator('html')).toHaveAttribute('lang', 'km');
   const project = (await page.getByTestId('project-list').getByRole('link').first().getAttribute('href')) ?? '';
   await page.goto(`${project}/deployments`);

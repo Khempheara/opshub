@@ -1,6 +1,6 @@
 import { expectKhmerLayoutOK } from '../khmer';
 import { expect, test } from '@playwright/test';
-import { PASSWORD, SEED_PASSWORD, emailLink, registerAndVerify, signIn, totp, uniqueEmail } from './helpers';
+import { emailLink, PASSWORD, registerAndVerify, SEED_PASSWORD, signIn, switchLanguage, totp, uniqueEmail } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -31,7 +31,7 @@ test('seeded Khmer user: profile language wins, and switching saves it', async (
   await expect(page.locator('html')).toHaveAttribute('lang', 'en', { timeout: 10_000 });
 
   // Switch back so the seed stays Khmer for other runs.
-  await page.getByRole('button', { name: 'ខ្មែរ' }).click();
+  await switchLanguage(page, 'km');
   await expect(page.locator('html')).toHaveAttribute('lang', 'km');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('lang', 'km');

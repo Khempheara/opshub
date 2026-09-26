@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expectKhmerLayoutOK } from '../khmer';
-import { SEED_PASSWORD, signIn } from './helpers';
+import { SEED_PASSWORD, signIn, switchLanguage } from './helpers';
 
 // Runs against the demo data from `make seed`: a succeeded run (approved production deploy),
 // a failed feature branch, a run waiting for approval and a queued manual run.
@@ -100,7 +100,7 @@ test('an Admin cancels the queued run', async ({ page }) => {
 test('Khmer layout of the pipeline pages on mobile and desktop', async ({ page }) => {
   await signIn(page, 'owner@demo.opshub.local', SEED_PASSWORD);
   await page.goto(PROJECT_LIST);
-  await page.getByRole('button', { name: 'ខ្មែរ' }).click();
+  await switchLanguage(page, 'km');
   await expect(page.locator('html')).toHaveAttribute('lang', 'km');
   const project = (await page.getByTestId('project-list').getByRole('link').first().getAttribute('href')) ?? '';
   await page.goto(project);

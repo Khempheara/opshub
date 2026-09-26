@@ -204,10 +204,17 @@ raised as warnings, so the original insert always succeeds.
 `opshub_maintain_log_partitions(keep_days)` creates partitions from 7 days back to 2 days ahead
 and drops expired ones (`SECURITY DEFINER`, `EXECUTE` granted to `opshub_app` only).
 
-### 11. Audit log **(✓ 000001)**
+### 11. Audit log **(✓ 000001, indexes 000011)**
 
 `audit_log(organization_id, actor_user_id, actor_type, action, resource_type, resource_id, ip, user_agent, before jsonb, after jsonb, metadata jsonb, created_at)`
-— append-only, indexed by `(organization_id, created_at DESC)`, exported as CSV with keyset pagination.
+— append-only (triggers refuse UPDATE/DELETE/TRUNCATE; `opshub_app` has INSERT and SELECT only) and
+kept forever. Project-scoped entries carry `metadata.project_id`; account events have no
+organization. Indexes: `(organization_id, created_at DESC)`, plus from 000011
+`(organization_id, split_part(action, '.', 1), created_at DESC, id DESC)` for areas,
+`(organization_id, metadata->>'project_id', …)` for projects, `(organization_id, actor_user_id, …)`
+for people, and `(resource_id, created_at DESC, id DESC) WHERE organization_id IS NULL AND
+resource_type = 'user'` for account activity. The viewer and the CSV export page with keyset
+cursors on `(created_at, id)`.
 
 ### Job queue (River)
 
