@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpsHub API
-  version: 0.10.0
+  version: 0.11.0
   summary: All-in-One DevOps Platform
   description: |
     REST API for OpsHub. All resource endpoints are versioned under `/api/v1`.
@@ -82,6 +82,12 @@ tags:
       infrastructure of Module 7, alerts with escalation and acknowledgement, silences, and
       notification channels (Telegram, Slack, email, webhooks) with write-only credentials
       (docs/monitoring.md).
+  - name: logs
+    description: |
+      Searchable logs (docs/logs.md): services send NDJSON lines with organization ingest
+      tokens, and pipeline job and deployment output is copied in automatically. Job and
+      deployment lines are shown only for projects the caller can see. Lines are kept for the
+      operator's OPSHUB_LOG_RETENTION_DAYS.
   - name: secrets
     description: |
       Write-only project secrets (docs/secrets.md): no endpoint returns a value. Values are
@@ -2676,6 +2682,129 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /api/v1/orgs/{orgId}/logs:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [logs]
+      operationId: searchLogs
+      summary: "Search log lines, newest first (logs.view)"
+      description: |
+        The range defaults to the last hour and spans at most 31 days. `q` is a full-text query
+        (words, "quoted phrases", -excluded); text in Khmer script matches as a substring.
+        Page to older lines with `before=next_cursor`; follow new lines with
+        `after=newest_cursor`.
+      parameters:
+        - { name: from, in: query, description: "Start (RFC 3339), inclusive", schema: { type: string, format: date-time } }
+        - { name: to, in: query, description: "End (RFC 3339), exclusive", schema: { type: string, format: date-time } }
+        - { name: q, in: query, description: "Search text", schema: { type: string, maxLength: 200 } }
+        - { name: source, in: query, schema: { $ref: "#/components/schemas/LogSource" } }
+        - { name: service, in: query, schema: { type: string } }
+        - { name: level, in: query, description: "Minimum level", schema: { $ref: "#/components/schemas/LogLevel" } }
+        - { name: before, in: query, description: "Cursor: lines older than this one", schema: { type: string } }
+        - { name: after, in: query, description: "Cursor: lines newer than this one", schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 200 } }
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogSearchResult" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/logs/services:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [logs]
+      operationId: listLogServices
+      summary: "Service names seen in the last day (logs.view)"
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogServiceList" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/log-ingest-tokens:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [logs]
+      operationId: listIngestTokens
+      summary: "Ingest tokens (logs.manage)"
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestTokenList" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [logs]
+      operationId: createIngestToken
+      summary: "Create an ingest token for one service; the token is shown once (logs.manage)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IngestTokenRequest" }
+      responses:
+        "201":
+          description: "Created. `token` is returned only now."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestToken" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/log-ingest-tokens/{tokenId}:
+    parameters:
+      - { name: tokenId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      tags: [logs]
+      operationId: revokeIngestToken
+      summary: "Revoke an ingest token; senders using it get 401 (logs.manage)"
+      responses:
+        "204": { description: "Revoked." }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/ingest/logs:
+    post:
+      tags: [logs]
+      operationId: ingestLogs
+      summary: "Send log lines (ingest token)"
+      description: |
+        Newline-delimited JSON objects, at most 1 MiB and 5000 lines per request. Each line
+        needs `message` (or `msg`, `log`); optional `ts` (RFC 3339 or Unix seconds or
+        milliseconds; at most 7 days old, and clocks more than 5 minutes ahead get the server's
+        time) and `level` (debug, info, warn, error and common aliases). Every other field,
+        and the fields of an `attributes` object, are kept as attributes (at most 50 keys and
+        8 KiB). Messages over 8 KiB are clipped. Bad lines are reported and skipped.
+      security:
+        - ingestToken: []
+      requestBody:
+        required: true
+        content:
+          application/x-ndjson:
+            schema: { type: string }
+      responses:
+        "200":
+          description: "Stored."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestResult" }
+        "401": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+
   /api/v1/agent/heartbeat:
     post:
       tags: [infrastructure]
@@ -2959,6 +3088,10 @@ components:
       type: http
       scheme: bearer
       description: Job token (`ohj_…`) from the job assignment.
+    ingestToken:
+      type: http
+      scheme: bearer
+      description: "Log ingest token (`ohl_…`) created for one service."
     refreshCookie:
       type: apiKey
       in: cookie
@@ -4851,6 +4984,83 @@ components:
       properties:
         ok: { type: boolean }
         error: { type: string, description: "Why it failed, without credentials." }
+
+    LogLevel:
+      type: string
+      enum: [debug, info, warn, error]
+    LogSource:
+      type: string
+      enum: [service, job, deployment]
+    LogEntry:
+      type: object
+      required: [id, ts, source, project_id, service, level, message, attributes]
+      properties:
+        id: { type: string, format: uuid }
+        ts: { type: string, format: date-time }
+        source: { $ref: "#/components/schemas/LogSource" }
+        project_id: { type: [string, "null"], format: uuid, description: "Set on job and deployment lines." }
+        service: { type: string, description: "The token's service, or <project>/<job> and <project>/deploy." }
+        level: { $ref: "#/components/schemas/LogLevel" }
+        message: { type: string }
+        attributes: { type: object, additionalProperties: true }
+    LogSearchResult:
+      type: object
+      required: [items, next_cursor, newest_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LogEntry" }
+        next_cursor: { type: [string, "null"], description: "Pass as `before` for older lines." }
+        newest_cursor: { type: [string, "null"], description: "Pass as `after` to follow new lines." }
+    LogServiceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { type: string }
+    IngestToken:
+      type: object
+      required: [id, name, service, token_prefix, created_by_name, last_used_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        service: { type: string }
+        token_prefix: { type: string, examples: [ohl_ab12cd34] }
+        token: { type: string, description: "Only in the create response." }
+        created_by_name: { type: [string, "null"] }
+        last_used_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    IngestTokenList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/IngestToken" }
+    IngestTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [name, service]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        service: { type: string, pattern: "^[a-z0-9][a-z0-9._/-]{0,99}$", description: "Lowercase letters, digits, dot, underscore, dash and slash." }
+    IngestLineError:
+      type: object
+      required: [line, rule]
+      properties:
+        line: { type: integer, description: "1-based line number" }
+        rule: { type: string, enum: [json_object, message_required, ts_format, too_old, attributes_max] }
+    IngestResult:
+      type: object
+      required: [accepted, rejected, errors]
+      properties:
+        accepted: { type: integer }
+        rejected: { type: integer }
+        errors:
+          type: array
+          description: "The first 20 rejected lines."
+          items: { $ref: "#/components/schemas/IngestLineError" }
 
     ErrorCode:
       type: string

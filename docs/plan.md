@@ -111,3 +111,8 @@ recorded; zero HIGH/CRITICAL findings; short changelog.
 | M9-3 | 9 | Escalation is timed steps until acknowledged (no repeat reminders); resolutions go to every channel that was notified; silenced alerts still fire and show, and notify when the silence ends |
 | M9-4 | 9 | Checks run from the OpsHub server through the SSRF guard (redirects not followed); results in monthly partitions via a second `SECURITY DEFINER` function, hourly rollups kept 400 days |
 | M9-5 | 9 | Channel credentials are write-only and sealed by the key ring (included in `keys rotate`); messages use the channel's language, else each member recipient's, else `OPSHUB_DEFAULT_LOCALE`; errors never contain credentials or internal addresses |
+| M10-1 | 10 | Log search covers ingested service lines and pipeline job and deployment output, copied in by database triggers as it is written; job and deployment lines are shown only for projects the caller can see |
+| M10-2 | 10 | Services send lines with organization ingest tokens (`ohl_`, Owner/Admin, one fixed service name per token) instead of personal API tokens or agent tokens; the infra agent doesn't tail files yet |
+| M10-3 | 10 | Retention is operator-wide (`OPSHUB_LOG_RETENTION_DAYS`, default 30, 1–365): daily partitions dropped by a third `SECURITY DEFINER` function; ingest accepts timestamps up to 7 days old and replaces those more than 5 minutes ahead |
+| M10-4 | 10 | Full text uses the `simple` configuration with `/ : = .` treated as spaces; queries in Khmer script (no spaces between words) match as a substring instead |
+| M10-5 | 10 | Follow mode polls for lines after the newest cursor every 3 s (no SSE); the page keeps at most 2,000 lines |

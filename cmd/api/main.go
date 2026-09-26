@@ -45,6 +45,7 @@ import (
 	"github.com/opshub/opshub/internal/jobs"
 	"github.com/opshub/opshub/internal/keyrotate"
 	"github.com/opshub/opshub/internal/logging"
+	"github.com/opshub/opshub/internal/logs"
 	"github.com/opshub/opshub/internal/mail"
 	"github.com/opshub/opshub/internal/monitor"
 	"github.com/opshub/opshub/internal/notify"
@@ -168,6 +169,7 @@ func serve() error {
 		PublicURL: cfg.PublicURL, DefaultLocale: cfg.DefaultLocale, OutboundAllowedCIDRs: outboundCIDRs,
 	}, logger)
 	alertSvc := alert.NewService(pool, inserter, logger)
+	logSvc := logs.NewService(pool, logs.Config{RetentionDays: cfg.LogRetentionDays}, logger)
 
 	river, err := jobs.NewClient(jobs.Deps{
 		Pool: pool, Logger: logger,
@@ -181,8 +183,9 @@ func serve() error {
 			monitorSvc.Register(w)
 			notifySvc.Register(w)
 			alertSvc.Register(w)
+			logSvc.Register(w)
 		},
-		Periodic: slices.Concat(pipeline.Periodic(), runners.Periodic(), infra.Periodic(), monitor.Periodic(), alert.Periodic()),
+		Periodic: slices.Concat(pipeline.Periodic(), runners.Periodic(), infra.Periodic(), monitor.Periodic(), alert.Periodic(), logs.Periodic()),
 	})
 	if err != nil {
 		return err
@@ -226,6 +229,7 @@ func serve() error {
 				monitor.NewHandler(monitorSvc),
 				alert.NewHandler(alertSvc),
 				notify.NewHandler(notifySvc),
+				logs.NewHandler(logSvc),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -399,10 +403,11 @@ func seedCmd() error {
 		return err
 	}
 	return seed.Run(ctx, pool, seed.Options{
-		Password: os.Getenv("OPSHUB_SEED_PASSWORD"),
-		Hasher:   authn.NewHasher(authn.DefaultArgon2Params),
-		Out:      os.Stdout,
-		Keys:     keys,
+		Password:         os.Getenv("OPSHUB_SEED_PASSWORD"),
+		Hasher:           authn.NewHasher(authn.DefaultArgon2Params),
+		Out:              os.Stdout,
+		Keys:             keys,
+		LogRetentionDays: cfg.LogRetentionDays,
 	})
 }
 

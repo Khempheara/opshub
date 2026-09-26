@@ -50,6 +50,8 @@ type Options struct {
 	Out      io.Writer
 	// Keys encrypt the demo deploy target's credentials; without them it isn't seeded.
 	Keys *crypto.KeyRing
+	// LogRetentionDays is OPSHUB_LOG_RETENTION_DAYS (log partitions are prepared for it).
+	LogRetentionDays int
 }
 
 // Run seeds the demo organization and users.
@@ -136,7 +138,10 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 	if err := seedSecrets(ctx, pool, opts.Keys, opts.Out); err != nil {
 		return err
 	}
-	return seedMonitoring(ctx, pool, opts.Keys, opts.Out)
+	if err := seedMonitoring(ctx, pool, opts.Keys, opts.Out); err != nil {
+		return err
+	}
+	return seedLogs(ctx, pool, opts.LogRetentionDays, opts.Out)
 }
 
 // DemoProjectSlug is the seeded project in the demo organization.

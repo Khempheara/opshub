@@ -1,5 +1,82 @@
 # Changelog
 
+## Module 10 — Logs
+
+### Built
+
+**Backend** (`internal/logs`)
+- **One search over three sources:**
+  - Service lines sent with ingest tokens.
+  - Pipeline job and deployment output, copied in by database triggers as chunks are written.
+    ANSI colours are removed, red lines are `error`, and attributes name the project with the
+    job and run or the deployment and environment. A failed copy never fails the original
+    write.
+- **Ingest tokens:** `ohl_…`, one per organization and service name, managed by Owners and
+  Admins (`logs.manage`).
+  - Shown once and stored as a hash; the last use is recorded.
+  - Creating and revoking are audited without the secret.
+  - The token passes user authentication as a machine token and is rate-limited by its hash.
+- **`POST /api/v1/ingest/logs`:** NDJSON, at most 1 MiB and 5,000 lines per request.
+  - `message`/`msg`/`log` is required.
+  - `ts` accepts RFC 3339 or Unix seconds or milliseconds. It may be at most 7 days old, and
+    clocks more than 5 minutes ahead get the server's time.
+  - Level aliases are accepted (warning, fatal, trace, …).
+  - Other fields and an `attributes` object are kept as attributes (at most 50 keys and 8 KiB).
+    Messages are clipped at 8 KiB.
+  - Bad lines are skipped and reported by line number (first 20). Accepted lines are stored in
+    one statement.
+- **Search:**
+  - Newest first over up to 31 days; minimum level, source and service filters; keyset
+    cursors for older pages and for follow mode.
+  - Job and deployment lines only for projects the caller can see.
+  - Full text uses PostgreSQL's `simple` configuration with `/ : = .` split, so paths and
+    `key=value` are searchable. Queries in Khmer script match as substrings, because Khmer has
+    no spaces between words.
+- **Storage:** `log_entries` is partitioned by UTC day. An hourly River job runs a third
+  `SECURITY DEFINER` function, which creates the partitions for the ingest window and drops
+  those older than `OPSHUB_LOG_RETENTION_DAYS` (default 30, 1–365).
+- **Delivery:** migration `000010_logs`; 6 endpoints; 3 error codes (EN + KM); OpenAPI 0.11.0.
+- **Demo seed:** a "Checkout service" ingest token and 13 recent lines in English and Khmer.
+
+**Frontend**
+- **Organization → Logs** (sidebar):
+  - **Search:** text search, level, source and service filters, time range (15 min–7 days),
+    follow mode that polls every 3 s, and load older lines.
+  - Level colours, and each line opens to show its attributes.
+- **Ingest tokens** tab for Owners and Admins: create (validated service name), a token dialog
+  shown once with a `curl` example, last use, and revoke.
+- New `logs` translation namespace (EN + KM).
+
+### Quality
+
+- **Go:**
+  - NDJSON parsing: aliases, timestamps in every format, clock skew, clipping without splitting
+    Khmer characters, NUL removal, attribute limits, and body and line limits.
+  - Tokens: validation, permissions, audit without the secret, revocation, last use.
+  - Search: full text, phrases, exclusions, paths, Khmer substrings, literal `%`, level,
+    source, service and time filters, paging, follow cursors, other organizations.
+  - Triggers: job and deployment lines, levels and attributes, project visibility for
+    Developers, and a failed copy keeping the original chunk.
+  - Partition maintenance and retention.
+  - Tenant isolation over all 6 routes with coverage guards.
+  - Coverage: logs 93.4 %; service coverage 78.1 %.
+- **Web:** 112 Vitest tests (+7 search params, merging, attributes, curl example, token rules)
+  and 50 Playwright tests (+2):
+  - A token created in the UI sends lines; bad lines are reported.
+  - Search by words, path parts and Khmer; level filter and attributes.
+  - Follow mode shows a new line without reloading.
+  - Revoking gives 401 and keeps the stored lines.
+  - Khmer layout at phone and desktop widths; viewers search but can't open ingest tokens.
+- **Checked by hand on the dev stack:** the seeded checkout lines in the Khmer UI, and the
+  expanded attributes.
+- golangci-lint, gosec, govulncheck, ESLint, TypeScript and the i18n check are clean. Trivy
+  finds 0 HIGH/CRITICAL in the api, web and runner images. Migrations pass up/down/up; sqlc and
+  orval are deterministic; the OpenAPI ↔ routes test passes.
+
+### Next — Module 11: Audit log
+
+Audit log viewer with filters and a CSV export that keeps Khmer readable in Excel.
+
 ## Module 9 — Monitoring & alerts
 
 ### Built

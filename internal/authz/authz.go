@@ -67,6 +67,7 @@ const (
 	AuditView        Action = "audit.view"
 	AuditExport      Action = "audit.export"
 	LogsView         Action = "logs.view"
+	LogsManage       Action = "logs.manage" // ingest tokens
 )
 
 // orgMatrix is the minimum role for each organization-scope action (docs/rbac.md).
@@ -98,6 +99,7 @@ var orgMatrix = map[Action]Role{
 	AuditView:        Admin,
 	AuditExport:      Admin,
 	LogsView:         Viewer,
+	LogsManage:       Admin,
 }
 
 // OrgActions lists every organization-scope action (stable order), for the permissions API.

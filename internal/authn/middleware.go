@@ -78,11 +78,13 @@ const (
 	RegistrationTokenPrefix = "ohr_reg_" // #nosec G101 -- a token prefix, not a credential
 	JobTokenPrefix          = "ohj_"
 	AgentTokenPrefix        = "ohi_" // infra agents (Module 7)
+	IngestTokenPrefix       = "ohl_" // log ingest (Module 10)
 )
 
 // IsMachineToken reports whether a bearer credential belongs to a runner or a job.
 func IsMachineToken(cred string) bool {
-	return strings.HasPrefix(cred, RunnerTokenPrefix) || strings.HasPrefix(cred, JobTokenPrefix) || strings.HasPrefix(cred, AgentTokenPrefix)
+	return strings.HasPrefix(cred, RunnerTokenPrefix) || strings.HasPrefix(cred, JobTokenPrefix) ||
+		strings.HasPrefix(cred, AgentTokenPrefix) || strings.HasPrefix(cred, IngestTokenPrefix)
 }
 
 // RequireAuth rejects anonymous requests with 401.

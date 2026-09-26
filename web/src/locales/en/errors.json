@@ -107,7 +107,10 @@
     "SILENCE_NOT_FOUND": "This silence doesn't exist or has already ended.",
     "CHANNEL_NOT_FOUND": "This notification channel doesn't exist or was deleted.",
     "CHANNEL_NAME_TAKEN": "A notification channel with this name already exists.",
-    "CHANNEL_IN_USE": "Alert rules still notify this channel. Remove it from their escalation first."
+    "CHANNEL_IN_USE": "Alert rules still notify this channel. Remove it from their escalation first.",
+    "INGEST_TOKEN_NOT_FOUND": "This ingest token doesn't exist or was revoked.",
+    "INGEST_TOKEN_NAME_TAKEN": "An ingest token with this name already exists.",
+    "INGEST_TOKEN_INVALID": "The ingest token is invalid or has been revoked."
   },
   "rules": {
     "required": "This field is required.",

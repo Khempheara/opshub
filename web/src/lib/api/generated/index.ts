@@ -3,6 +3,7 @@ export * from './auth/auth';
 export * from './deployments/deployments';
 export * from './environments/environments';
 export * from './infrastructure/infrastructure';
+export * from './logs/logs';
 export * from './members/members';
 export * from './monitoring/monitoring';
 export * from './organizations/organizations';

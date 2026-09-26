@@ -578,6 +578,93 @@ func (ns NullJobStatus) Value() (driver.Value, error) {
 	return string(ns.JobStatus), nil
 }
 
+type LogLevel string
+
+const (
+	LogLevelDebug LogLevel = "debug"
+	LogLevelInfo  LogLevel = "info"
+	LogLevelWarn  LogLevel = "warn"
+	LogLevelError LogLevel = "error"
+)
+
+func (e *LogLevel) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LogLevel(s)
+	case string:
+		*e = LogLevel(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LogLevel: %T", src)
+	}
+	return nil
+}
+
+type NullLogLevel struct {
+	LogLevel LogLevel `json:"log_level"`
+	Valid    bool     `json:"valid"` // Valid is true if LogLevel is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLogLevel) Scan(value interface{}) error {
+	if value == nil {
+		ns.LogLevel, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LogLevel.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLogLevel) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LogLevel), nil
+}
+
+type LogSource string
+
+const (
+	LogSourceService    LogSource = "service"
+	LogSourceJob        LogSource = "job"
+	LogSourceDeployment LogSource = "deployment"
+)
+
+func (e *LogSource) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LogSource(s)
+	case string:
+		*e = LogSource(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LogSource: %T", src)
+	}
+	return nil
+}
+
+type NullLogSource struct {
+	LogSource LogSource `json:"log_source"`
+	Valid     bool      `json:"valid"` // Valid is true if LogSource is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLogSource) Scan(value interface{}) error {
+	if value == nil {
+		ns.LogSource, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LogSource.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLogSource) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LogSource), nil
+}
+
 type MemberRole string
 
 const (
@@ -1125,6 +1212,32 @@ type JobToken struct {
 	TokenHash []byte    `json:"token_hash"`
 	ExpiresAt time.Time `json:"expires_at"`
 	MasksEnc  []byte    `json:"masks_enc"`
+}
+
+type LogEntry struct {
+	ID             uuid.UUID   `json:"id"`
+	OrganizationID uuid.UUID   `json:"organization_id"`
+	Ts             time.Time   `json:"ts"`
+	Source         LogSource   `json:"source"`
+	SourceID       *uuid.UUID  `json:"source_id"`
+	ProjectID      *uuid.UUID  `json:"project_id"`
+	Service        string      `json:"service"`
+	Level          LogLevel    `json:"level"`
+	Message        string      `json:"message"`
+	Attributes     []byte      `json:"attributes"`
+	Search         interface{} `json:"search"`
+}
+
+type LogIngestToken struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Name           string     `json:"name"`
+	Service        string     `json:"service"`
+	TokenHash      []byte     `json:"token_hash"`
+	TokenPrefix    string     `json:"token_prefix"`
+	CreatedBy      *uuid.UUID `json:"created_by"`
+	LastUsedAt     *time.Time `json:"last_used_at"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 type MfaChallenge struct {

@@ -161,6 +161,13 @@ const (
 	CodeChannelInUse     Code = "CHANNEL_IN_USE"
 )
 
+// Module 10: logs.
+const (
+	CodeIngestTokenNotFound  Code = "INGEST_TOKEN_NOT_FOUND"  // #nosec G101 -- an error code, not a credential
+	CodeIngestTokenNameTaken Code = "INGEST_TOKEN_NAME_TAKEN" // #nosec G101 -- an error code, not a credential
+	CodeIngestTokenInvalid   Code = "INGEST_TOKEN_INVALID"    // #nosec G101 -- an error code, not a credential
+)
+
 // AllCodes lists every code; append new codes here as modules add them.
 var AllCodes = []Code{
 	CodeInternal, CodeBadRequest, CodeValidation, CodeUnauthenticated, CodeForbidden,
@@ -194,6 +201,7 @@ var AllCodes = []Code{
 	CodeSecretNotFound, CodeSecretNameTaken, CodeSecretLimit,
 	CodeMonitorNotFound, CodeMonitorNameTaken, CodeRuleNotFound, CodeRuleNameTaken, CodeAlertNotFound,
 	CodeAlertNotFiring, CodeSilenceNotFound, CodeChannelNotFound, CodeChannelNameTaken, CodeChannelInUse,
+	CodeIngestTokenNotFound, CodeIngestTokenNameTaken, CodeIngestTokenInvalid,
 }
 
 // Error is an application error carrying its HTTP status and client-facing code.
