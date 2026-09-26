@@ -13,6 +13,8 @@ FROM nginxinc/nginx-unprivileged:1.29-alpine
 USER root
 RUN apk upgrade --no-cache && (apk del --no-cache curl || true)
 USER 101
-COPY deploy/docker/nginx.conf /etc/nginx/conf.d/default.conf
+# Rendered into /etc/nginx/conf.d/default.conf at start (envsubst of OPSHUB_API_UPSTREAM only).
+ENV OPSHUB_API_UPSTREAM=api:8080 NGINX_ENVSUBST_FILTER=^OPSHUB_
+COPY deploy/docker/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /src/web/dist /usr/share/nginx/html
 EXPOSE 8080

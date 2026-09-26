@@ -296,14 +296,14 @@ func (s *Service) CreateSilence(ctx context.Context, orgID uuid.UUID, in Silence
 		}
 		sl, err := q.CreateSilence(ctx, store.CreateSilenceParams{
 			OrganizationID: orgID, RuleID: in.RuleID, SubjectID: in.SubjectID, Label: in.Label, Severity: in.Severity,
-			Comment: in.Comment, StartsAt: starts, EndsAt: in.EndsAt, CreatedBy: &m.UserID,
+			Comment: in.Comment, StartsAt: in.StartsAt, EndsAt: in.EndsAt, CreatedBy: &m.UserID,
 		})
 		if err != nil {
 			return err
 		}
 		out = Silence{
 			ID: sl.ID, RuleID: sl.RuleID, SubjectID: sl.SubjectID, Label: sl.Label, Severity: sl.Severity, Comment: sl.Comment,
-			StartsAt: sl.StartsAt, EndsAt: sl.EndsAt, Active: !sl.StartsAt.After(now), CreatedAt: sl.CreatedAt,
+			StartsAt: sl.StartsAt, EndsAt: sl.EndsAt, Active: in.StartsAt == nil || !sl.StartsAt.After(now), CreatedAt: sl.CreatedAt,
 		}
 		return audit.Record(ctx, q, audit.Entry{
 			OrganizationID: &orgID, Action: "silence.create", ResourceType: "silence", ResourceID: sl.ID.String(),

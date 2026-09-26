@@ -34,7 +34,7 @@ make seed   # demo organization "Angkor Tech · អង្គរ តិច" with 
 | http://localhost:3000 | OpsHub UI |
 | http://localhost:8080/docs | API reference (Swagger UI; spec at `/api/openapi.yaml`) |
 | http://localhost:8025 | Mailpit: every email the platform sends (verification, reset, …) |
-| http://localhost:3001 | Grafana: "OpsHub API" dashboard (requests, p95 latency, errors) |
+| http://localhost:3001 | Grafana: "OpsHub API" (requests, p95 latency, errors) and "OpsHub Platform" (background jobs, runners, alerts, log ingest, database pool) dashboards |
 | http://localhost:9090 | Prometheus |
 
 Demo accounts (all share the password `make seed` prints; set `OPSHUB_SEED_PASSWORD` to choose it):
@@ -140,7 +140,12 @@ Details: [architecture](docs/architecture.md) · [API endpoints](docs/api.md) ·
   `OPSHUB_MIGRATE_ON_START=false` for the API.
 - Create the roles as in `deploy/compose/postgres/init-roles.sql` (with real passwords).
 - Set `OPSHUB_TRUSTED_PROXIES` to your ingress range, and configure real SMTP with TLS.
-- Keep `/metrics` on an internal network (the bundled nginx doesn't expose it).
+- Keep `/metrics` on an internal network (the bundled nginx doesn't expose it); metrics,
+  dashboards and suggested alerts are in [observability.md](docs/observability.md).
+- Back up the database nightly and practise restores ([backup.md](docs/backup.md)); keep
+  `OPSHUB_MASTER_KEYS` backed up offline too.
+- On Kubernetes, use the Helm chart in `deploy/helm/opshub` ([helm.md](docs/helm.md)).
+- Load-test changes with `make load` ([load-testing.md](docs/load-testing.md)).
 - Put `OPSHUB_BLOB_DIR` (artifacts and caches) on persistent storage writable by the API user
   and include it in backups if artifacts matter to you.
 - Run runners on machines dedicated to CI: the agent controls that machine's Docker.
@@ -215,4 +220,4 @@ history in the `checkout-web` project.
 
 1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. ✅ CI/CD pipelines · 5. ✅ Runner agent ·
 6. ✅ Deployments · 7. ✅ Infrastructure · 8. ✅ Secrets · 9. ✅ Monitoring & alerts · 10. ✅ Logs ·
-11. ✅ Audit log · 12. Dashboard & DORA metrics (✅ dashboard; operations next)
+11. ✅ Audit log · 12. ✅ Dashboard, DORA metrics & operations

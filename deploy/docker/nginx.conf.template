@@ -1,5 +1,6 @@
 # Serves the SPA and proxies API traffic so browser and API share one origin
-# (session cookies work without CORS).
+# (session cookies work without CORS). The image renders this template at start:
+# ${OPSHUB_API_UPSTREAM} is the API's host:port (default api:8080; the Helm chart sets it).
 #
 # Note: nginx does not inherit add_header into a location that declares its own,
 # so security headers are repeated per static location. The API sets its own headers.
@@ -10,7 +11,7 @@ server {
   server_tokens off;
 
   location ~ ^/(api|docs|healthz|readyz)(/|$) {
-    proxy_pass http://api:8080;
+    proxy_pass http://${OPSHUB_API_UPSTREAM};
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     # Overwrite (never append) so clients cannot spoof their IP in audit logs.

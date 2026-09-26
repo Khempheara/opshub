@@ -173,6 +173,9 @@ func serve() error {
 	alertSvc := alert.NewService(pool, inserter, logger)
 	auditSvc := auditlog.NewService(pool, bundle, logger)
 	logSvc := logs.NewService(pool, logs.Config{RetentionDays: cfg.LogRetentionDays}, logger)
+	metrics := telemetry.NewMetrics()
+	metrics.RegisterPlatform(pool, logger)
+	logSvc.SetIngestObserver(metrics.ObserveLogLines)
 
 	river, err := jobs.NewClient(jobs.Deps{
 		Pool: pool, Logger: logger,
@@ -212,7 +215,7 @@ func serve() error {
 			Config:        cfg,
 			Logger:        logger,
 			DB:            pool,
-			Metrics:       telemetry.NewMetrics(),
+			Metrics:       metrics,
 			Version:       version,
 			Authenticator: &authn.Authenticator{JWT: signer, Tokens: authSvc},
 			SSOProviders:  ssoRegistry.Names(),

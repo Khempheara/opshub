@@ -75,8 +75,12 @@ export function StackedBars({ title, summary, series, periods }: { title: string
         {labels.map((i) => {
           const p = periods[i];
           if (!p) return null;
+          // The first and last labels hug the plot's edges so they are never cut off.
+          const first = i === 0 && periods.length > 1;
+          const last = i === periods.length - 1 && periods.length > 1;
+          const x = first ? PAD.l : last ? W - PAD.r : PAD.l + i * slot + slot / 2;
           return (
-            <text key={p.period} x={PAD.l + i * slot + slot / 2} y={H - 4} textAnchor="middle" className="fill-muted-foreground text-[10px]">
+            <text key={p.period} x={x} y={H - 4} textAnchor={first ? 'start' : last ? 'end' : 'middle'} className="fill-muted-foreground text-[10px]">
               {date(p.period)}
             </text>
           );

@@ -1,0 +1,127 @@
+# OpsHub Helm chart. PostgreSQL 17 is external (managed, or an operator such as
+# CloudNativePG); see docs/helm.md.
+
+image:
+  # Registry prefix for the images below, e.g. ghcr.io/your-org (empty: use the names as is).
+  registry: ""
+  pullPolicy: IfNotPresent
+  # Defaults to the chart's appVersion.
+  tag: ""
+imagePullSecrets: []
+
+# The URL people open, used in links and emails. Must be https in production.
+publicURL: https://opshub.example.com
+# production | test | development
+environment: production
+
+# Secrets are never put in values. Create a Secret (see docs/helm.md) with at least:
+#   OPSHUB_DATABASE_URL          the API's role (DML only)
+#   OPSHUB_MIGRATE_DATABASE_URL  the schema owner (migrations)
+#   OPSHUB_MASTER_KEYS           AES-256 key ring (`opshub-api keys generate`)
+#   OPSHUB_JWT_KEYS              Ed25519 signing keys
+# and optionally SMTP and SSO credentials (OPSHUB_SMTP_PASSWORD, OPSHUB_SSO_*_CLIENT_SECRET).
+existingSecret: opshub
+
+# Other OpsHub settings as environment variables (non-secret), e.g.
+#   OPSHUB_SMTP_HOST: smtp.example.com
+#   OPSHUB_DEFAULT_LOCALE: km
+#   OPSHUB_LOG_RETENTION_DAYS: "60"
+config: {}
+
+api:
+  image:
+    repository: opshub-api
+  # More than one replica needs a ReadWriteMany volume for artifacts and caches.
+  replicas: 1
+  # CIDRs of the ingress controller, so client IPs in audit logs are the real ones.
+  trustedProxies: ""
+  resources:
+    requests: { cpu: 250m, memory: 256Mi }
+    limits: { memory: 1Gi }
+  persistence:
+    # Pipeline artifacts, caches and source archives (OPSHUB_BLOB_DIR).
+    enabled: true
+    size: 20Gi
+    storageClass: ""
+    accessModes: [ReadWriteOnce]
+    existingClaim: ""
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+web:
+  image:
+    repository: opshub-web
+  replicas: 2
+  resources:
+    requests: { cpu: 50m, memory: 32Mi }
+    limits: { memory: 128Mi }
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# Runs `opshub-api migrate up` as a pre-install/pre-upgrade hook; the API then starts without
+# migrating itself.
+migrations:
+  enabled: true
+  activeDeadlineSeconds: 600
+
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  host: opshub.example.com
+  tls:
+    enabled: true
+    secretName: opshub-tls
+
+service:
+  type: ClusterIP
+
+metrics:
+  # A Prometheus Operator ServiceMonitor for the API's /metrics.
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+
+# Restricts traffic: the web pods and the ingress controller reach the API, nothing else
+# reaches OpsHub pods. Egress stays open (Git hosts, deploy targets, notifications).
+networkPolicy:
+  enabled: false
+  # Namespace labels of the ingress controller, e.g. { kubernetes.io/metadata.name: ingress-nginx }
+  ingressNamespaceSelector: {}
+  # Namespace labels of Prometheus, allowed to scrape the API.
+  metricsNamespaceSelector: {}
+
+# Nightly encrypted database backups (docs/backup.md).
+backup:
+  enabled: false
+  image:
+    repository: opshub-backup
+  schedule: "0 2 * * *"
+  timeZone: UTC
+  # age public keys (age1…), space separated. Required when enabled; the private key stays
+  # offline.
+  ageRecipients: ""
+  # Secret with OPSHUB_BACKUP_DATABASE_URL (the read-only opshub_backup role) and, for an
+  # off-site copy, the RCLONE_CONFIG_<REMOTE>_* variables of the rclone remote.
+  existingSecret: opshub-backup
+  # rclone destination, e.g. "s3:my-bucket/opshub" (empty: keep on the volume only).
+  rcloneRemote: ""
+  retention: { daily: 7, weekly: 4, monthly: 3 }
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  persistence:
+    size: 50Gi
+    storageClass: ""
+    existingClaim: ""

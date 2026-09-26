@@ -34,11 +34,15 @@ type Config struct {
 
 // Service manages ingest tokens, ingests lines and searches them.
 type Service struct {
-	pool   *pgxpool.Pool
-	cfg    Config
-	logger *slog.Logger
-	now    func() time.Time
+	pool     *pgxpool.Pool
+	cfg      Config
+	logger   *slog.Logger
+	now      func() time.Time
+	observer func(accepted, rejected int)
 }
+
+// SetIngestObserver reports each ingest request's accepted and rejected line counts (metrics).
+func (s *Service) SetIngestObserver(f func(accepted, rejected int)) { s.observer = f }
 
 func NewService(pool *pgxpool.Pool, cfg Config, logger *slog.Logger) *Service {
 	if cfg.RetentionDays < 1 || cfg.RetentionDays > 365 {

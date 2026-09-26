@@ -76,6 +76,8 @@ type Querier interface {
 	CreateRunner(ctx context.Context, arg CreateRunnerParams) (Runner, error)
 	CreateSecret(ctx context.Context, arg CreateSecretParams) (Secret, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	// Without starts_at the silence starts at the database's now(), the clock that decides whether
+	// it is active (the API server's clock may differ).
 	CreateSilence(ctx context.Context, arg CreateSilenceParams) (Silence, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)

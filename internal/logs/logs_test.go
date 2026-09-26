@@ -195,10 +195,13 @@ func TestIngestLimits(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, MaxLines, res.Accepted)
 
+	var seen [2]int
+	e.svc.SetIngestObserver(func(accepted, rejected int) { seen[0], seen[1] = seen[0]+accepted, seen[1]+rejected })
 	res, err = e.svc.Ingest(ctx, st, strings.NewReader(strings.Repeat("oops\n", 30)))
 	require.NoError(t, err)
 	assert.Equal(t, 30, res.Rejected)
 	assert.Len(t, res.Errors, 20, "only the first 20 problems are listed")
+	assert.Equal(t, [2]int{0, 30}, seen, "metrics see every request's counts")
 
 	res, err = e.svc.Ingest(ctx, st, strings.NewReader(""))
 	require.NoError(t, err)

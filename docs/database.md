@@ -248,7 +248,7 @@ A **change** is a finished deployment (succeeded or failed) to an environment of
 |---|---|---|
 | `opshub_migrator` | Owns schema; DDL | `cmd/api migrate` (Helm pre-upgrade Job / `make migrate-up`) |
 | `opshub_app` | `SELECT, INSERT, UPDATE, DELETE` on app tables; `INSERT, SELECT` only on `audit_log`; no `TRUNCATE`, no DDL (metric, monitor and log partitions via `SECURITY DEFINER` functions, §7, §9 and §10) | API + workers |
-| `opshub_backup` | `pg_read_all_data` | Backup job |
+| `opshub_backup` | `pg_read_all_data` (read-only) | Backup job (`opshub-backup`) |
 
 In local dev a single superuser is used for convenience; `docker-compose.yml` creates the three roles to
 mirror production.
@@ -272,14 +272,8 @@ copied off-host. For RPO below 24 h, enable WAL archiving/PITR (e.g. pgBackRest 
 Postgres). The secrets master key (KEK) is **not** in the database and must be backed up separately.
 Without it, restored secrets cannot be decrypted.
 
-```bash
-# Backup (custom format, schema + data)
-pg_dump --format=custom --no-owner --file=opshub-$(date -u +%Y%m%dT%H%M%SZ).dump "$OPSHUB_BACKUP_DATABASE_URL"
-
-# Restore into an empty database, then verify
-pg_restore --clean --if-exists --no-owner --jobs=4 --dbname="$TARGET_DATABASE_URL" opshub-<ts>.dump
-opshub-api migrate status   # schema version must match the binary
-```
-
-Deliverables with the module work: `deploy/backup/backup.sh` + `restore.sh`, a `backup` service in
-docker-compose (cron schedule), a Helm `CronJob` example, and a quarterly restore-drill runbook.
+**Built (Module 12b):** `deploy/backup/backup.sh` and `restore.sh` in the `opshub-backup` image,
+the opt-in compose `backup` service (daily at `OPSHUB_BACKUP_AT`), the Helm `CronJob`, and the
+quarterly restore-drill runbook. Backups are always encrypted with age to public keys and can be
+copied to S3-compatible storage with rclone. `make backup-drill` (also in CI) restores into a
+scratch database and compares row counts. Operating guide: [backup.md](backup.md).

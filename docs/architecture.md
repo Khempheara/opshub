@@ -205,10 +205,10 @@ sequenceDiagram
 │   ├── queries/                     sqlc queries, one file per module
 │   └── seed/                        demo org/users/project (EN + KM text)
 ├── deploy/
-│   ├── docker/                      api/runner/web Dockerfiles, nginx.conf
+│   ├── docker/                      api/runner/web/backup Dockerfiles, nginx.conf.template
 │   ├── compose/                     prometheus.yml, grafana provisioning + dashboards
-│   ├── helm/opshub/                 Helm chart (API, worker, web, migrations Job, backup CronJob)
-│   └── backup/                      pg_dump backup/restore scripts
+│   ├── helm/opshub/                 Helm chart (API with workers, web, migrations hook, backup CronJob)
+│   └── backup/                      backup/restore/schedule scripts (pg_dump + age), restore drill
 ├── docs/                            architecture, api, database, rbac, i18n, plan, runbooks
 ├── internal/
 │   ├── apperr/  config/  database/  httpx/  i18n/  logging/  telemetry/  server/   (platform)

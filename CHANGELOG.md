@@ -1,5 +1,94 @@
 # Changelog
 
+## Module 12b — Operations
+
+The second part of Module 12 (decision M12-1): monitoring OpsHub itself, backups, Kubernetes
+and load testing.
+
+### Built
+
+**Platform metrics and Grafana** ([observability.md](docs/observability.md))
+- **New `/metrics` figures:**
+  - background (River) jobs by queue and state, and jobs discarded in the last hour;
+  - pipeline jobs queued or running;
+  - runners online, offline and disabled;
+  - running deployments, firing alerts by severity, log lines ingested (accepted and rejected);
+  - the database pool (connections, waits, acquire time) and `opshub_platform_metrics_up`.
+- **How they are collected:** read in one query at each scrape (3 s timeout), and identical on
+  every replica.
+- **"OpsHub Platform" Grafana dashboard** next to the API dashboard, plus suggested alert rules
+  in the docs.
+
+**Backups** ([backup.md](docs/backup.md))
+- **`opshub-backup` image:** PostgreSQL 17 client tools, age and rclone; runs as uid 70; gosu
+  removed.
+- **`opshub-backup`:**
+  - `pg_dump` as the new read-only `opshub_backup` role, always encrypted with **age** to
+    public keys;
+  - written atomically with a `.sha256` beside it;
+  - 7 daily, 4 weekly and 3 monthly kept (hard links);
+  - optional **rclone** sync to S3-compatible storage, and a `last-success` marker.
+- **`opshub-restore`:** verifies the checksum, decrypts, restores into an empty database
+  (`OPSHUB_RESTORE_FORCE` to overwrite), and reports the schema version and row counts.
+- **Scheduling:** the opt-in compose `backup` service runs daily at `OPSHUB_BACKUP_AT`.
+- **Drill:** `make backup-drill` (also in CI after the E2E suite) backs up, restores into a
+  scratch database and compares row counts. Plus a quarterly drill runbook.
+
+**Helm chart** (`deploy/helm/opshub`, [helm.md](docs/helm.md))
+- **Workloads:** API with workers, web UI, a pre-install/pre-upgrade migration hook, and an
+  optional backup CronJob with its volume.
+- **Optional extras:** ServiceMonitor, NetworkPolicies, PodDisruptionBudgets.
+- **Requirements:** external PostgreSQL, and secrets only from existing Secrets.
+- **Security:** every pod non-root, read-only root filesystem, no privilege escalation, all
+  capabilities dropped, `RuntimeDefault` seccomp.
+- **Traffic:** the Ingress sends `/api` and `/docs` straight to the API so audit logs see
+  client addresses.
+- **Guard rails:**
+  - more than one API replica requires a ReadWriteMany volume;
+  - backups require age recipients;
+  - a ReadWriteOnce volume updates with `Recreate`.
+- **Web image:** the nginx upstream is now a template (`OPSHUB_API_UPSTREAM`, default
+  `api:8080`), so the web UI runs under any service name.
+- **Checks:** `make helm-lint` (helm lint --strict, kubeconform against Kubernetes 1.30,
+  shellcheck) runs in CI. The chart was installed into a kind cluster: migrations, readiness,
+  proxying, a backup job and an upgrade.
+
+**Load testing** ([load-testing.md](docs/load-testing.md))
+- **k6 test:** browsing by the four demo users and log ingest at a constant arrival rate, within
+  the rate limits.
+- **Thresholds:** failures < 1 %, reads p95 < 200 ms, dashboard p95 < 500 ms, search and ingest
+  p95 < 300 ms, no 429s.
+- **Running it:** `make load`, and a manually triggered **Load test** workflow.
+- **Baseline:** p95 under 12 ms on the dev stack.
+
+### Fixed
+
+- **Silences started on the API server's clock** but were checked with the database's `now()`.
+  With the API clock slightly ahead, a new silence could miss the next evaluation and let a
+  notification through. This showed up as an intermittent failure of `TestSilences` under load.
+  Immediate silences now start at the database's `now()`.
+- **Dashboard charts:** the first and last date labels no longer get cut off at the edges.
+
+### Quality
+
+- **Go:**
+  - Platform metrics against a real database (runners by status, alerts by severity, background
+    jobs and discarded jobs, pool series, log counters), and `up=0` when the database can't
+    answer.
+  - The ingest observer.
+  - The full race suite passed twice in a row. Service coverage 78.9 %.
+- **Web:** 132 Vitest tests (+3 chart rendering: legend, accessible name, label anchors, stacked
+  bars and tooltips) and 55 Playwright tests, passing twice in a row.
+- **Operations:**
+  - The backup drill passes (including about 10,000 log lines across partitions).
+  - Retention keeps exactly N with checksums; a bad database URL fails with no partial file.
+  - Missing or malformed age keys are refused.
+- golangci-lint, gosec, govulncheck, ESLint, TypeScript, the i18n check and shellcheck are
+  clean. Trivy finds 0 HIGH/CRITICAL in the api, web, runner and backup images.
+- **New dependencies (backup image only):** `age` (encrypts each dump to public keys) and
+  `rclone` (optional off-site copy). One indirect Go test module: `kylelemons/godebug`, used by
+  Prometheus `testutil` for metric diffs.
+
 ## Module 12a — Dashboard & DORA metrics
 
 The first of two parts of Module 12 (decision M12-1). Next, 12b: Grafana platform dashboard,
@@ -73,8 +162,7 @@ backup/restore job and runbook, Helm chart, k6 load tests.
 
 ### Next — Module 12b: Operations
 
-Grafana dashboard for platform metrics, backup/restore job with a compose service and restore
-runbook, Helm chart (with the backup CronJob), and k6 load tests.
+Shipped in the next release above.
 
 ## Module 11 — Audit log
 

@@ -227,6 +227,9 @@ func (s *Service) Ingest(ctx context.Context, t store.LogIngestToken, body io.Re
 			return IngestResult{}, err
 		}
 	}
+	if s.observer != nil {
+		s.observer(res.Accepted, res.Rejected)
+	}
 	return res, nil
 }
 

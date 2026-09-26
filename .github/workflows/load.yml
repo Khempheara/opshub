@@ -1,0 +1,53 @@
+name: Load test
+
+# Manual: Actions → Load test → Run workflow. Starts the compose stack with demo data and runs
+# the k6 scenarios in tests/load (docs/load-testing.md); fails when a threshold is missed.
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: How long each scenario runs (k6 duration, e.g. 1m, 5m)
+        default: 2m
+      browse_rate:
+        description: Browsing requests per second (stay below 3 × OPSHUB_RATE_LIMIT_RPS per IP)
+        default: "30"
+      ingest_rate:
+        description: Log batches (50 lines) per second
+        default: "5"
+
+permissions:
+  contents: read
+
+jobs:
+  k6:
+    name: k6 against the compose stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - name: Configure (.env with fresh keys)
+        run: make .env
+      - name: Start the stack
+        run: docker compose up -d --build --wait
+      - name: Seed demo data
+        run: OPSHUB_SEED_PASSWORD=angkor-wat-sunrise-2026 make seed
+      - name: k6
+        env:
+          LOAD_BASE_URL: http://host.docker.internal:3000
+          LOAD_DURATION: ${{ inputs.duration }}
+          LOAD_BROWSE_RATE: ${{ inputs.browse_rate }}
+          LOAD_INGEST_RATE: ${{ inputs.ingest_rate }}
+        run: make load | tee k6-summary.txt
+      - name: API logs on failure
+        if: failure()
+        run: docker compose logs --no-color api > api.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: load-test
+          path: |
+            k6-summary.txt
+            api.log
+          retention-days: 14
