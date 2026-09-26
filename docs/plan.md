@@ -120,3 +120,8 @@ recorded; zero HIGH/CRITICAL findings; short changelog.
 | M11-2 | 11 | Account events (no organization) are each person's own "Recent account activity" in Settings → Security, never part of an organization's log |
 | M11-3 | 11 | The audit log is kept forever (append-only, no purge); operators archive it with backups |
 | M11-4 | 11 | CSV export streams every matching row with before/after/metadata JSON, UTF-8 BOM, formula-like cells escaped; the export is recorded with its filter before the file is sent |
+| M12-1 | 12 | Module 12 ships as two PRs: 12a pipeline statistics + DORA dashboard; 12b operations (Grafana platform dashboard, backup/restore job and runbook, Helm chart with the backup CronJob, k6 load tests) |
+| M12-2 | 12 | A change is a finished production deployment that isn't a rollback; it failed when it failed or was rolled back later (alerts don't count toward change failure rate) |
+| M12-3 | 12 | Time to restore = failed change → its automatic revert or the next successful deployment in that environment (per project); alert resolution time is shown separately, organization-wide |
+| M12-4 | 12 | The dashboard is the organization's Overview page (the getting-started checklist stays until 2FA and a first project are done), filtered by project and range, in the viewer's time zone |
+| M12-5 | 12 | Metrics are computed on request (no `dora_daily` table): always current, exact medians; runs record `committed_at` from the Git host for lead time (fallback: run creation) |

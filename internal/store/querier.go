@@ -25,6 +25,9 @@ type Querier interface {
 	AdvanceSchedule(ctx context.Context, arg AdvanceScheduleParams) error
 	// Accepts a TOTP time step only once (replay protection); returns no row if already used.
 	AdvanceTOTPStep(ctx context.Context, arg AdvanceTOTPStepParams) (uuid.UUID, error)
+	// Alerts that stopped firing in the range (organization-wide; alerts aren't tied to
+	// projects): how many, and the median time from firing to resolved.
+	AlertRestores(ctx context.Context, arg AlertRestoresParams) (AlertRestoresRow, error)
 	// Names of infrastructure assets mentioned by audit entries.
 	AuditAssetNames(ctx context.Context, ids []uuid.UUID) ([]AuditAssetNamesRow, error)
 	// Names of teams mentioned by audit entries (deleted teams included).
@@ -108,9 +111,24 @@ type Querier interface {
 	// Artifacts of the latest successful attempt of each named job in a run.
 	DependencyArtifacts(ctx context.Context, arg DependencyArtifactsParams) ([]DependencyArtifactsRow, error)
 	DeploymentByJob(ctx context.Context, jobID *uuid.UUID) (Deployment, error)
+	// Changes per day or week (bucket) in the time zone tz, oldest first, split into those that
+	// succeeded and stayed, and those that failed or were rolled back later.
+	DeploymentTrend(ctx context.Context, arg DeploymentTrendParams) ([]DeploymentTrendRow, error)
 	// Destroys the values of every version below before_version (all of them when it is 0).
 	DestroySecretValues(ctx context.Context, arg DestroySecretValuesParams) (int64, error)
 	DisableTOTP(ctx context.Context, id uuid.UUID) error
+	// Per project: changes, failed changes and median lead time, busiest first (at most 50).
+	DoraByProject(ctx context.Context, arg DoraByProjectParams) ([]DoraByProjectRow, error)
+	// Time to restore, per failed change: a failed deployment counts from its start until it was
+	// reverted automatically or the next successful deployment to that environment finished; a
+	// change rolled back later counts from when it went live until the next successful deployment
+	// (normally the rollback). Changes not restored yet are counted as open.
+	DoraRestores(ctx context.Context, arg DoraRestoresParams) (DoraRestoresRow, error)
+	// Changes are finished deployments started in the range to production environments (or to
+	// environment_id), not counting rollbacks. A change failed when it failed or was rolled back
+	// later. Lead time runs from the commit (or, without one, the run's creation) to the finished
+	// deployment of a successful change made by a pipeline.
+	DoraSummary(ctx context.Context, arg DoraSummaryParams) (DoraSummaryRow, error)
 	// Domain assets whose certificate is due for a check (or was never checked).
 	DueCertificateChecks(ctx context.Context) ([]DueCertificateChecksRow, error)
 	// Firing, unacknowledged alerts whose next escalation step is due.
@@ -293,6 +311,16 @@ type Querier interface {
 	// Running jobs assigned to a runner that it no longer reports (the agent restarted, or
 	// never received the assignment). The grace period covers a claim racing a heartbeat.
 	OrphanedRunnerJobs(ctx context.Context, arg OrphanedRunnerJobsParams) ([]uuid.UUID, error)
+	// Per project, busiest first (at most 50), with its latest run in the range.
+	PipelineByProject(ctx context.Context, arg PipelineByProjectParams) ([]PipelineByProjectRow, error)
+	// Dashboard (Module 12): pipeline statistics and DORA metrics, computed on request.
+	// Every query takes the organization, the caller's project visibility (see_all or the
+	// visible project_ids), an optional project, and the range [from_ts, to_ts).
+	// Durations are in seconds; medians and p95 are -1 when there is nothing to measure.
+	// Runs created in the range. Success rate and durations use finished runs.
+	PipelineSummary(ctx context.Context, arg PipelineSummaryParams) (PipelineSummaryRow, error)
+	// Runs per day or week (bucket) in the time zone tz, oldest first.
+	PipelineTrend(ctx context.Context, arg PipelineTrendParams) ([]PipelineTrendRow, error)
 	// The latest successful deployment of the environment before the given time.
 	PreviousSuccessfulDeployment(ctx context.Context, arg PreviousSuccessfulDeploymentParams) (Deployment, error)
 	// Averages and maxima per step (seconds) from the raw samples; -1 = no data in the bucket.

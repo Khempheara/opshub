@@ -17,6 +17,7 @@ import (
 	"github.com/opshub/opshub/internal/alert"
 	"github.com/opshub/opshub/internal/auditlog"
 	"github.com/opshub/opshub/internal/auth"
+	"github.com/opshub/opshub/internal/dashboard"
 	"github.com/opshub/opshub/internal/deploy"
 	"github.com/opshub/opshub/internal/infra"
 	"github.com/opshub/opshub/internal/logs"
@@ -66,6 +67,7 @@ func TestOpenAPIMatchesRoutes(t *testing.T) {
 		notify.NewHandler(nil),
 		logs.NewHandler(nil),
 		auditlog.NewHandler(nil),
+		dashboard.NewHandler(nil),
 	} {
 		m.Mount(r)
 	}

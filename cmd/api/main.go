@@ -36,6 +36,7 @@ import (
 	"github.com/opshub/opshub/internal/blob"
 	"github.com/opshub/opshub/internal/config"
 	"github.com/opshub/opshub/internal/crypto"
+	"github.com/opshub/opshub/internal/dashboard"
 	"github.com/opshub/opshub/internal/database"
 	"github.com/opshub/opshub/internal/deploy"
 	"github.com/opshub/opshub/internal/events"
@@ -233,6 +234,7 @@ func serve() error {
 				notify.NewHandler(notifySvc),
 				logs.NewHandler(logSvc),
 				auditlog.NewHandler(auditSvc),
+				dashboard.NewHandler(dashboard.NewService(pool)),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

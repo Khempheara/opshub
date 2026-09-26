@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/opshub/opshub/internal/safehttp"
@@ -70,6 +71,8 @@ type Client interface {
 type Commit struct {
 	SHA     string
 	Message string
+	// Time is when the commit was made (the committer date); zero when unknown.
+	Time time.Time
 }
 
 // MaxFileSize bounds files read from repositories (pipeline definitions are small).

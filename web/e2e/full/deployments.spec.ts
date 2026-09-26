@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expectKhmerLayoutOK } from '../khmer';
-import { newOwnerWithOrg, SEED_PASSWORD, signIn, switchLanguage } from './helpers';
+import { demoProjectLink, newOwnerWithOrg, SEED_PASSWORD, signIn, switchLanguage } from './helpers';
 
 // Runs against the demo data from `make seed`: the demo-k8s target (a cluster that doesn't
 // resolve, so every deployment started here fails safely as "target unreachable") and a
@@ -9,7 +9,7 @@ test.describe.configure({ mode: 'serial' });
 
 async function openDeployments(page: Page) {
   await page.goto('/o/angkor-tech/projects');
-  await page.getByTestId('project-list').getByRole('link').first().click();
+  await demoProjectLink(page).click();
   await page.getByRole('link', { name: 'Deployments' }).click();
   await expect(page.getByTestId('deployments-table')).toBeVisible();
 }
@@ -137,7 +137,7 @@ test('Khmer layout of the deployment pages on mobile and desktop', async ({ page
   await page.goto('/o/angkor-tech/projects');
   await switchLanguage(page, 'km');
   await expect(page.locator('html')).toHaveAttribute('lang', 'km');
-  const project = (await page.getByTestId('project-list').getByRole('link').first().getAttribute('href')) ?? '';
+  const project = (await demoProjectLink(page).getAttribute('href')) ?? '';
   await page.goto(`${project}/deployments`);
   const detail = (await page.getByTestId('deployment-row').first().getByRole('link').first().getAttribute('href')) ?? '';
   for (const viewport of [

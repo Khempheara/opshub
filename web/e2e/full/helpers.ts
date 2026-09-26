@@ -91,3 +91,11 @@ export async function switchLanguage(page: Page, lng: 'en' | 'km') {
   await expect(page.locator('html')).toHaveAttribute('lang', lng);
   await saved;
 }
+
+/**
+ * The seeded Payments API project's link in the projects list (the demo organization has other
+ * projects too, such as checkout-web with the dashboard history).
+ */
+export function demoProjectLink(page: Page) {
+  return page.getByTestId('project-list').getByRole('link', { name: /Payments API/ });
+}

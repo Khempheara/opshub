@@ -34,6 +34,15 @@ func (s *Service) pipelineProject(ctx context.Context, q *store.Queries, id uuid
 }
 
 // fileMissing reports a PIPELINE_FILE_NOT_FOUND error: the repository has no pipeline.
+// commitTime is c's time, or nil when the Git host didn't give one.
+func commitTime(c gitprovider.Commit) *time.Time {
+	if c.Time.IsZero() {
+		return nil
+	}
+	t := c.Time.UTC()
+	return &t
+}
+
 func fileMissing(err error) bool {
 	ae, ok := apperr.From(err)
 	return ok && ae.Code == apperr.CodePipelineFileNotFound
@@ -75,6 +84,14 @@ func (s *Service) RunFromEvent(ctx context.Context, a jobs.PipelineFromEventArgs
 	if err != nil {
 		return err
 	}
+	// The commit time (for lead time) isn't in every event payload: ask the Git host, and go
+	// without it when that fails.
+	var committedAt *time.Time
+	if c, err := client.Commit(ctx, a.SHA); err == nil {
+		committedAt = commitTime(c)
+	} else {
+		s.logger.DebugContext(ctx, "commit time unavailable", "project_id", p.ID, "err", err)
+	}
 	onDefault := trigger == store.RunTriggerPush && a.Ref == "refs/heads/"+p.DefaultBranch
 	matched := len(problems) > 0 // invalid files always surface as a failed run
 	if def != nil {
@@ -98,7 +115,7 @@ func (s *Service) RunFromEvent(ctx context.Context, a jobs.PipelineFromEventArgs
 		}
 		_, err := s.createRun(ctx, tx, q, newRun{
 			project: p, trigger: trigger, ref: a.Ref, sha: a.SHA, title: a.Title, actor: a.Actor,
-			def: def, problems: problems,
+			def: def, problems: problems, committedAt: committedAt,
 		})
 		return err
 	})
@@ -148,7 +165,7 @@ func (s *Service) RunFromSchedule(ctx context.Context, a jobs.PipelineScheduleAr
 		}
 		_, err := s.createRun(ctx, tx, q, newRun{
 			project: p, trigger: store.RunTriggerSchedule, ref: "refs/heads/" + p.DefaultBranch, sha: commit.SHA,
-			title: firstLine(commit.Message), def: def, problems: problems,
+			title: firstLine(commit.Message), def: def, problems: problems, committedAt: commitTime(commit),
 		})
 		return err
 	})

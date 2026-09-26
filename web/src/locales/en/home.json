@@ -6,7 +6,8 @@
     "orgCreated": "Organization created",
     "secureAccount": "Protect your account with two-factor authentication",
     "secureAccountDone": "Two-factor authentication is on",
-    "profile": "Choose your language and time zone"
+    "profile": "Choose your language and time zone",
+    "createProject": "Create your first project"
   },
   "setUp": "Set up",
   "review": "Review",

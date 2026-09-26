@@ -6,11 +6,16 @@ import { useSession } from '@/auth/session';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dashboard } from '@/features/dashboard/Dashboard';
+import { useListProjects } from '@/lib/api/generated/projects/projects';
 
+/** Organization → Overview: getting started (until its steps are done), then the dashboard. */
 export function OrgHomePage() {
   const { t } = useTranslation(['home', 'common']);
   const org = useCurrentOrg();
   const { user } = useSession();
+  const projects = useListProjects(org.id, { limit: 1 });
+  const hasProject = (projects.data?.items.length ?? 0) > 0;
 
   const steps = [
     { done: true, label: t('steps.orgCreated') },
@@ -19,8 +24,11 @@ export function OrgHomePage() {
       label: user?.two_factor_enabled ? t('steps.secureAccountDone') : t('steps.secureAccount'),
       to: '/settings/security',
     },
+    { done: hasProject, label: t('steps.createProject'), to: `/o/${org.slug}/projects` },
     { done: false, label: t('steps.profile'), to: '/settings/profile', optional: true },
   ];
+  // The checklist stays until every required step is done.
+  const gettingStarted = !projects.isPending && steps.some((s) => !s.done && !s.optional);
 
   return (
     <div className="space-y-8">
@@ -29,30 +37,34 @@ export function OrgHomePage() {
         <Badge variant="secondary">{t('yourRole', { role: t(`common:roles.${org.role}`) })}</Badge>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('gettingStarted')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="divide-y">
-            {steps.map((s) => (
-              <li key={s.label} className="flex flex-wrap items-center gap-3 py-3">
-                {s.done ? (
-                  <CheckCircle2 aria-hidden className="text-success size-5 shrink-0" />
-                ) : (
-                  <Circle aria-hidden className="text-muted-foreground size-5 shrink-0" />
-                )}
-                <span className="min-w-0 flex-1">{s.label}</span>
-                {s.to && (
-                  <Button asChild variant="outline" size="sm">
-                    <Link to={s.to}>{s.done || s.optional ? t('review') : t('setUp')}</Link>
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
+      {gettingStarted && (
+        <Card data-testid="getting-started">
+          <CardHeader>
+            <CardTitle>{t('gettingStarted')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {steps.map((s) => (
+                <li key={s.label} className="flex flex-wrap items-center gap-3 py-3">
+                  {s.done ? (
+                    <CheckCircle2 aria-hidden className="text-success size-5 shrink-0" />
+                  ) : (
+                    <Circle aria-hidden className="text-muted-foreground size-5 shrink-0" />
+                  )}
+                  <span className="min-w-0 flex-1">{s.label}</span>
+                  {s.to && (
+                    <Button asChild variant="outline" size="sm">
+                      <Link to={s.to}>{s.done || s.optional ? t('review') : t('setUp')}</Link>
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dashboard orgId={org.id} orgSlug={org.slug} />
     </div>
   );
 }

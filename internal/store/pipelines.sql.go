@@ -375,7 +375,7 @@ func (q *Queries) GetProjectForPipeline(ctx context.Context, id uuid.UUID) (GetP
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, organization_id, project_id, number, status, trigger, ref, commit_sha, title, actor_name, created_by, rerun_of, definition, problems, variables, started_at, finished_at, created_at, updated_at FROM pipeline_runs WHERE id = $1
+SELECT id, organization_id, project_id, number, status, trigger, ref, commit_sha, title, actor_name, created_by, rerun_of, definition, problems, variables, started_at, finished_at, created_at, updated_at, committed_at FROM pipeline_runs WHERE id = $1
 `
 
 func (q *Queries) GetRun(ctx context.Context, id uuid.UUID) (PipelineRun, error) {
@@ -401,6 +401,7 @@ func (q *Queries) GetRun(ctx context.Context, id uuid.UUID) (PipelineRun, error)
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CommittedAt,
 	)
 	return i, err
 }
@@ -549,12 +550,12 @@ func (q *Queries) InsertLogChunk(ctx context.Context, arg InsertLogChunkParams) 
 const insertRun = `-- name: InsertRun :one
 INSERT INTO pipeline_runs (
   organization_id, project_id, number, status, trigger, ref, commit_sha, title, actor_name,
-  created_by, rerun_of, definition, problems, variables, finished_at
+  created_by, rerun_of, definition, problems, variables, finished_at, committed_at
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9,
-  $10, $11, $12, $13, $14, $15
+  $10, $11, $12, $13, $14, $15, $16
 )
-RETURNING id, organization_id, project_id, number, status, trigger, ref, commit_sha, title, actor_name, created_by, rerun_of, definition, problems, variables, started_at, finished_at, created_at, updated_at
+RETURNING id, organization_id, project_id, number, status, trigger, ref, commit_sha, title, actor_name, created_by, rerun_of, definition, problems, variables, started_at, finished_at, created_at, updated_at, committed_at
 `
 
 type InsertRunParams struct {
@@ -573,6 +574,7 @@ type InsertRunParams struct {
 	Problems       []byte     `json:"problems"`
 	Variables      []byte     `json:"variables"`
 	FinishedAt     *time.Time `json:"finished_at"`
+	CommittedAt    *time.Time `json:"committed_at"`
 }
 
 func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) (PipelineRun, error) {
@@ -592,6 +594,7 @@ func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) (PipelineR
 		arg.Problems,
 		arg.Variables,
 		arg.FinishedAt,
+		arg.CommittedAt,
 	)
 	var i PipelineRun
 	err := row.Scan(
@@ -614,6 +617,7 @@ func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) (PipelineR
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CommittedAt,
 	)
 	return i, err
 }
@@ -776,7 +780,7 @@ func (q *Queries) ListLogChunks(ctx context.Context, arg ListLogChunksParams) ([
 }
 
 const listRuns = `-- name: ListRuns :many
-SELECT r.id, r.organization_id, r.project_id, r.number, r.status, r.trigger, r.ref, r.commit_sha, r.title, r.actor_name, r.created_by, r.rerun_of, r.definition, r.problems, r.variables, r.started_at, r.finished_at, r.created_at, r.updated_at, coalesce(u.display_name, '')::text AS created_by_name
+SELECT r.id, r.organization_id, r.project_id, r.number, r.status, r.trigger, r.ref, r.commit_sha, r.title, r.actor_name, r.created_by, r.rerun_of, r.definition, r.problems, r.variables, r.started_at, r.finished_at, r.created_at, r.updated_at, r.committed_at, coalesce(u.display_name, '')::text AS created_by_name
 FROM pipeline_runs r
 LEFT JOIN users u ON u.id = r.created_by
 WHERE r.project_id = $1
@@ -819,6 +823,7 @@ type ListRunsRow struct {
 	FinishedAt     *time.Time `json:"finished_at"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+	CommittedAt    *time.Time `json:"committed_at"`
 	CreatedByName  string     `json:"created_by_name"`
 }
 
@@ -859,6 +864,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]ListRunsR
 			&i.FinishedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CommittedAt,
 			&i.CreatedByName,
 		); err != nil {
 			return nil, err
@@ -970,7 +976,7 @@ func (q *Queries) ListStepsForJobs(ctx context.Context, jobIds []uuid.UUID) ([]J
 }
 
 const lockRun = `-- name: LockRun :one
-SELECT id, organization_id, project_id, number, status, trigger, ref, commit_sha, title, actor_name, created_by, rerun_of, definition, problems, variables, started_at, finished_at, created_at, updated_at FROM pipeline_runs WHERE id = $1 FOR UPDATE
+SELECT id, organization_id, project_id, number, status, trigger, ref, commit_sha, title, actor_name, created_by, rerun_of, definition, problems, variables, started_at, finished_at, created_at, updated_at, committed_at FROM pipeline_runs WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockRun(ctx context.Context, id uuid.UUID) (PipelineRun, error) {
@@ -996,6 +1002,7 @@ func (q *Queries) LockRun(ctx context.Context, id uuid.UUID) (PipelineRun, error
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CommittedAt,
 	)
 	return i, err
 }

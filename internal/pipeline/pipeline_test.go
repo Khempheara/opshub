@@ -414,3 +414,35 @@ func TestTickSchedulesAndReaper(t *testing.T) {
 	assert.Equal(t, "failed/timeout", statuses(e.get(t, r.ID))["test"])
 	assert.Equal(t, "failed/no_runner", statuses(e.get(t, page.Items[0].ID))["test"])
 }
+
+// Runs keep their commit's time (from the Git host) for lead time; without it, it stays NULL.
+func TestCommitTimeRecorded(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	committedAt := func(id uuid.UUID) *time.Time {
+		t.Helper()
+		var at *time.Time
+		require.NoError(t, pgtest.Pool(t).QueryRow(ctx, `SELECT committed_at FROM pipeline_runs WHERE id = $1`, id).Scan(&at))
+		return at
+	}
+	e.git.set("main", "ccccccc1", threeStage)
+	r := e.run(t, e.dev, "")
+	require.NotNil(t, committedAt(r.ID))
+	assert.True(t, committedAt(r.ID).Equal(commitDate))
+
+	repo, err := e.projects.GetRepository(e.dev.ctx, e.projectID)
+	require.NoError(t, err)
+	e.git.set("feature", "ddddddd1", threeStage)
+	require.NoError(t, e.svc.RunFromEvent(ctx, jobs.PipelineFromEventArgs{
+		RepositoryID: repo.ID, ProjectID: e.projectID, Event: "pull_request", Ref: "refs/heads/feature", SHA: "ddddddd1", BaseRef: "main",
+	}))
+	e.git.files["eeeeeee1"] = threeStage // a commit the host can't describe
+	require.NoError(t, e.svc.RunFromEvent(ctx, jobs.PipelineFromEventArgs{
+		RepositoryID: repo.ID, ProjectID: e.projectID, Event: "pull_request", Ref: "refs/heads/other", SHA: "eeeeeee1", BaseRef: "main",
+	}))
+	var withTime, without int
+	require.NoError(t, pgtest.Pool(t).QueryRow(ctx, `SELECT count(*) FILTER (WHERE committed_at = $2), count(*) FILTER (WHERE committed_at IS NULL)
+		FROM pipeline_runs WHERE project_id = $1 AND trigger = 'pull_request'`, e.projectID, commitDate).Scan(&withTime, &without))
+	assert.Equal(t, 1, withTime)
+	assert.Equal(t, 1, without)
+}

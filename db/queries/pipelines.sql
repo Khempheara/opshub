@@ -5,10 +5,10 @@ UPDATE projects SET last_run_number = last_run_number + 1 WHERE id = @id RETURNI
 -- name: InsertRun :one
 INSERT INTO pipeline_runs (
   organization_id, project_id, number, status, trigger, ref, commit_sha, title, actor_name,
-  created_by, rerun_of, definition, problems, variables, finished_at
+  created_by, rerun_of, definition, problems, variables, finished_at, committed_at
 ) VALUES (
   @organization_id, @project_id, @number, @status, @trigger, @ref, @commit_sha, @title, @actor_name,
-  @created_by, @rerun_of, @definition, @problems, @variables, @finished_at
+  @created_by, @rerun_of, @definition, @problems, @variables, @finished_at, sqlc.narg(committed_at)
 )
 RETURNING *;
 

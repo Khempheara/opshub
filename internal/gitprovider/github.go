@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type github struct {
@@ -90,7 +91,10 @@ func (g *github) Commit(ctx context.Context, ref string) (Commit, error) {
 	var out struct {
 		SHA    string `json:"sha"`
 		Commit struct {
-			Message string `json:"message"`
+			Message   string `json:"message"`
+			Committer struct {
+				Date time.Time `json:"date"`
+			} `json:"committer"`
 		} `json:"commit"`
 	}
 	if err := g.client().do(ctx, http.MethodGet, "/repos/"+g.fullName+"/commits/"+url.PathEscape(ref), nil, &out); err != nil {
@@ -99,7 +103,7 @@ func (g *github) Commit(ctx context.Context, ref string) (Commit, error) {
 		}
 		return Commit{}, err
 	}
-	return Commit{SHA: out.SHA, Message: out.Commit.Message}, nil
+	return Commit{SHA: out.SHA, Message: out.Commit.Message, Time: out.Commit.Committer.Date}, nil
 }
 
 // escapePath escapes each segment of a repository path.
