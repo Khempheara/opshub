@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpsHub API
-  version: 0.11.0
+  version: 0.12.0
   summary: All-in-One DevOps Platform
   description: |
     REST API for OpsHub. All resource endpoints are versioned under `/api/v1`.
@@ -82,6 +82,12 @@ tags:
       infrastructure of Module 7, alerts with escalation and acknowledgement, silences, and
       notification channels (Telegram, Slack, email, webhooks) with write-only credentials
       (docs/monitoring.md).
+  - name: audit
+    description: |
+      The append-only audit log (docs/audit.md): every change and security event, shown as a
+      sentence in the requested language (`locale`, else Accept-Language), with the raw
+      before/after values. Owners and Admins read and export an organization's log; everyone
+      sees their own account activity.
   - name: logs
     description: |
       Searchable logs (docs/logs.md): services send NDJSON lines with organization ingest
@@ -488,6 +494,25 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RecoveryCodes" }
         "401": { $ref: "#/components/responses/Error" }
+
+  /api/v1/me/activity:
+    get:
+      tags: [account, audit]
+      operationId: listAccountActivity
+      summary: "Your own account activity: sign-ins, two-factor, password, tokens and sessions"
+      description: "Needs a signed-in session (not an API token). Newest first."
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/AuditLocale"
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditEntryPage" }
+        "401": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
 
   /api/v1/me/sessions:
     get:
@@ -2682,6 +2707,67 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /api/v1/orgs/{orgId}/audit-log:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [audit]
+      operationId: listAuditLog
+      summary: "The organization's audit log, newest first (audit.view)"
+      parameters:
+        - $ref: "#/components/parameters/AuditArea"
+        - $ref: "#/components/parameters/AuditAction"
+        - $ref: "#/components/parameters/AuditActor"
+        - $ref: "#/components/parameters/AuditProject"
+        - $ref: "#/components/parameters/AuditResourceType"
+        - $ref: "#/components/parameters/AuditResourceID"
+        - $ref: "#/components/parameters/AuditFrom"
+        - $ref: "#/components/parameters/AuditTo"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/AuditLocale"
+      responses:
+        "200":
+          description: "OK."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditEntryPage" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /api/v1/orgs/{orgId}/audit-log/export:
+    parameters:
+      - $ref: "#/components/parameters/OrgID"
+    get:
+      tags: [audit]
+      operationId: exportAuditLog
+      summary: "Every matching entry as CSV (audit.export); the export itself is audited"
+      description: |
+        UTF-8 with a byte-order mark, so spreadsheet programs show Khmer correctly. Columns:
+        time, actor_type, actor_name, actor_email, action, summary, resource_type,
+        resource_id, project_id, project_name, ip, user_agent, before, after, metadata (JSON).
+        Cells that start with = + - @ get a leading apostrophe.
+      parameters:
+        - $ref: "#/components/parameters/AuditArea"
+        - $ref: "#/components/parameters/AuditAction"
+        - $ref: "#/components/parameters/AuditActor"
+        - $ref: "#/components/parameters/AuditProject"
+        - $ref: "#/components/parameters/AuditResourceType"
+        - $ref: "#/components/parameters/AuditResourceID"
+        - $ref: "#/components/parameters/AuditFrom"
+        - $ref: "#/components/parameters/AuditTo"
+        - $ref: "#/components/parameters/AuditLocale"
+      responses:
+        "200":
+          description: "The CSV file (attachment audit-log-<org>-<date>.csv)."
+          content:
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /api/v1/orgs/{orgId}/logs:
     parameters:
       - $ref: "#/components/parameters/OrgID"
@@ -3244,6 +3330,52 @@ components:
       in: path
       required: true
       schema: { type: string, enum: [github, google, keycloak] }
+    AuditArea:
+      name: area
+      in: query
+      description: "Areas (the action before the dot, e.g. secret, monitor); repeat or comma-separate"
+      style: form
+      explode: true
+      schema: { type: array, items: { type: string }, maxItems: 30 }
+    AuditAction:
+      name: action
+      in: query
+      description: "Exact actions (e.g. secret.read); repeat or comma-separate. Matches either an area or an action"
+      style: form
+      explode: true
+      schema: { type: array, items: { type: string }, maxItems: 30 }
+    AuditActor:
+      name: actor
+      in: query
+      description: "User id of who did it"
+      schema: { type: string, format: uuid }
+    AuditProject:
+      name: project
+      in: query
+      schema: { type: string, format: uuid }
+    AuditResourceType:
+      name: resource_type
+      in: query
+      schema: { type: string }
+    AuditResourceID:
+      name: resource_id
+      in: query
+      schema: { type: string }
+    AuditFrom:
+      name: from
+      in: query
+      description: "Start (RFC 3339), inclusive"
+      schema: { type: string, format: date-time }
+    AuditTo:
+      name: to
+      in: query
+      description: "End (RFC 3339), exclusive"
+      schema: { type: string, format: date-time }
+    AuditLocale:
+      name: locale
+      in: query
+      description: "Language of the summaries (en or km); defaults to Accept-Language"
+      schema: { type: string, enum: [en, km] }
 
   headers:
     ETag:
@@ -4985,6 +5117,46 @@ components:
         ok: { type: boolean }
         error: { type: string, description: "Why it failed, without credentials." }
 
+    AuditActor:
+      type: object
+      required: [type, user_id, name, email]
+      properties:
+        type: { type: string, enum: [user, api_token, runner, system] }
+        user_id: { type: [string, "null"], format: uuid }
+        name: { type: [string, "null"], description: "Null for OpsHub, runners and deleted users." }
+        email: { type: [string, "null"] }
+    AuditProjectRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: [string, "null"] }
+    AuditEntry:
+      type: object
+      required: [id, created_at, action, area, summary, actor, resource_type, resource_id, project, ip, user_agent, before, after, metadata]
+      properties:
+        id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        action: { type: string, examples: [secret.rotate] }
+        area: { type: string, examples: [secret] }
+        summary: { type: string, description: "The entry as a sentence in the requested language." }
+        actor: { $ref: "#/components/schemas/AuditActor" }
+        resource_type: { type: string }
+        resource_id: { type: [string, "null"] }
+        project: { oneOf: [{ $ref: "#/components/schemas/AuditProjectRef" }, { type: "null" }] }
+        ip: { type: [string, "null"] }
+        user_agent: { type: [string, "null"] }
+        before: { type: [object, "null"], additionalProperties: true }
+        after: { type: [object, "null"], additionalProperties: true }
+        metadata: { type: object, additionalProperties: true }
+    AuditEntryPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AuditEntry" }
+        next_cursor: { type: [string, "null"] }
     LogLevel:
       type: string
       enum: [debug, info, warn, error]

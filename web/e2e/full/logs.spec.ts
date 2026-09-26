@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expectKhmerLayoutOK } from '../khmer';
-import { newOwnerWithOrg, SEED_PASSWORD, signIn } from './helpers';
+import { newOwnerWithOrg, SEED_PASSWORD, signIn, switchLanguage } from './helpers';
 
 /** Opens a Logs tab and waits until it is shown (a closing dialog can swallow a click). */
 async function openTab(page: Page, name: string, path: string) {
@@ -100,7 +100,7 @@ test('a service sends lines with an ingest token; they are searched, followed an
   await page.getByRole('button', { name: 'Follow' }).click();
 
   // Khmer layout on phone and desktop widths.
-  await page.getByRole('button', { name: 'ខ្មែរ' }).click();
+  await switchLanguage(page, 'km');
   for (const viewport of [
     { width: 375, height: 812 },
     { width: 1280, height: 800 },
@@ -113,7 +113,7 @@ test('a service sends lines with an ingest token; they are searched, followed an
       await expectKhmerLayoutOK(page);
     }
   }
-  await page.getByRole('button', { name: 'EN', exact: true }).click();
+  await switchLanguage(page, 'en');
 
   // A revoked token stops working; stored lines stay.
   await page.goto(`/o/${slug}/logs/tokens`);
@@ -129,7 +129,7 @@ test('a service sends lines with an ingest token; they are searched, followed an
 
 test('viewers search logs but cannot manage ingest tokens', async ({ page }) => {
   await signIn(page, 'viewer@demo.opshub.local', SEED_PASSWORD);
-  await page.getByRole('button', { name: 'EN', exact: true }).click();
+  await switchLanguage(page, 'en');
   await page.goto('/o/angkor-tech/logs');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Logs');
   await expect(page.getByRole('navigation', { name: 'Logs sections' })).toHaveCount(0);

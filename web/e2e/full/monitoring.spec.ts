@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expectKhmerLayoutOK } from '../khmer';
-import { MAILPIT, newOwnerWithOrg, SEED_PASSWORD, signIn, uniqueEmail } from './helpers';
+import { MAILPIT, newOwnerWithOrg, SEED_PASSWORD, signIn, switchLanguage, uniqueEmail } from './helpers';
 
 /** Opens a Monitoring tab and waits until it is shown (a closing dialog can swallow a click). */
 async function openTab(page: Page, name: string, path: string) {
@@ -142,7 +142,7 @@ test('a down monitor fires an alert that is acknowledged and silenced; channels 
   await expect(page.getByText('Alert rules still notify this channel')).toBeVisible();
 
   // Khmer layout on phone and desktop widths.
-  await page.getByRole('button', { name: 'ខ្មែរ' }).click();
+  await switchLanguage(page, 'km');
   for (const viewport of [
     { width: 375, height: 812 },
     { width: 1280, height: 800 },
@@ -157,7 +157,7 @@ test('a down monitor fires an alert that is acknowledged and silenced; channels 
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expectKhmerLayoutOK(page);
   }
-  await page.getByRole('button', { name: 'EN', exact: true }).click();
+  await switchLanguage(page, 'en');
 
   // Deleting the monitor keeps the alert history.
   await page.goto(monitorUrl);
@@ -169,7 +169,7 @@ test('a down monitor fires an alert that is acknowledged and silenced; channels 
 
 test("viewers see monitoring read-only and don't see channels", async ({ page }) => {
   await signIn(page, 'viewer@demo.opshub.local', SEED_PASSWORD);
-  await page.getByRole('button', { name: 'EN', exact: true }).click();
+  await switchLanguage(page, 'en');
   await page.goto('/o/angkor-tech/monitoring');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Monitoring');
   await expect(page.getByTestId('monitor-row').first()).toBeVisible();

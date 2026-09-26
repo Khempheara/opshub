@@ -1,4 +1,4 @@
-import { Activity, Boxes, Building2, FolderGit2, KeyRound, LayoutDashboard, Rocket, ScrollText, Server, Settings, ShieldCheck, UserRound, Users, UsersRound, type LucideIcon } from 'lucide-react';
+import { Activity, Boxes, Building2, FolderGit2, History, KeyRound, LayoutDashboard, Rocket, ScrollText, Server, Settings, ShieldCheck, UserRound, Users, UsersRound, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router';
 import { hasRole, lastOrg } from '@/app/org';
@@ -39,6 +39,8 @@ function useNavGroups(): { label?: string; items: Item[] }[] {
         { to: `${base}/infrastructure`, label: t('org:nav.infrastructure'), icon: Boxes },
         { to: `${base}/monitoring`, label: t('org:nav.monitoring'), icon: Activity },
         { to: `${base}/logs`, label: t('org:nav.logs'), icon: ScrollText },
+        // audit.view is Owner/Admin (the page itself also guards).
+        ...(routeOrg && hasRole(routeOrg.role, 'admin') ? [{ to: `${base}/audit-log`, label: t('org:nav.audit'), icon: History }] : []),
         { to: `${base}/settings`, label: t('org:nav.settings'), icon: Settings },
       ],
     });

@@ -29,6 +29,7 @@ import (
 	riverpkg "github.com/riverqueue/river"
 
 	"github.com/opshub/opshub/internal/alert"
+	"github.com/opshub/opshub/internal/auditlog"
 	"github.com/opshub/opshub/internal/auth"
 	"github.com/opshub/opshub/internal/auth/sso"
 	"github.com/opshub/opshub/internal/authn"
@@ -169,6 +170,7 @@ func serve() error {
 		PublicURL: cfg.PublicURL, DefaultLocale: cfg.DefaultLocale, OutboundAllowedCIDRs: outboundCIDRs,
 	}, logger)
 	alertSvc := alert.NewService(pool, inserter, logger)
+	auditSvc := auditlog.NewService(pool, bundle, logger)
 	logSvc := logs.NewService(pool, logs.Config{RetentionDays: cfg.LogRetentionDays}, logger)
 
 	river, err := jobs.NewClient(jobs.Deps{
@@ -230,6 +232,7 @@ func serve() error {
 				alert.NewHandler(alertSvc),
 				notify.NewHandler(notifySvc),
 				logs.NewHandler(logSvc),
+				auditlog.NewHandler(auditSvc),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

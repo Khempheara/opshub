@@ -1,4 +1,5 @@
 export * from './account/account';
+export * from './audit/audit';
 export * from './auth/auth';
 export * from './deployments/deployments';
 export * from './environments/environments';

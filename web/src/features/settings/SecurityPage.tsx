@@ -14,6 +14,7 @@ import { EmptyState, ErrorState, FormError, LoadingState } from '@/components/co
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { AccountActivityCard } from '@/features/audit/AccountActivityCard';
 import { useFormat } from '@/i18n/useFormat';
 import { errorMessage, hasCode } from '@/lib/api/errors';
 import {
@@ -211,6 +212,7 @@ export function SecurityPage() {
       <TwoFactorCard />
       <SessionsCard />
       <IdentitiesCard />
+      <AccountActivityCard />
     </div>
   );
 }

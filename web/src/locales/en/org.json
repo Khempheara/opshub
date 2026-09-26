@@ -8,7 +8,8 @@
     "deployTargets": "Deploy targets",
     "infrastructure": "Infrastructure",
     "monitoring": "Monitoring",
-    "logs": "Logs"
+    "logs": "Logs",
+    "audit": "Audit log"
   },
   "roleDescriptions": {
     "owner": "Full control, including deleting the organization and managing owners.",

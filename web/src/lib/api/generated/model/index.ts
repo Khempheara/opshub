@@ -25,7 +25,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.11.0
+ * OpenAPI spec version: 0.12.0
  */
 
 export * from './agentHeartbeat';
@@ -66,6 +66,23 @@ export * from './assetMetrics';
 export * from './assetRequest';
 export * from './assetRequestMetadata';
 export * from './assetStatus';
+export * from './auditActionParameter';
+export * from './auditActor';
+export * from './auditActorParameter';
+export * from './auditActorType';
+export * from './auditAreaParameter';
+export * from './auditEntry';
+export * from './auditEntryAfter';
+export * from './auditEntryBefore';
+export * from './auditEntryMetadata';
+export * from './auditEntryPage';
+export * from './auditFromParameter';
+export * from './auditLocaleParameter';
+export * from './auditProjectParameter';
+export * from './auditProjectRef';
+export * from './auditResourceIDParameter';
+export * from './auditResourceTypeParameter';
+export * from './auditToParameter';
 export * from './certificate';
 export * from './certificateList';
 export * from './certificateStatus';
@@ -117,6 +134,7 @@ export * from './errorError';
 export * from './errorErrorDetails';
 export * from './errorResponse';
 export * from './escalationStep';
+export * from './exportAuditLogParams';
 export * from './fieldError';
 export * from './getAssetCertificate200';
 export * from './getAssetMetricsParams';
@@ -147,10 +165,12 @@ export * from './jobDetail';
 export * from './jobStatus';
 export * from './kubernetesTargetConfig';
 export * from './limitParameter';
+export * from './listAccountActivityParams';
 export * from './listAlertsParams';
 export * from './listAlertsStatus';
 export * from './listApiTokensParams';
 export * from './listAssetsParams';
+export * from './listAuditLogParams';
 export * from './listCertificatesParams';
 export * from './listDeploymentsParams';
 export * from './listEnvironments200';

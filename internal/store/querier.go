@@ -12,6 +12,9 @@ import (
 )
 
 type Querier interface {
+	// A user's own account events (sign-ins, 2FA, password, tokens, sessions): entries without
+	// an organization that the user did or that are about the user. Newest first, keyset paging.
+	AccountActivity(ctx context.Context, arg AccountActivityParams) ([]AccountActivityRow, error)
 	AcknowledgeAlert(ctx context.Context, arg AcknowledgeAlertParams) (Alert, error)
 	ActiveSilences(ctx context.Context, organizationID uuid.UUID) ([]Silence, error)
 	AddDeploymentLogBytes(ctx context.Context, arg AddDeploymentLogBytesParams) error
@@ -22,6 +25,12 @@ type Querier interface {
 	AdvanceSchedule(ctx context.Context, arg AdvanceScheduleParams) error
 	// Accepts a TOTP time step only once (replay protection); returns no row if already used.
 	AdvanceTOTPStep(ctx context.Context, arg AdvanceTOTPStepParams) (uuid.UUID, error)
+	// Names of infrastructure assets mentioned by audit entries.
+	AuditAssetNames(ctx context.Context, ids []uuid.UUID) ([]AuditAssetNamesRow, error)
+	// Names of teams mentioned by audit entries (deleted teams included).
+	AuditTeamNames(ctx context.Context, ids []uuid.UUID) ([]AuditTeamNamesRow, error)
+	// Names of users mentioned by audit entries.
+	AuditUserNames(ctx context.Context, ids []uuid.UUID) ([]AuditUserNamesRow, error)
 	// Rotation: the next value version, also a new ETag version.
 	BumpSecretVersion(ctx context.Context, arg BumpSecretVersionParams) (Secret, error)
 	// Takes due monitors and schedules their next check, so concurrent workers never run the
@@ -218,8 +227,6 @@ type Querier interface {
 	ListAlerts(ctx context.Context, arg ListAlertsParams) ([]ListAlertsRow, error)
 	ListApprovals(ctx context.Context, jobID uuid.UUID) ([]ListApprovalsRow, error)
 	ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListAssetsRow, error)
-	// Keyset pagination on (created_at, id) newest first.
-	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
 	// Certificates of the organization's domains, soonest expiry first; expiring_before (optional)
 	// keeps those expiring earlier or failing.
 	ListCertificates(ctx context.Context, arg ListCertificatesParams) ([]ListCertificatesRow, error)
@@ -323,6 +330,11 @@ type Querier interface {
 	// Names of the rules whose escalation notifies the channel.
 	RulesUsingChannel(ctx context.Context, arg RulesUsingChannelParams) ([]string, error)
 	RunningJobsForRunner(ctx context.Context, runnerID *uuid.UUID) ([]uuid.UUID, error)
+	// An organization's entries, newest first, with the actor, the project and (for user and
+	// member resources) the user named by resource_id. Filters: areas (the action's part before
+	// the dot) or exact actions, actor, project, resource, and [from_ts, to_ts). Keyset paging on
+	// (created_at, id).
+	SearchAuditLog(ctx context.Context, arg SearchAuditLogParams) ([]SearchAuditLogRow, error)
 	// Newest first within [from_ts, to_ts). Job and deployment lines only for the given projects
 	// (see_all: every project). fts: a full-text query; contains: a plain substring (for text
 	// without spaces between words, such as Khmer). before_* pages backwards, after_* fetches

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { expectKhmerLayoutOK } from '../khmer';
-import { newOwnerWithOrg } from './helpers';
+import { newOwnerWithOrg, switchLanguage } from './helpers';
 
 test('register a runner, see it online, edit, disable and delete it', async ({ page }) => {
   test.setTimeout(90_000);
@@ -67,7 +67,7 @@ test('register a runner, see it online, edit, disable and delete it', async ({ p
   await expect(row).not.toContainText('Disabled');
 
   // Khmer layout on phone and desktop widths.
-  await page.getByRole('button', { name: 'ខ្មែរ' }).click();
+  await switchLanguage(page, 'km');
   for (const viewport of [
     { width: 375, height: 812 },
     { width: 1280, height: 800 },

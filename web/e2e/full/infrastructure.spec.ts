@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { expectKhmerLayoutOK } from '../khmer';
-import { newOwnerWithOrg, SEED_PASSWORD, signIn } from './helpers';
+import { newOwnerWithOrg, SEED_PASSWORD, signIn, switchLanguage } from './helpers';
 
 test('inventory, agent token and heartbeat, metrics, certificates', async ({ page }) => {
   test.setTimeout(120_000);
@@ -98,7 +98,7 @@ test('inventory, agent token and heartbeat, metrics, certificates', async ({ pag
   await expect(certRow).toHaveCount(1);
 
   // Khmer layout on phone and desktop widths.
-  await page.getByRole('button', { name: 'ខ្មែរ' }).click();
+  await switchLanguage(page, 'km');
   for (const viewport of [
     { width: 375, height: 812 },
     { width: 1280, height: 800 },
@@ -110,7 +110,7 @@ test('inventory, agent token and heartbeat, metrics, certificates', async ({ pag
       await expectKhmerLayoutOK(page);
     }
   }
-  await page.getByRole('button', { name: 'EN', exact: true }).click();
+  await switchLanguage(page, 'en');
 
   // Delete.
   await page.goto(assetUrl);
@@ -124,7 +124,7 @@ test('inventory, agent token and heartbeat, metrics, certificates', async ({ pag
 
 test('viewers see infrastructure read-only', async ({ page }) => {
   await signIn(page, 'viewer@demo.opshub.local', SEED_PASSWORD);
-  await page.getByRole('button', { name: 'EN', exact: true }).click();
+  await switchLanguage(page, 'en');
   await page.goto('/o/angkor-tech/infrastructure');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Infrastructure');
   await expect(page.getByTestId('asset-row').filter({ hasText: 'web-1' })).toBeVisible();

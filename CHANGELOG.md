@@ -1,5 +1,82 @@
 # Changelog
 
+## Module 11 — Audit log
+
+### Built
+
+**Backend** (`internal/auditlog`; the recorder `internal/audit` is unchanged)
+- **Organization audit log** (`audit.view`, Owners and Admins):
+  - Newest first, with filters for area (the action before the dot), exact action, person,
+    project, resource and time range, and keyset paging.
+  - Each entry has the actor (person, API token, runner or OpsHub), project, IP, User-Agent,
+    before/after values and metadata.
+- **Sentences in English and Khmer:**
+  - 89 action sentences (`audit.<action>`) in the Go bundle, rendered by the API in `?locale` or the
+    Accept-Language language, so the page and the CSV read the same.
+  - Names are resolved at read time: people, projects, and teams and assets mentioned by id.
+  - Unknown actions fall back to "who: action (resource)".
+- **Account activity** (`GET /me/activity`, signed-in sessions): each person's own sign-ins,
+  failed sign-ins, lockouts, 2FA, password, token, session and linked sign-in events. These
+  are never part of an organization's log.
+- **CSV export** (`audit.export`):
+  - Streams every matching entry in batches with all columns, including before/after/metadata
+    JSON.
+  - UTF-8 byte-order mark for Excel and Khmer; cells that look like formulas are escaped.
+  - The export is recorded with its filter before the file is sent.
+- **Retention:** kept forever (append-only, as before).
+- **Delivery:** migration `000011_audit` (area, project, actor and account-activity indexes); 3
+  endpoints; OpenAPI 0.12.0.
+
+**Frontend**
+- **Organization → Audit log** (sidebar, Owners and Admins):
+  - Sentences with area icons, time, IP and action code.
+  - Filters for area, person, project and time range, with load more.
+  - Details for each entry: who, resource, project, device, a before/after table and extra
+    values.
+  - **Export CSV** button.
+- **Settings → Security → Recent account activity** for everyone, with the device named from its
+  User-Agent ("Chrome · macOS").
+- New `audit` translation namespace (EN + KM).
+
+### Quality
+
+- **Go:**
+  - Every sentence renders in both languages with no missing values, and a scan of the services
+    fails when a recorded action has no sentence.
+  - Sentence cases: roles, teams and assets by id, approvals, deployments by OpsHub, runner
+    secret reads, API-token actors, deleted users, variants and the fallback.
+  - Filters, validation, paging, permissions and other organizations.
+  - Account activity stays personal.
+  - CSV content: BOM, header, Khmer, formula escaping, JSON columns, the recorded export, and
+    streaming across batches (1,203 rows).
+  - HTTP: locale and Accept-Language, CSV headers, tenant isolation and route coverage.
+  - Coverage: auditlog 94.0 %; service coverage 78.6 %.
+- **Web:** 121 Vitest tests (+9: filters, areas, before/after changes, metadata, device names,
+  file names) and 52 Playwright tests (+2):
+  - An owner's team changes read as sentences and filter by area.
+  - The export downloads a BOM-prefixed CSV and appears in the log.
+  - Account activity shows sign-ins but not organization events.
+  - Khmer layout at phone and desktop widths.
+  - Developers get no audit log but see their own activity.
+- **E2E fix:** a new `switchLanguage` helper waits for the profile to save the language before
+  the next page load. This fixes the intermittent failures where a reload brought back the
+  previous language (seen in the monitoring and audit specs).
+- **Deployment rollback fix (Module 6):**
+  - When a Docker release failed, restoring the previous container could fail silently if
+    Docker hadn't yet released the removed container's port ("port is already allocated").
+    This happened once on CI.
+  - The rollback now retries the start for up to 15 s and writes every failed step to the
+    deployment log. A unit test covers it against a fake Docker API.
+- golangci-lint, gosec, govulncheck, ESLint, TypeScript and the i18n check are clean. Trivy
+  finds 0 HIGH/CRITICAL in the api, web and runner images. Migrations pass up/down/up; sqlc and
+  orval are deterministic; the OpenAPI ↔ routes test passes. The full Playwright suite passed
+  twice in a row.
+
+### Next — Module 12: Dashboard & DORA metrics
+
+Pipeline success rate and duration trends, and deployment frequency, lead time, change failure
+rate and time to restore.
+
 ## Module 10 — Logs
 
 ### Built

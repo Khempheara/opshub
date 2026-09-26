@@ -25,7 +25,7 @@
  *
  * **Timestamps** are RFC 3339 in UTC. **IDs** are UUID v7.
  *
- * OpenAPI spec version: 0.11.0
+ * OpenAPI spec version: 0.12.0
  */
 import {
   useQuery
@@ -44,12 +44,14 @@ import type {
 
 import type {
   APITokenPage,
+  AuditEntryPage,
   ChangePasswordRequest,
   CodeRequest,
   CreateAPITokenRequest,
   CreatedAPIToken,
   DisableTwoFactorRequest,
   ErrorResponse,
+  ListAccountActivityParams,
   ListApiTokensParams,
   ListIdentities200,
   ListSessionsParams,
@@ -958,6 +960,114 @@ export function useRegenerateRecoveryCodes<TData = Awaited<ReturnType<typeof reg
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getRegenerateRecoveryCodesQueryOptions(codeRequest,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getListAccountActivityUrl = (params?: ListAccountActivityParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/me/activity?${stringifiedParams}` : `/api/v1/me/activity`
+}
+
+/**
+ * Needs a signed-in session (not an API token). Newest first.
+ * @summary Your own account activity: sign-ins, two-factor, password, tokens and sessions
+ */
+export const listAccountActivity = async (params?: ListAccountActivityParams, options?: Parameters<typeof customFetch>[1]): Promise<AuditEntryPage> => {
+
+  return customFetch<AuditEntryPage>(getListAccountActivityUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAccountActivityQueryKey = (params?: ListAccountActivityParams,) => {
+    return [
+    `/api/v1/me/activity`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAccountActivityQueryOptions = <TData = Awaited<ReturnType<typeof listAccountActivity>>, TError = ErrorResponse>(params?: ListAccountActivityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccountActivity>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAccountActivityQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAccountActivity>>> = ({ signal }) => listAccountActivity(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAccountActivity>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAccountActivityQueryResult = NonNullable<Awaited<ReturnType<typeof listAccountActivity>>>
+export type ListAccountActivityQueryError = ErrorResponse
+
+
+export function useListAccountActivity<TData = Awaited<ReturnType<typeof listAccountActivity>>, TError = ErrorResponse>(
+ params: undefined |  ListAccountActivityParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccountActivity>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAccountActivity>>,
+          TError,
+          Awaited<ReturnType<typeof listAccountActivity>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAccountActivity<TData = Awaited<ReturnType<typeof listAccountActivity>>, TError = ErrorResponse>(
+ params?: ListAccountActivityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccountActivity>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAccountActivity>>,
+          TError,
+          Awaited<ReturnType<typeof listAccountActivity>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAccountActivity<TData = Awaited<ReturnType<typeof listAccountActivity>>, TError = ErrorResponse>(
+ params?: ListAccountActivityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccountActivity>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Your own account activity: sign-ins, two-factor, password, tokens and sessions
+ */
+
+export function useListAccountActivity<TData = Awaited<ReturnType<typeof listAccountActivity>>, TError = ErrorResponse>(
+ params?: ListAccountActivityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccountActivity>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAccountActivityQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

@@ -60,6 +60,7 @@ export const routes: RouteObject[] = [
               { path: 'monitoring/silences', ...page(() => import('@/features/monitoring/SilencesPage'), 'SilencesPage') },
               { path: 'monitoring/channels', ...page(() => import('@/features/monitoring/ChannelsPage'), 'ChannelsPage') },
               { path: 'logs', ...page(() => import('@/features/logs/LogsPage'), 'LogsPage') },
+              { path: 'audit-log', ...page(() => import('@/features/audit/AuditLogRoute'), 'AuditLogRoute') },
               { path: 'logs/tokens', ...page(() => import('@/features/logs/IngestTokensRoute'), 'IngestTokensRoute') },
               { path: 'projects', ...page(() => import('@/features/project/ProjectsPage'), 'ProjectsPage') },
               {

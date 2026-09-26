@@ -47,6 +47,7 @@ per-job token · `Agent` per-asset agent token · `HMAC` webhook signature.
 | GET | `/me/sessions` | JWT | | Active refresh-token families (device, IP, last used) |
 | DELETE | `/me/sessions/{id}` | JWT | | Revoke a session |
 | GET | `/me/tokens` | JWT | | Personal API tokens (prefix, scopes, last used) |
+| GET | `/me/activity` | JWT (session) | | Own account activity (see §11) |
 | POST | `/me/tokens` | JWT | | Create token; secret shown once |
 | DELETE | `/me/tokens/{id}` | JWT | | Revoke |
 | GET | `/me/2fa` | JWT | | 2FA status + remaining recovery codes |
@@ -225,12 +226,16 @@ See [logs.md](logs.md).
 | DELETE | `/log-ingest-tokens/{tokenId}` | JWT | `logs.manage` | Revoke |
 | POST | `/ingest/logs` | Ingest token | | NDJSON, ≤ 1 MiB and 5,000 lines → `{accepted, rejected, errors[≤20]}` |
 
-## 11. Audit log
+## 11. Audit log **(✓ Module 11)**
+
+See [audit.md](audit.md). Every entry has a `summary` sentence in `?locale=en|km`, else the
+Accept-Language language.
 
 | Method | Path | Auth | Action | Description |
 |---|---|---|---|---|
-| GET | `/orgs/{orgId}/audit-log` | JWT | `audit.view` | Filter actor, action, resource type/id, from/to |
-| GET | `/orgs/{orgId}/audit-log/export` | JWT | `audit.export` | CSV stream (UTF-8 with BOM so Excel shows Khmer correctly); the export itself is audited |
+| GET | `/orgs/{orgId}/audit-log` | JWT | `audit.view` | Newest first; `area` (the action before the dot) and `action` (exact), both repeatable or comma-separated; `actor`, `project`, `resource_type`, `resource_id`, `from`, `to`; `limit` ≤ 200 and `cursor` |
+| GET | `/orgs/{orgId}/audit-log/export` | JWT | `audit.export` | The same filters, all matching rows as a streamed CSV (UTF-8 with BOM so Excel shows Khmer correctly; formula-like cells escaped); the export is audited before the file is sent |
+| GET | `/me/activity` | JWT (session) | | The caller's own account events: sign-ins, 2FA, password, tokens, sessions |
 
 ## 12. Dashboard
 
