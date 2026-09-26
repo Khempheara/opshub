@@ -29,13 +29,13 @@ func ring(t *testing.T, ids ...string) *crypto.KeyRing {
 
 // fixture writes one encrypted value into every column, sealed with kr.
 type fixture struct {
-	userID, repoID, targetID, secretID, jobID uuid.UUID
+	userID, repoID, targetID, secretID, jobID, channelID uuid.UUID
 }
 
 func seed(t *testing.T, pool *pgxpool.Pool, kr *crypto.KeyRing) fixture {
 	t.Helper()
 	ctx := context.Background()
-	f := fixture{repoID: uuid.New(), targetID: uuid.New(), secretID: uuid.New()}
+	f := fixture{repoID: uuid.New(), targetID: uuid.New(), secretID: uuid.New(), channelID: uuid.New()}
 	enc := func(v string, aad []byte) []byte {
 		b, err := kr.Encrypt([]byte(v), aad)
 		require.NoError(t, err)
@@ -61,6 +61,9 @@ func seed(t *testing.T, pool *pgxpool.Pool, kr *crypto.KeyRing) fixture {
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO deploy_targets (id, organization_id, name, kind, credentials_enc) VALUES ($1, $2, 'web', 'ssh', $3)`,
 		f.targetID, orgID, enc(`{"private_key":"k"}`, f.targetID[:]))
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO notification_channels (id, organization_id, name, kind, secrets_enc) VALUES ($1, $2, 'ops', 'slack', $3)`,
+		f.channelID, orgID, enc(`{"webhook_url":"https://hooks.example.com/x"}`, f.channelID[:]))
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO secrets (id, project_id, name, current_version) VALUES ($1, $2, 'TOKEN', 2)`, f.secretID, projectID)
 	require.NoError(t, err)
@@ -100,6 +103,8 @@ func readAll(t *testing.T, pool *pgxpool.Pool, kr *crypto.KeyRing, f fixture) ma
 	dec("webhook_secret", b, f.repoID[:])
 	require.NoError(t, pool.QueryRow(ctx, `SELECT credentials_enc FROM deploy_targets WHERE id = $1`, f.targetID).Scan(&a))
 	dec("credentials", a, f.targetID[:])
+	require.NoError(t, pool.QueryRow(ctx, `SELECT secrets_enc FROM notification_channels WHERE id = $1`, f.channelID).Scan(&a))
+	dec("channel", a, f.channelID[:])
 	require.NoError(t, pool.QueryRow(ctx, `SELECT masks_enc FROM job_tokens WHERE job_id = $1`, f.jobID).Scan(&a))
 	dec("masks", a, []byte("job-masks:"+f.jobID.String()))
 	var e crypto.Envelope
@@ -146,7 +151,7 @@ func TestRotate(t *testing.T) {
 	values := readAll(t, pool, ring(t, "m2"), f)
 	assert.Equal(t, map[string]string{
 		"totp": "TOTP-ACTIVE", "totp_pending": "TOTP-PENDING", "access_token": "ghp_token", "webhook_secret": "whsec",
-		"credentials": `{"private_key":"k"}`, "masks": `["secret-value"]`, "secret": "secret-value", "kek_id": "m2",
+		"credentials": `{"private_key":"k"}`, "masks": `["secret-value"]`, "channel": `{"webhook_url":"https://hooks.example.com/x"}`, "secret": "secret-value", "kek_id": "m2",
 	}, values, "readable with the new key alone")
 
 	// Idempotent: a second run re-encrypts nothing.

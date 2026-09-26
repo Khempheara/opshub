@@ -147,6 +147,20 @@ const (
 	CodeSecretLimit     Code = "SECRET_LIMIT_REACHED"
 )
 
+// Module 9: monitoring and alerts.
+const (
+	CodeMonitorNotFound  Code = "MONITOR_NOT_FOUND"
+	CodeMonitorNameTaken Code = "MONITOR_NAME_TAKEN"
+	CodeRuleNotFound     Code = "ALERT_RULE_NOT_FOUND"
+	CodeRuleNameTaken    Code = "ALERT_RULE_NAME_TAKEN"
+	CodeAlertNotFound    Code = "ALERT_NOT_FOUND"
+	CodeAlertNotFiring   Code = "ALERT_NOT_FIRING"
+	CodeSilenceNotFound  Code = "SILENCE_NOT_FOUND"
+	CodeChannelNotFound  Code = "CHANNEL_NOT_FOUND"
+	CodeChannelNameTaken Code = "CHANNEL_NAME_TAKEN"
+	CodeChannelInUse     Code = "CHANNEL_IN_USE"
+)
+
 // AllCodes lists every code; append new codes here as modules add them.
 var AllCodes = []Code{
 	CodeInternal, CodeBadRequest, CodeValidation, CodeUnauthenticated, CodeForbidden,
@@ -178,6 +192,8 @@ var AllCodes = []Code{
 	CodeNothingToRollBack, CodeEnvironmentProtected, CodeStrategyNotSupported, CodeDeployNotAllowed,
 	CodeAssetNotFound, CodeAssetNameTaken, CodeAgentTokenInvalid, CodeAgentNotSupported,
 	CodeSecretNotFound, CodeSecretNameTaken, CodeSecretLimit,
+	CodeMonitorNotFound, CodeMonitorNameTaken, CodeRuleNotFound, CodeRuleNameTaken, CodeAlertNotFound,
+	CodeAlertNotFiring, CodeSilenceNotFound, CodeChannelNotFound, CodeChannelNameTaken, CodeChannelInUse,
 }
 
 // Error is an application error carrying its HTTP status and client-facing code.

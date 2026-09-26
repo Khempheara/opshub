@@ -193,23 +193,25 @@ Runners receive a job's `secrets:` decrypted in `POST /runner/jobs/request`, aud
 `secret.read`. Master-key (KEK) rotation is an operator CLI: `opshub-api keys rotate` re-wraps
 secret data keys and re-encrypts every other value stored under the key ring.
 
-## 9. Monitoring & alerts
+## 9. Monitoring & alerts **(✓ Module 9)**
+
+See [monitoring.md](monitoring.md).
 
 | Method | Path | Auth | Action | Description |
 |---|---|---|---|---|
-| GET / POST | `/orgs/{orgId}/monitors` | JWT | `monitor.view` / `monitor.manage` | HTTP / TCP / SSL checks |
-| GET / PATCH / DELETE | `/monitors/{monitorId}` | JWT | `monitor.manage` | Pause via `enabled=false` **(IM)** |
-| GET | `/monitors/{monitorId}/results` | JWT | `monitor.view` | Uptime %, latency series |
-| GET / POST | `/orgs/{orgId}/alert-rules` | JWT | `monitor.view` / `monitor.manage` | Threshold, duration, severity, escalation |
-| GET / PATCH / DELETE | `/alert-rules/{ruleId}` | JWT | `monitor.manage` | **(IM)** |
-| GET | `/orgs/{orgId}/alerts` | JWT | `monitor.view` | Filter status, severity |
-| GET | `/alerts/{alertId}` | JWT | `monitor.view` | Timeline, notifications sent |
-| POST | `/alerts/{alertId}/acknowledge` | JWT | `alert.ack` | Stops escalation |
-| GET / POST | `/orgs/{orgId}/silences` | JWT | `monitor.view` / `monitor.manage` | |
-| DELETE | `/silences/{silenceId}` | JWT | `monitor.manage` | Expire now |
-| GET / POST | `/orgs/{orgId}/notification-channels` | JWT | `channel.view` / `channel.manage` | Telegram, Slack, Email, Webhook (secrets write-only) |
-| PATCH / DELETE | `/notification-channels/{channelId}` | JWT | `channel.manage` | **(IM)** |
-| POST | `/notification-channels/{channelId}/test` | JWT | `channel.manage` | Send a test message in the channel/recipient locale |
+| GET / POST | `/orgs/{orgId}/monitors` | JWT | `monitor.view` / `monitor.manage` | HTTP / TCP / SSL checks; filter `label`, `q`, `status`; list includes 24 h uptime |
+| GET / PATCH / DELETE | `/monitors/{monitorId}` | JWT | `monitor.view` / `monitor.manage` | Pause via `enabled=false` **(IM)**; kind is fixed |
+| GET | `/monitors/{monitorId}/results` | JWT | `monitor.view` | `?from&to&step` uptime % and latency per step (raw ≤ 30 days back, then hourly), latest 20 checks |
+| GET / POST | `/orgs/{orgId}/alert-rules` | JWT | `monitor.view` / `monitor.manage` | Condition kind, target or label, threshold, metric, `for_seconds`, severity, escalation steps |
+| GET / PATCH / DELETE | `/alert-rules/{ruleId}` | JWT | `monitor.view` / `monitor.manage` | **(IM)**; disabling or deleting resolves its alerts |
+| GET | `/orgs/{orgId}/alerts` | JWT | `monitor.view` | Firing first, then resolved; filter `status`, `severity`, `before` |
+| GET | `/alerts/{alertId}` | JWT | `monitor.view` | With its timeline (fired, notified, notify_failed, escalated, acknowledged, silenced, resolved) |
+| POST | `/alerts/{alertId}/acknowledge` | JWT | `alert.ack` | Stops escalation (`ALERT_NOT_FIRING` otherwise) |
+| GET / POST | `/orgs/{orgId}/silences` | JWT | `monitor.view` / `monitor.manage` | Rule / subject / label / severity matchers, ≤ 90 days; `?include_expired=true` |
+| DELETE | `/silences/{silenceId}` | JWT | `monitor.manage` | End now |
+| GET / POST | `/orgs/{orgId}/notification-channels` | JWT | `channel.view` / `channel.manage` | Telegram, Slack, Email, Webhook (credentials write-only) |
+| PATCH / DELETE | `/notification-channels/{channelId}` | JWT | `channel.manage` | **(IM)**; empty secrets keep the stored ones; DELETE refused while rules use it (`CHANNEL_IN_USE`) |
+| POST | `/notification-channels/{channelId}/test` | JWT | `channel.manage` | Sends a test message in the channel or recipient locale → `{ok, error}` |
 
 ## 10. Logs
 
@@ -252,5 +254,7 @@ Module-specific examples: `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED`, `EMAIL_NOT_VE
 `JOB_TOKEN_INVALID`, `ARTIFACT_NOT_FOUND`, `CACHE_NOT_FOUND`, `DEPLOY_TARGET_NOT_FOUND`,
 `DEPLOY_TARGET_NAME_TAKEN`, `DEPLOY_TARGET_IN_USE`, `DEPLOYMENT_NOT_FOUND`, `DEPLOYMENT_IN_PROGRESS`,
 `STRATEGY_NOT_SUPPORTED`, `DEPLOY_NOT_ALLOWED`, `ASSET_NOT_FOUND`, `ASSET_NAME_TAKEN`,
-`AGENT_TOKEN_INVALID`, `AGENT_NOT_SUPPORTED`, `SECRET_LIMIT_REACHED`.
+`AGENT_TOKEN_INVALID`, `AGENT_NOT_SUPPORTED`, `SECRET_LIMIT_REACHED`, `MONITOR_NOT_FOUND`, `MONITOR_NAME_TAKEN`, `ALERT_RULE_NOT_FOUND`,
+`ALERT_RULE_NAME_TAKEN`, `ALERT_NOT_FOUND`, `ALERT_NOT_FIRING`, `SILENCE_NOT_FOUND`, `CHANNEL_NOT_FOUND`,
+`CHANNEL_NAME_TAKEN`, `CHANNEL_IN_USE`.
 Each has EN + KM entries in `web/src/locales/*/errors.json` (enforced by a Go test).

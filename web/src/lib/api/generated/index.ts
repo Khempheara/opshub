@@ -4,6 +4,7 @@ export * from './deployments/deployments';
 export * from './environments/environments';
 export * from './infrastructure/infrastructure';
 export * from './members/members';
+export * from './monitoring/monitoring';
 export * from './organizations/organizations';
 export * from './pipelines/pipelines';
 export * from './projects/projects';

@@ -133,7 +133,10 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 	if err := seedInfra(ctx, pool, opts.Out); err != nil {
 		return err
 	}
-	return seedSecrets(ctx, pool, opts.Keys, opts.Out)
+	if err := seedSecrets(ctx, pool, opts.Keys, opts.Out); err != nil {
+		return err
+	}
+	return seedMonitoring(ctx, pool, opts.Keys, opts.Out)
 }
 
 // DemoProjectSlug is the seeded project in the demo organization.

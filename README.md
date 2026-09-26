@@ -180,8 +180,17 @@ Add secrets in a project's **Secrets** tab (for all environments or one environm
 them under a job's `secrets:` in `.opshub.yml`. Values are encrypted, write-only and masked in
 logs; pull-request runs never receive them ([secrets guide](docs/secrets.md)).
 
+## Monitoring & alerts
+
+**Organization → Monitoring** checks HTTP endpoints, TCP ports and TLS certificates, and alerts
+on them and on the infrastructure of Module 7 (server usage, offline agents, expiring
+certificates). Alerts escalate through Telegram, Slack, email or webhooks until someone
+acknowledges them; silences mute them during maintenance ([monitoring guide](docs/monitoring.md)).
+The demo data includes an unreachable database monitor, so an alert fires a minute after
+`make seed` (the email arrives in Mailpit).
+
 ## Roadmap
 
 1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. ✅ CI/CD pipelines · 5. ✅ Runner agent ·
-6. ✅ Deployments · 7. ✅ Infrastructure · 8. ✅ Secrets · 9. Monitoring & alerts · 10. Logs ·
+6. ✅ Deployments · 7. ✅ Infrastructure · 8. ✅ Secrets · 9. ✅ Monitoring & alerts · 10. Logs ·
 11. Audit log · 12. Dashboard & DORA metrics

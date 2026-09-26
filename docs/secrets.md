@@ -79,6 +79,7 @@ are bound to the secret and version, so a value can't be moved to another row.
    - 2FA seeds;
    - Git access tokens and webhook secrets;
    - deploy-target credentials;
+   - notification-channel credentials;
    - the log masks of running jobs.
 
    It is safe while OpsHub runs, skips what is already on the new key, and can be run again

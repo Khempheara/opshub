@@ -28,6 +28,7 @@ import (
 
 	riverpkg "github.com/riverqueue/river"
 
+	"github.com/opshub/opshub/internal/alert"
 	"github.com/opshub/opshub/internal/auth"
 	"github.com/opshub/opshub/internal/auth/sso"
 	"github.com/opshub/opshub/internal/authn"
@@ -45,6 +46,8 @@ import (
 	"github.com/opshub/opshub/internal/keyrotate"
 	"github.com/opshub/opshub/internal/logging"
 	"github.com/opshub/opshub/internal/mail"
+	"github.com/opshub/opshub/internal/monitor"
+	"github.com/opshub/opshub/internal/notify"
 	"github.com/opshub/opshub/internal/org"
 	"github.com/opshub/opshub/internal/pipeline"
 	"github.com/opshub/opshub/internal/project"
@@ -159,17 +162,27 @@ func serve() error {
 	secretSvc := secret.NewService(pool, keyRing, logger)
 	runnerSvc.SetSecrets(secretSvc)
 
+	monitorSvc := monitor.NewService(pool, monitor.Config{OutboundAllowedCIDRs: outboundCIDRs}, logger)
+	mailer := &mail.SMTPSender{Config: cfg.SMTP}
+	notifySvc := notify.NewService(pool, keyRing, bundle, mailer, notify.Config{
+		PublicURL: cfg.PublicURL, DefaultLocale: cfg.DefaultLocale, OutboundAllowedCIDRs: outboundCIDRs,
+	}, logger)
+	alertSvc := alert.NewService(pool, inserter, logger)
+
 	river, err := jobs.NewClient(jobs.Deps{
 		Pool: pool, Logger: logger,
 		Renderer: &mail.Renderer{Bundle: bundle},
-		Sender:   &mail.SMTPSender{Config: cfg.SMTP},
+		Sender:   mailer,
 		Register: func(w *riverpkg.Workers) {
 			pipelineSvc.Register(w)
 			runnerSvc.Register(w)
 			deploySvc.Register(w)
 			infraSvc.Register(w)
+			monitorSvc.Register(w)
+			notifySvc.Register(w)
+			alertSvc.Register(w)
 		},
-		Periodic: slices.Concat(pipeline.Periodic(), runners.Periodic(), infra.Periodic()),
+		Periodic: slices.Concat(pipeline.Periodic(), runners.Periodic(), infra.Periodic(), monitor.Periodic(), alert.Periodic()),
 	})
 	if err != nil {
 		return err
@@ -210,6 +223,9 @@ func serve() error {
 				deploy.NewHandler(deploySvc, hub, idempotency.Middleware(pool)),
 				infra.NewHandler(infraSvc),
 				secret.NewHandler(secretSvc),
+				monitor.NewHandler(monitorSvc),
+				alert.NewHandler(alertSvc),
+				notify.NewHandler(notifySvc),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

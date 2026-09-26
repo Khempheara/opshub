@@ -1,5 +1,92 @@
 # Changelog
 
+## Module 9 — Monitoring & alerts
+
+### Built
+
+**Backend** (`internal/monitor`, `internal/alert`, `internal/notify`)
+- **Uptime monitors:**
+  - HTTP: expected status codes, keyword, `GET`/`HEAD`, no redirects followed.
+  - TCP.
+  - SSL: trust, name and expiry days, using the Module 7 prober moved to `internal/tlsprobe`.
+  - Checks run every 30 s–1 h from the OpsHub server through the SSRF guard. A 15-second River
+    job claims due checks with `SKIP LOCKED` on its own `monitoring` queue.
+  - Results are kept in monthly partitions through a second `SECURITY DEFINER` function, plus
+    hourly rollups kept 400 days. The API returns uptime and latency series, the latest checks
+    and 24 h uptime.
+- **Alert rules:**
+  - Conditions: monitor down or slow, and from Module 7, server CPU/memory/disk, agent offline,
+    and certificates expiring or failing.
+  - A rule targets one subject or all of them, optionally only those with a label or tag.
+  - Each rule has a "for" duration and a severity.
+  - Rules are evaluated every 30 s with one alert per rule and subject (pending → firing →
+    resolved). Resolution is automatic.
+- **Escalation:**
+  - Up to 5 timed steps until someone acknowledges; resolutions go to every channel that was
+    notified.
+  - Each alert has a timeline: fired, notified, notify_failed, escalated, acknowledged, silenced,
+    resolved.
+  - Disabling or deleting a rule resolves its alerts and keeps the history.
+- **Silences:** rule, subject, label or severity matchers for up to 90 days. Silenced alerts
+  still fire and show; they notify when the silence ends.
+- **Notification channels:** Telegram, Slack, email (SMTP) and webhooks (optional
+  HMAC-SHA256 signature).
+  - Credentials are write-only and sealed by the key ring; `keys rotate` covers them.
+  - Messages are in EN or KM: the channel's language, else each member recipient's, else the
+    default.
+  - Test messages are available. Deliveries retry up to 5 times, and every failed attempt is
+    on the timeline.
+  - A channel that rules use can't be deleted (`CHANNEL_IN_USE`).
+- **Errors never reveal credentials or internal addresses.** DNS and dial errors are reduced to
+  "host not found", "connection refused" and similar, for monitors, certificates and channels
+  alike. This also fixes the Module 7 certificate errors.
+- **Delivery:** migration `000009_monitoring`; 22 endpoints; 10 error codes and 6 validation
+  rules (EN + KM); OpenAPI 0.10.0.
+- **Demo seed:** 3 monitors, one of them unreachable on purpose, so an alert fires a minute
+  after seeding and emails the on-call channel (Mailpit). Also 3 rules and an email channel.
+
+**Frontend**
+- **Organization → Monitoring** has five tabs:
+  - **Monitors:** status, 24 h uptime, response time, filters.
+  - **Monitor page:** uptime strip over the whole range, response-time chart from 1 h to 90 d,
+    latest checks, pause/resume/edit/delete.
+  - **Alerts:** firing first; the alert page has a timeline, Acknowledge and "Silence this".
+  - **Alert rules:** condition, target and label, threshold, duration, severity, escalation
+    steps with channels.
+  - **Silences** and **Channels** (with Send test). Viewers see no channels.
+- New `monitoring` translation namespace (EN + KM).
+- The Module 7 line chart now takes any scale and unit.
+
+### Quality
+
+- **Go:**
+  - Checks against fake HTTP, TCP and TLS servers (status, keyword, redirects, timeouts, SSRF
+    block, expiry, wrong name).
+  - Due-check claiming, results and rollups, partitions.
+  - Rule validation for every kind.
+  - Firing after the duration, escalation steps, acknowledge, silences before and after they
+    end, infrastructure rules (stale metrics, agents that never reported), disable and delete.
+  - Channels against fake Telegram, Slack and webhook servers (signature, languages,
+    write-only credentials, errors without URLs), delivery retries and the final give-up.
+  - Tenant isolation over all 22 routes with coverage guards.
+  - Coverage: monitor 84.0 %, alert 79.4 %, notify 84.4 %; service coverage 77.6 %.
+- **Web:** 105 Vitest tests (+11 form mapping) and 48 Playwright tests (+2):
+  - A real always-down monitor fires an alert through the real workers.
+  - The failing webhook shows on the timeline; acknowledge, silence and "end now".
+  - The email test lands in Mailpit.
+  - A channel in use can't be deleted.
+  - Khmer layout on every page at phone and desktop widths; viewers are read-only.
+- **Checked by hand on the dev stack:** checks against example.com, and the seeded unreachable
+  database firing "Production down" and emailing both on-call addresses.
+- golangci-lint, gosec, govulncheck, ESLint, TypeScript and the i18n check are clean. Trivy
+  finds 0 HIGH/CRITICAL in the api, web and runner images. Migrations pass up/down/up
+  (including the grant to `opshub_app`); sqlc and orval are deterministic; the OpenAPI ↔ routes
+  test passes.
+
+### Next — Module 10: Logs
+
+Log ingest (NDJSON from agents and API tokens), full-text search and a retention job.
+
 ## Module 8 — Secrets
 
 ### Built
@@ -68,11 +155,6 @@
 - golangci-lint, gosec, govulncheck, ESLint, TypeScript and the i18n check are clean. Trivy
   finds 0 HIGH/CRITICAL in the api, web and runner images. Migrations pass up/down/up; sqlc
   and orval are deterministic; the OpenAPI ↔ routes test passes.
-
-### Next — Module 9: Monitoring & alerts
-
-Uptime checks, alert rules (including the infrastructure metrics and certificate expiry from
-Module 7), silences, escalation, and Telegram/Slack/Email/Webhook notifications.
 
 ## Module 7 — Infrastructure
 

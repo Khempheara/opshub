@@ -18,6 +18,11 @@ export const OrgAction = {
   targetManage: 'target.manage',
   infraView: 'infra.view',
   infraManage: 'infra.manage',
+  monitorView: 'monitor.view',
+  monitorManage: 'monitor.manage',
+  alertAck: 'alert.ack',
+  channelView: 'channel.view',
+  channelManage: 'channel.manage',
 } as const;
 
 /**

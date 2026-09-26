@@ -106,3 +106,8 @@ recorded; zero HIGH/CRITICAL findings; short changelog.
 | M8-4 | 8 | Developers change secrets of unprotected environments only; all-environments secrets count as protected |
 | M8-5 | 8 | `opshub-api keys rotate` re-encrypts all key-ring data (secret DEKs, 2FA seeds, Git tokens, webhook secrets, deploy credentials, job masks), so an old master key can be removed |
 | M8-6 | 8 | The API masks stored job output too, with the job's values sealed in its token row; a secret wins over a variable of the same name in the job environment |
+| M9-1 | 9 | Alert rules watch monitors (down, slow) and Module 7 data (server CPU/memory/disk, agent offline, domain certificates); one alert per rule and subject, evaluated every 30 s with a "for" duration |
+| M9-2 | 9 | Module 9 sends alerts only; pipeline and deployment notifications can reuse the channels later |
+| M9-3 | 9 | Escalation is timed steps until acknowledged (no repeat reminders); resolutions go to every channel that was notified; silenced alerts still fire and show, and notify when the silence ends |
+| M9-4 | 9 | Checks run from the OpsHub server through the SSRF guard (redirects not followed); results in monthly partitions via a second `SECURITY DEFINER` function, hourly rollups kept 400 days |
+| M9-5 | 9 | Channel credentials are write-only and sealed by the key ring (included in `keys rotate`); messages use the channel's language, else each member recipient's, else `OPSHUB_DEFAULT_LOCALE`; errors never contain credentials or internal addresses |

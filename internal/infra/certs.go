@@ -3,11 +3,7 @@ package infra
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
-	"errors"
-	"net"
 	"strings"
 	"sync"
 	"time"
@@ -17,8 +13,8 @@ import (
 	"github.com/opshub/opshub/internal/apperr"
 	"github.com/opshub/opshub/internal/authz"
 	"github.com/opshub/opshub/internal/database"
-	"github.com/opshub/opshub/internal/safehttp"
 	"github.com/opshub/opshub/internal/store"
+	"github.com/opshub/opshub/internal/tlsprobe"
 )
 
 // Probe schedule: daily after a successful check, hourly after a failed one.
@@ -91,82 +87,26 @@ func (s *Service) ListCertificates(ctx context.Context, orgID uuid.UUID, expirin
 	return out, nil
 }
 
-// probeResult is what a TLS handshake revealed.
-type probeResult struct {
-	leaf *x509.Certificate
-	err  string
-}
-
 // probe connects to host:port, reads the served certificate (even an invalid one) and
 // verifies it for host.
-func (s *Service) probe(ctx context.Context, host string, port int32) probeResult {
+func (s *Service) probe(ctx context.Context, host string, port int32) tlsprobe.Result {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-	d := tls.Dialer{NetDialer: s.dialer, Config: &tls.Config{
-		ServerName: host, MinVersion: tls.VersionTLS12,
-		InsecureSkipVerify: true, // #nosec G402 -- verified below, so invalid certificates are still reported
-	}}
-	conn, err := d.DialContext(ctx, "tcp", s.addr(host, port))
-	if err != nil {
-		if safehttp.IsBlocked(err) {
-			return probeResult{err: "address not allowed (OPSHUB_OUTBOUND_ALLOWED_CIDRS)"}
-		}
-		return probeResult{err: "connection failed: " + shortErr(err)}
-	}
-	defer func() { _ = conn.Close() }()
-	state := conn.(*tls.Conn).ConnectionState()
-	if len(state.PeerCertificates) == 0 {
-		return probeResult{err: "no certificate served"}
-	}
-	leaf := state.PeerCertificates[0]
-	inter := x509.NewCertPool()
-	for _, c := range state.PeerCertificates[1:] {
-		inter.AddCert(c)
-	}
-	_, verr := leaf.Verify(x509.VerifyOptions{DNSName: host, Intermediates: inter, Roots: s.cfg.Roots, CurrentTime: s.now()})
-	res := probeResult{leaf: leaf}
-	if verr != nil {
-		res.err = verifyErr(verr)
-	}
-	return res
-}
-
-func shortErr(err error) string {
-	var op *net.OpError
-	if errors.As(err, &op) && op.Err != nil {
-		return op.Err.Error()
-	}
-	return err.Error()
-}
-
-// verifyErr turns verification errors into short, stable messages.
-func verifyErr(err error) string {
-	var hostErr x509.HostnameError
-	var invalid x509.CertificateInvalidError
-	var unknown x509.UnknownAuthorityError
-	switch {
-	case errors.As(err, &hostErr):
-		return "certificate is not valid for this name"
-	case errors.As(err, &invalid) && invalid.Reason == x509.Expired:
-		return "certificate expired or not yet valid"
-	case errors.As(err, &unknown):
-		return "certificate is not signed by a trusted authority"
-	}
-	return err.Error()
+	return tlsprobe.Probe(ctx, s.dialer, s.addr(host, port), host, s.cfg.Roots, s.now())
 }
 
 // check probes one domain asset and stores the result.
 func (s *Service) check(ctx context.Context, q *store.Queries, assetID uuid.UUID, host string, port int32) (store.SslCertificate, error) {
 	res := s.probe(ctx, host, port)
 	params := store.UpsertCertificateParams{
-		AssetID: assetID, Host: host, Port: port, Error: res.err, DnsNames: []string{},
+		AssetID: assetID, Host: host, Port: port, Error: res.Err, DnsNames: []string{},
 		NextCheckAt: s.now().Add(checkEvery),
 	}
-	if res.err != "" {
+	if res.Err != "" {
 		params.NextCheckAt = s.now().Add(retryFailedIn)
 	}
-	if res.leaf != nil {
-		l := res.leaf
+	if res.Leaf != nil {
+		l := res.Leaf
 		sum := sha256.Sum256(l.Raw)
 		params.Subject, params.Issuer = l.Subject.String(), l.Issuer.String()
 		params.DnsNames = l.DNSNames

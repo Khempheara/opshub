@@ -10,7 +10,7 @@ export interface ChartPoint {
 
 const W = 600;
 const H = 160;
-const PAD = { l: 34, r: 8, t: 8, b: 22 };
+const PAD = { r: 8, t: 8, b: 22 };
 
 /** Splits a series into drawable runs, breaking at missing values. */
 function paths(points: ChartPoint[], key: 'avg' | 'max', x: (t: number) => number, y: (v: number) => number): string {
@@ -29,7 +29,7 @@ function paths(points: ChartPoint[], key: 'avg' | 'max', x: (t: number) => numbe
 }
 
 /**
- * A 0–100 % line chart: the average per step, and the maximum as a lighter line. Gaps are
+ * A line chart from 0 to max (default 0–100 %): the average per step, and the maximum as a lighter line. Gaps are
  * steps without data. Hovering shows the nearest step; screen readers get the summary.
  */
 export function LineChart({
@@ -41,6 +41,8 @@ export function LineChart({
   tone = 'text-sky-600 dark:text-sky-400',
   maxLabel,
   avgLabel,
+  max = 100,
+  unit = '%',
 }: {
   title: string;
   points: ChartPoint[];
@@ -50,17 +52,23 @@ export function LineChart({
   tone?: string;
   avgLabel: string;
   maxLabel: string;
+  /** The top of the scale. */
+  max?: number;
+  /** Appended to values ("%", " ms"). */
+  unit?: string;
 }) {
   const fmt = useFormat();
   const id = useId();
   const [hover, setHover] = useState<ChartPoint | null>(null);
   const span = Math.max(to - from, 1);
-  const x = (t: number) => PAD.l + ((t - from) / span) * (W - PAD.l - PAD.r);
-  const y = (v: number) => PAD.t + (1 - v / 100) * (H - PAD.t - PAD.b);
+  // Room for the widest y-axis label ("100%", "2,000 ms"), about 6 units per character.
+  const padL = Math.max(34, (fmt.number(max) + unit).length * 6 + 8);
+  const x = (t: number) => padL + ((t - from) / span) * (W - padL - PAD.r);
+  const y = (v: number) => PAD.t + (1 - Math.min(v, max) / max) * (H - PAD.t - PAD.b);
   const { avgPath, maxPath } = useMemo(
     () => ({ avgPath: paths(points, 'avg', x, y), maxPath: paths(points, 'max', x, y) }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- x and y depend only on from/to
-    [points, from, to],
+    [points, from, to, max],
   );
   const ticks = [0, 1, 2, 3].map((i) => from + (span * i) / 3);
   const short = span <= 36 * 3600 * 1000;
@@ -68,7 +76,7 @@ export function LineChart({
 
   const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const box = e.currentTarget.getBoundingClientRect();
-    const t = from + (((e.clientX - box.left) / box.width) * W - PAD.l) / (W - PAD.l - PAD.r) * span;
+    const t = from + (((e.clientX - box.left) / box.width) * W - padL) / (W - padL - PAD.r) * span;
     let best: ChartPoint | null = null;
     for (const p of points) if (!best || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
     setHover(best);
@@ -82,7 +90,7 @@ export function LineChart({
         </span>
         <span className="text-muted-foreground text-xs" aria-live="polite">
           {hover
-            ? `${fmt.dateTime(hover.t, { dateStyle: 'short', timeStyle: 'short' })} · ${avgLabel} ${hover.avg === null ? '—' : fmt.number(hover.avg, { maximumFractionDigits: 1 })}% · ${maxLabel} ${hover.max === null ? '—' : fmt.number(hover.max, { maximumFractionDigits: 1 })}%`
+            ? `${fmt.dateTime(hover.t, { dateStyle: 'short', timeStyle: 'short' })} · ${avgLabel} ${hover.avg === null ? '—' : fmt.number(hover.avg, { maximumFractionDigits: 1 }) + unit} · ${maxLabel} ${hover.max === null ? '—' : fmt.number(hover.max, { maximumFractionDigits: 1 }) + unit}`
             : summary}
         </span>
       </figcaption>
@@ -96,11 +104,12 @@ export function LineChart({
           setHover(null);
         }}
       >
-        {[0, 50, 100].map((v) => (
+        {[0, max / 2, max].map((v) => (
           <g key={v}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={y(v)} y2={y(v)} className="stroke-border" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-            <text x={PAD.l - 4} y={y(v) + 3} textAnchor="end" className="fill-muted-foreground text-[10px]">
-              {fmt.number(v)}%
+            <line x1={padL} x2={W - PAD.r} y1={y(v)} y2={y(v)} className="stroke-border" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <text x={padL - 4} y={y(v) + 3} textAnchor="end" className="fill-muted-foreground text-[10px]">
+              {fmt.number(v)}
+              {unit}
             </text>
           </g>
         ))}

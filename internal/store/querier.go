@@ -12,15 +12,21 @@ import (
 )
 
 type Querier interface {
+	AcknowledgeAlert(ctx context.Context, arg AcknowledgeAlertParams) (Alert, error)
+	ActiveSilences(ctx context.Context, organizationID uuid.UUID) ([]Silence, error)
 	AddDeploymentLogBytes(ctx context.Context, arg AddDeploymentLogBytesParams) error
 	AddLogBytes(ctx context.Context, arg AddLogBytesParams) (int64, error)
 	AddOrganizationMember(ctx context.Context, arg AddOrganizationMemberParams) error
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) error
+	AdvanceAlertStep(ctx context.Context, arg AdvanceAlertStepParams) error
 	AdvanceSchedule(ctx context.Context, arg AdvanceScheduleParams) error
 	// Accepts a TOTP time step only once (replay protection); returns no row if already used.
 	AdvanceTOTPStep(ctx context.Context, arg AdvanceTOTPStepParams) (uuid.UUID, error)
 	// Rotation: the next value version, also a new ETag version.
 	BumpSecretVersion(ctx context.Context, arg BumpSecretVersionParams) (Secret, error)
+	// Takes due monitors and schedules their next check, so concurrent workers never run the
+	// same check twice.
+	ClaimDueMonitors(ctx context.Context, maxMonitors int32) ([]Monitor, error)
 	// Inserts an in-flight record (or takes over an expired one); returns no row when a live
 	// record already exists for this user and key.
 	ClaimIdempotencyKey(ctx context.Context, arg ClaimIdempotencyKeyParams) (uuid.UUID, error)
@@ -38,7 +44,9 @@ type Querier interface {
 	CountSecrets(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountUnusedRecoveryCodes(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
+	CreateAlertRule(ctx context.Context, arg CreateAlertRuleParams) (AlertRule, error)
 	CreateAsset(ctx context.Context, arg CreateAssetParams) (InfraAsset, error)
+	CreateChannel(ctx context.Context, arg CreateChannelParams) (NotificationChannel, error)
 	// The id is chosen by the caller: it is the associated data of the credentials' encryption.
 	CreateDeployTargetWithID(ctx context.Context, arg CreateDeployTargetWithIDParams) (DeployTarget, error)
 	CreateDeployment(ctx context.Context, arg CreateDeploymentParams) (Deployment, error)
@@ -47,6 +55,7 @@ type Querier interface {
 	CreateIdentity(ctx context.Context, arg CreateIdentityParams) (UserIdentity, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreateMFAChallenge(ctx context.Context, arg CreateMFAChallengeParams) error
+	CreateMonitor(ctx context.Context, arg CreateMonitorParams) (Monitor, error)
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
@@ -54,12 +63,15 @@ type Querier interface {
 	CreateRunner(ctx context.Context, arg CreateRunnerParams) (Runner, error)
 	CreateSecret(ctx context.Context, arg CreateSecretParams) (Secret, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	CreateSilence(ctx context.Context, arg CreateSilenceParams) (Silence, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// The latest attempt of every job in a run.
 	CurrentJobs(ctx context.Context, runID uuid.UUID) ([]PipelineJob, error)
+	DeleteAlertRule(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteAsset(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteCertificate(ctx context.Context, assetID uuid.UUID) error
+	DeleteChannel(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteDeployTarget(ctx context.Context, id uuid.UUID) (int64, error)
 	// Periodic cleanup. Sessions are kept 30 days after expiry/revocation for the security page history.
 	DeleteExpiredAuthRecords(ctx context.Context) error
@@ -68,7 +80,10 @@ type Querier interface {
 	DeleteExpiredJobTokens(ctx context.Context) (int64, error)
 	DeleteExpiredRegistrationTokens(ctx context.Context) (int64, error)
 	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (UserIdentity, error)
+	DeleteMonitor(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteOldHourlyMetrics(ctx context.Context, before time.Time) (int64, error)
+	DeleteOldMonitorHourly(ctx context.Context, before time.Time) (int64, error)
+	DeletePendingAlert(ctx context.Context, id uuid.UUID) error
 	DeleteProjectGrantsForTeam(ctx context.Context, teamID uuid.UUID) error
 	// Called when someone leaves or is removed from an organization.
 	DeleteProjectGrantsForUserInOrg(ctx context.Context, arg DeleteProjectGrantsForUserInOrgParams) error
@@ -87,21 +102,32 @@ type Querier interface {
 	DisableTOTP(ctx context.Context, id uuid.UUID) error
 	// Domain assets whose certificate is due for a check (or was never checked).
 	DueCertificateChecks(ctx context.Context) ([]DueCertificateChecksRow, error)
+	// Firing, unacknowledged alerts whose next escalation step is due.
+	DueEscalations(ctx context.Context, maxAlerts int32) ([]Alert, error)
 	DueSchedules(ctx context.Context) ([]PipelineSchedule, error)
 	EnableTOTP(ctx context.Context, arg EnableTOTPParams) error
+	EnabledAlertRules(ctx context.Context) ([]AlertRule, error)
+	EvalCertificates(ctx context.Context, organizationID uuid.UUID) ([]EvalCertificatesRow, error)
+	EvalMonitors(ctx context.Context, organizationID uuid.UUID) ([]EvalMonitorsRow, error)
+	EvalServers(ctx context.Context, organizationID uuid.UUID) ([]EvalServersRow, error)
 	// Removes the least recently used entries beyond a project's quota.
 	EvictCache(ctx context.Context, quotaBytes int64) ([]string, error)
+	ExpireSilence(ctx context.Context, id uuid.UUID) (Silence, error)
 	ExpiredArtifacts(ctx context.Context) ([]string, error)
 	ExpiredRunningJobs(ctx context.Context) ([]ExpiredRunningJobsRow, error)
 	FinishDeployment(ctx context.Context, arg FinishDeploymentParams) (Deployment, error)
 	// Steps still pending or running when a job ends.
 	FinishOpenSteps(ctx context.Context, arg FinishOpenStepsParams) error
+	FireAlert(ctx context.Context, id uuid.UUID) (Alert, error)
 	GetActiveAPITokenByHash(ctx context.Context, tokenHash []byte) (GetActiveAPITokenByHashRow, error)
+	GetAlert(ctx context.Context, id uuid.UUID) (GetAlertRow, error)
+	GetAlertRule(ctx context.Context, id uuid.UUID) (AlertRule, error)
 	GetArtifact(ctx context.Context, id uuid.UUID) (Artifact, error)
 	GetAsset(ctx context.Context, id uuid.UUID) (InfraAsset, error)
 	GetAssetByAgentToken(ctx context.Context, tokenHash []byte) (InfraAsset, error)
 	GetCacheEntry(ctx context.Context, arg GetCacheEntryParams) (CacheEntry, error)
 	GetCertificate(ctx context.Context, assetID uuid.UUID) (SslCertificate, error)
+	GetChannel(ctx context.Context, id uuid.UUID) (NotificationChannel, error)
 	GetCurrentDeployment(ctx context.Context, environmentID uuid.UUID) (Deployment, error)
 	GetDeployTarget(ctx context.Context, id uuid.UUID) (DeployTarget, error)
 	GetDeployTargetByName(ctx context.Context, arg GetDeployTargetByNameParams) (DeployTarget, error)
@@ -119,9 +145,11 @@ type Querier interface {
 	GetMember(ctx context.Context, arg GetMemberParams) (GetMemberRow, error)
 	// The caller's role in a live organization (tenant check for every org-scoped request).
 	GetMembership(ctx context.Context, arg GetMembershipParams) (MemberRole, error)
+	GetMonitor(ctx context.Context, id uuid.UUID) (Monitor, error)
 	// Used by sign-up when self-service registration is disabled: an open invitation for the
 	// same address lets the invitee create an account.
 	GetOpenInvitationEmailByToken(ctx context.Context, tokenHash []byte) (string, error)
+	GetOrgSlugName(ctx context.Context, id uuid.UUID) (GetOrgSlugNameRow, error)
 	// Tenant-scoped read: returns no row unless the user is a member.
 	GetOrganizationForMember(ctx context.Context, arg GetOrganizationForMemberParams) (GetOrganizationForMemberRow, error)
 	// A project with the caller's organization role and project grants (docs/rbac.md); '' means
@@ -140,6 +168,7 @@ type Querier interface {
 	GetSchedule(ctx context.Context, id uuid.UUID) (PipelineSchedule, error)
 	// A live secret with its scope; environments deleted since hide their secrets.
 	GetSecret(ctx context.Context, id uuid.UUID) (GetSecretRow, error)
+	GetSilence(ctx context.Context, id uuid.UUID) (Silence, error)
 	GetTeam(ctx context.Context, id uuid.UUID) (Team, error)
 	GetTeamInOrg(ctx context.Context, arg GetTeamInOrgParams) (Team, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
@@ -148,7 +177,9 @@ type Querier interface {
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (User, error)
 	// The same from hourly rollups (for ranges beyond the raw retention); -1 = no data.
 	HourlyMetricSeries(ctx context.Context, arg HourlyMetricSeriesParams) ([]HourlyMetricSeriesRow, error)
+	HourlyMonitorSeries(ctx context.Context, arg HourlyMonitorSeriesParams) ([]HourlyMonitorSeriesRow, error)
 	IncrementMFAAttempts(ctx context.Context, id uuid.UUID) error
+	InsertAlertEvent(ctx context.Context, arg InsertAlertEventParams) error
 	InsertApproval(ctx context.Context, arg InsertApprovalParams) (uuid.UUID, error)
 	InsertArtifact(ctx context.Context, arg InsertArtifactParams) (Artifact, error)
 	InsertAuditLog(ctx context.Context, arg InsertAuditLogParams) (AuditLog, error)
@@ -157,6 +188,8 @@ type Querier interface {
 	InsertLogChunk(ctx context.Context, arg InsertLogChunkParams) (int64, error)
 	// One sample per asset and second; a re-sent heartbeat within the same second is ignored.
 	InsertMetric(ctx context.Context, arg InsertMetricParams) error
+	InsertMonitorResult(ctx context.Context, arg InsertMonitorResultParams) error
+	InsertPendingAlert(ctx context.Context, arg InsertPendingAlertParams) (Alert, error)
 	InsertRecoveryCodes(ctx context.Context, arg []InsertRecoveryCodesParams) (int64, error)
 	InsertRepository(ctx context.Context, arg InsertRepositoryParams) (Repository, error)
 	InsertRun(ctx context.Context, arg InsertRunParams) (PipelineRun, error)
@@ -167,10 +200,15 @@ type Querier interface {
 	InvalidateEmailTokens(ctx context.Context, arg InvalidateEmailTokensParams) error
 	// The subset of names a job can be given (no decryption: used when the job becomes ready).
 	JobSecretNames(ctx context.Context, arg JobSecretNamesParams) ([]string, error)
+	LastAlertEventKind(ctx context.Context, alertID uuid.UUID) (string, error)
 	LinkRegistrationToken(ctx context.Context, arg LinkRegistrationTokenParams) error
 	ListAPITokens(ctx context.Context, arg ListAPITokensParams) ([]ApiToken, error)
 	// Keyset pagination (newest first).
 	ListActiveSessions(ctx context.Context, arg ListActiveSessionsParams) ([]Session, error)
+	ListAlertEvents(ctx context.Context, alertID uuid.UUID) ([]ListAlertEventsRow, error)
+	ListAlertRules(ctx context.Context, organizationID uuid.UUID) ([]ListAlertRulesRow, error)
+	// Firing and resolved alerts, newest first (pending ones aren't alerts yet).
+	ListAlerts(ctx context.Context, arg ListAlertsParams) ([]ListAlertsRow, error)
 	ListApprovals(ctx context.Context, jobID uuid.UUID) ([]ListApprovalsRow, error)
 	ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListAssetsRow, error)
 	// Keyset pagination on (created_at, id) newest first.
@@ -178,6 +216,7 @@ type Querier interface {
 	// Certificates of the organization's domains, soonest expiry first; expiring_before (optional)
 	// keeps those expiring earlier or failing.
 	ListCertificates(ctx context.Context, arg ListCertificatesParams) ([]ListCertificatesRow, error)
+	ListChannels(ctx context.Context, organizationID uuid.UUID) ([]NotificationChannel, error)
 	ListDeployTargets(ctx context.Context, organizationID uuid.UUID) ([]DeployTarget, error)
 	ListDeploymentLogs(ctx context.Context, arg ListDeploymentLogsParams) ([]ListDeploymentLogsRow, error)
 	// Newest first; keyset pagination on (created_at, id).
@@ -189,6 +228,7 @@ type Querier interface {
 	ListJobAttempts(ctx context.Context, arg ListJobAttemptsParams) ([]PipelineJob, error)
 	ListLogChunks(ctx context.Context, arg ListLogChunksParams) ([]ListLogChunksRow, error)
 	ListMembers(ctx context.Context, arg ListMembersParams) ([]ListMembersRow, error)
+	ListMonitors(ctx context.Context, arg ListMonitorsParams) ([]Monitor, error)
 	ListOpenInvitations(ctx context.Context, arg ListOpenInvitationsParams) ([]ListOpenInvitationsRow, error)
 	// Organization Owners and Admins, who inherit that role on every project.
 	ListOrgManagers(ctx context.Context, organizationID uuid.UUID) ([]ListOrgManagersRow, error)
@@ -204,6 +244,8 @@ type Querier interface {
 	// Project-wide first, then by environment and name. project_wide = true lists only
 	// project-wide secrets; environment_id lists only that environment's.
 	ListSecrets(ctx context.Context, arg ListSecretsParams) ([]ListSecretsRow, error)
+	// Active and upcoming silences, then (with include_expired) the last 100 expired ones.
+	ListSilences(ctx context.Context, arg ListSilencesParams) ([]ListSilencesRow, error)
 	ListSteps(ctx context.Context, jobID uuid.UUID) ([]JobStep, error)
 	ListStepsForJobs(ctx context.Context, jobIds []uuid.UUID) ([]JobStep, error)
 	ListTeamMembers(ctx context.Context, teamID uuid.UUID) ([]ListTeamMembersRow, error)
@@ -218,12 +260,20 @@ type Querier interface {
 	// Running jobs whose runner stopped sending heartbeats.
 	LostRunnerJobs(ctx context.Context, staleSeconds int32) ([]uuid.UUID, error)
 	MaintainMetricPartitions(ctx context.Context, keepMonths int32) error
+	MaintainMonitorPartitions(ctx context.Context, keepMonths int32) error
 	MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) error
 	MarkRefreshTokenUsed(ctx context.Context, id uuid.UUID) error
+	// The language of each address that belongs to a member of the organization.
+	MemberLocalesByEmail(ctx context.Context, arg MemberLocalesByEmailParams) ([]MemberLocalesByEmailRow, error)
+	MonitorUptime24h(ctx context.Context, organizationID uuid.UUID) ([]MonitorUptime24hRow, error)
 	NextDeploymentNumber(ctx context.Context, id uuid.UUID) (int32, error)
 	NextJobLogSeq(ctx context.Context, jobID uuid.UUID) (int32, error)
 	// Serializes run creation per project (row lock on the project).
 	NextRunNumber(ctx context.Context, id uuid.UUID) (int32, error)
+	// Channels that received this alert's firing message (they also get the resolution).
+	NotifiedChannelIDs(ctx context.Context, alertID uuid.UUID) ([]uuid.UUID, error)
+	OpenAlertsForRule(ctx context.Context, ruleID *uuid.UUID) ([]Alert, error)
+	OrgChannelIDs(ctx context.Context, arg OrgChannelIDsParams) ([]uuid.UUID, error)
 	// Running jobs assigned to a runner that it no longer reports (the agent restarted, or
 	// never received the assignment). The grace period covers a claim racing a heartbeat.
 	OrphanedRunnerJobs(ctx context.Context, arg OrphanedRunnerJobsParams) ([]uuid.UUID, error)
@@ -231,6 +281,9 @@ type Querier interface {
 	PreviousSuccessfulDeployment(ctx context.Context, arg PreviousSuccessfulDeploymentParams) (Deployment, error)
 	// Averages and maxima per step (seconds) from the raw samples; -1 = no data in the bucket.
 	RawMetricSeries(ctx context.Context, arg RawMetricSeriesParams) ([]RawMetricSeriesRow, error)
+	// Buckets of step_seconds; latency is averaged over successful checks. -1 = no value.
+	RawMonitorSeries(ctx context.Context, arg RawMonitorSeriesParams) ([]RawMonitorSeriesRow, error)
+	RecentMonitorResults(ctx context.Context, arg RecentMonitorResultsParams) ([]RecentMonitorResultsRow, error)
 	// Guards against creating a second run for the same event when a worker is retried.
 	RecentRunExists(ctx context.Context, arg RecentRunExistsParams) (bool, error)
 	RecordHeartbeat(ctx context.Context, arg RecordHeartbeatParams) error
@@ -242,6 +295,7 @@ type Querier interface {
 	RemoveMember(ctx context.Context, arg RemoveMemberParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error)
 	RemoveUserFromOrgTeams(ctx context.Context, arg RemoveUserFromOrgTeamsParams) error
+	ResolveAlert(ctx context.Context, id uuid.UUID) (Alert, error)
 	// The live secrets a job may receive, by name: the job's environment's secret wins over a
 	// project-wide one of the same name. environment_id NULL = a job without an environment.
 	ResolveJobSecrets(ctx context.Context, arg ResolveJobSecretsParams) ([]ResolveJobSecretsRow, error)
@@ -253,10 +307,16 @@ type Querier interface {
 	RevokeUserSessions(ctx context.Context, arg RevokeUserSessionsParams) error
 	// Summarizes raw samples of whole hours in [from, to) into hourly rows (idempotent).
 	RollupMetrics(ctx context.Context, arg RollupMetricsParams) (int64, error)
+	// Rolls up the whole hours in [from_ts, to_ts); re-running replaces them.
+	RollupMonitorResults(ctx context.Context, arg RollupMonitorResultsParams) error
+	// Names of the rules whose escalation notifies the channel.
+	RulesUsingChannel(ctx context.Context, arg RulesUsingChannelParams) ([]string, error)
 	RunningJobsForRunner(ctx context.Context, runnerID *uuid.UUID) ([]uuid.UUID, error)
 	SetAgentToken(ctx context.Context, arg SetAgentTokenParams) (InfraAsset, error)
+	SetChannelTest(ctx context.Context, arg SetChannelTestParams) error
 	SetCurrentDeployment(ctx context.Context, arg SetCurrentDeploymentParams) error
 	SetJobStatus(ctx context.Context, arg SetJobStatusParams) error
+	SetMonitorState(ctx context.Context, arg SetMonitorStateParams) error
 	SetTOTPPending(ctx context.Context, arg SetTOTPPendingParams) error
 	SetUserEmailVerified(ctx context.Context, id uuid.UUID) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error
@@ -273,10 +333,15 @@ type Querier interface {
 	TouchRepositoryDelivery(ctx context.Context, id uuid.UUID) error
 	TouchRunner(ctx context.Context, arg TouchRunnerParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	UpdateAlertObservation(ctx context.Context, arg UpdateAlertObservationParams) error
+	UpdateAlertRule(ctx context.Context, arg UpdateAlertRuleParams) (AlertRule, error)
 	UpdateAsset(ctx context.Context, arg UpdateAssetParams) (InfraAsset, error)
+	UpdateChannel(ctx context.Context, arg UpdateChannelParams) (NotificationChannel, error)
 	UpdateDeployTarget(ctx context.Context, arg UpdateDeployTargetParams) (DeployTarget, error)
 	UpdateEnvironment(ctx context.Context, arg UpdateEnvironmentParams) (Environment, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error
+	// Edits check again right away and forget the old state when what is checked changed.
+	UpdateMonitor(ctx context.Context, arg UpdateMonitorParams) (Monitor, error)
 	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateRepositoryDefaultBranch(ctx context.Context, arg UpdateRepositoryDefaultBranchParams) error

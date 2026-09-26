@@ -97,7 +97,17 @@
     "AGENT_NOT_SUPPORTED": "Only servers run the infrastructure agent.",
     "SECRET_NOT_FOUND": "This secret doesn't exist or was deleted.",
     "SECRET_NAME_TAKEN": "A secret with this name already exists for this environment.",
-    "SECRET_LIMIT_REACHED": "This project has reached its limit of 500 secrets."
+    "SECRET_LIMIT_REACHED": "This project has reached its limit of 500 secrets.",
+    "MONITOR_NOT_FOUND": "This monitor doesn't exist or was deleted.",
+    "MONITOR_NAME_TAKEN": "A monitor with this name already exists.",
+    "ALERT_RULE_NOT_FOUND": "This alert rule doesn't exist or was deleted.",
+    "ALERT_RULE_NAME_TAKEN": "An alert rule with this name already exists.",
+    "ALERT_NOT_FOUND": "This alert doesn't exist.",
+    "ALERT_NOT_FIRING": "This alert is no longer firing or was already acknowledged.",
+    "SILENCE_NOT_FOUND": "This silence doesn't exist or has already ended.",
+    "CHANNEL_NOT_FOUND": "This notification channel doesn't exist or was deleted.",
+    "CHANNEL_NAME_TAKEN": "A notification channel with this name already exists.",
+    "CHANNEL_IN_USE": "Alert rules still notify this channel. Remove it from their escalation first."
   },
   "rules": {
     "required": "This field is required.",
@@ -139,6 +149,12 @@
     "secret_name": "Use capital letters, numbers and underscores, not starting with a number (e.g. DB_URL).",
     "max_bytes": "Too large: at most {{param}} bytes.",
     "text": "Use plain text without NUL characters.",
-    "reserved": "Names starting with {{param}} are reserved."
+    "reserved": "Names starting with {{param}} are reserved.",
+    "host_port": "Enter a host and port, e.g. db.internal:5432.",
+    "lt_interval": "Must be shorter than the check interval.",
+    "keyword_needs_get": "A keyword needs the GET method (HEAD has no body).",
+    "first_step_immediate": "The first step is notified right away: use 0 minutes.",
+    "increasing": "Each step must come later than the one before (at most {{param}} minutes).",
+    "after": "Must be later than {{param}}."
   }
 }

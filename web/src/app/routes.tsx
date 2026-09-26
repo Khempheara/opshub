@@ -52,6 +52,13 @@ export const routes: RouteObject[] = [
               { path: 'infrastructure', ...page(() => import('@/features/infra/AssetsPage'), 'AssetsPage') },
               { path: 'infrastructure/certificates', ...page(() => import('@/features/infra/CertificatesPage'), 'CertificatesPage') },
               { path: 'infrastructure/:assetId', ...page(() => import('@/features/infra/AssetPage'), 'AssetPage') },
+              { path: 'monitoring', ...page(() => import('@/features/monitoring/MonitorsPage'), 'MonitorsPage') },
+              { path: 'monitoring/monitors/:monitorId', ...page(() => import('@/features/monitoring/MonitorPage'), 'MonitorPage') },
+              { path: 'monitoring/alerts', ...page(() => import('@/features/monitoring/AlertsPage'), 'AlertsPage') },
+              { path: 'monitoring/alerts/:alertId', ...page(() => import('@/features/monitoring/AlertPage'), 'AlertPage') },
+              { path: 'monitoring/rules', ...page(() => import('@/features/monitoring/RulesPage'), 'RulesPage') },
+              { path: 'monitoring/silences', ...page(() => import('@/features/monitoring/SilencesPage'), 'SilencesPage') },
+              { path: 'monitoring/channels', ...page(() => import('@/features/monitoring/ChannelsPage'), 'ChannelsPage') },
               { path: 'projects', ...page(() => import('@/features/project/ProjectsPage'), 'ProjectsPage') },
               {
                 path: 'projects/:projectId',

@@ -70,6 +70,12 @@ var columns = []column{
 		aad:    func(id uuid.UUID, _ int32) []byte { return id[:] },
 	},
 	{
+		name:   "notification_channels.secrets_enc",
+		list:   `SELECT id, 0, secrets_enc FROM notification_channels WHERE (id, 0) > ($1, $3) ORDER BY id LIMIT $2`,
+		update: `UPDATE notification_channels SET secrets_enc = $3 WHERE id = $1 AND $2 = 0 AND secrets_enc = $4`,
+		aad:    func(id uuid.UUID, _ int32) []byte { return id[:] },
+	},
+	{
 		name:   "job_tokens.masks_enc",
 		list:   `SELECT job_id, 0, masks_enc FROM job_tokens WHERE masks_enc IS NOT NULL AND (job_id, 0) > ($1, $3) ORDER BY job_id LIMIT $2`,
 		update: `UPDATE job_tokens SET masks_enc = $3 WHERE job_id = $1 AND $2 = 0 AND masks_enc = $4`,
