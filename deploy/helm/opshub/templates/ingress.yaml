@@ -1,0 +1,37 @@
+{{- if .Values.ingress.enabled -}}
+{{- $full := include "opshub.fullname" . -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $full }}
+  labels:
+    {{- include "opshub.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ required "ingress.host is required" .Values.ingress.host | quote }}
+      http:
+        paths:
+          # API traffic goes straight to the API, so the ingress controller's
+          # X-Forwarded-For reaches it (set api.trustedProxies to the controller's CIDR).
+          {{- range list "/api" "/docs" }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service: { name: {{ $full }}-api, port: { name: http } }
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: {{ $full }}-web, port: { name: http } }
+{{- end }}

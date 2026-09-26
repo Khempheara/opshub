@@ -1,0 +1,16 @@
+OpsHub {{ .Chart.AppVersion }} is installed as "{{ .Release.Name }}".
+
+Open {{ .Values.publicURL }}
+{{- if not .Values.ingress.enabled }}
+(ingress is disabled: expose the {{ include "opshub.fullname" . }}-web and -api services yourself)
+{{- end }}
+
+The first person to sign up with OPSHUB_BOOTSTRAP_ADMIN_EMAIL becomes the platform admin.
+{{- if .Values.backup.enabled }}
+
+Backups run on "{{ .Values.backup.schedule }}" ({{ .Values.backup.timeZone }}). Practise a restore every quarter:
+docs/backup.md, "Restore drill".
+{{- else }}
+
+Backups are off. Turn them on with backup.enabled=true (docs/backup.md).
+{{- end }}

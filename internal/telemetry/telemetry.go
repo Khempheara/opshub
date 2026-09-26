@@ -27,6 +27,7 @@ type Metrics struct {
 	Registry     *prometheus.Registry
 	httpRequests *prometheus.CounterVec
 	httpDuration *prometheus.HistogramVec
+	logLines     *prometheus.CounterVec
 }
 
 func NewMetrics() *Metrics {
@@ -41,9 +42,20 @@ func NewMetrics() *Metrics {
 			Namespace: "opshub", Name: "http_request_duration_seconds", Help: "HTTP request latency by route.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"method", "route"}),
+		logLines: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "opshub", Name: "log_lines_ingested_total", Help: "Log lines sent with ingest tokens, accepted or rejected.",
+		}, []string{"result"}),
 	}
-	reg.MustRegister(m.httpRequests, m.httpDuration)
+	reg.MustRegister(m.httpRequests, m.httpDuration, m.logLines)
+	m.logLines.WithLabelValues("accepted")
+	m.logLines.WithLabelValues("rejected")
 	return m
+}
+
+// ObserveLogLines counts one ingest request's accepted and rejected lines.
+func (m *Metrics) ObserveLogLines(accepted, rejected int) {
+	m.logLines.WithLabelValues("accepted").Add(float64(accepted))
+	m.logLines.WithLabelValues("rejected").Add(float64(rejected))
 }
 
 func (m *Metrics) Handler() http.Handler {

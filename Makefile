@@ -4,6 +4,9 @@ SHELL := /bin/bash
 
 SQLC_VERSION   ?= 1.31.1
 GOLANGCI_IMAGE ?= golangci/golangci-lint:latest
+HELM_IMAGE     ?= alpine/helm:3.19.0
+KUBECONFORM    ?= ghcr.io/yannh/kubeconform:v0.7.0
+K6_IMAGE       ?= grafana/k6:1.3.0
 VERSION        ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMPOSE        := docker compose
 
@@ -118,11 +121,36 @@ docker: ## Build the Docker images
 	docker build -f deploy/docker/api.Dockerfile --build-arg VERSION=$(VERSION) -t opshub-api:$(VERSION) .
 	docker build -f deploy/docker/web.Dockerfile -t opshub-web:$(VERSION) .
 	docker build -f deploy/docker/runner.Dockerfile --build-arg VERSION=$(VERSION) -t opshub-runner:$(VERSION) .
+	docker build -f deploy/docker/backup.Dockerfile -t opshub-backup:$(VERSION) .
 
 .PHONY: runner
 runner: .env ## Start a local runner (Docker socket); first time set OPSHUB_RUNNER_REGISTRATION_TOKEN in .env
 	docker compose --profile runner up -d --build runner
 	@echo "Runner started. Logs: docker compose logs -f runner"
+
+##@ Operations
+.PHONY: backup-drill
+backup-drill: .env ## Back up the running stack's database, restore it into a scratch database and compare
+	sh deploy/backup/drill.sh
+
+.PHONY: helm-lint
+helm-lint: ## Lint the Helm chart and validate its manifests (every option on) against Kubernetes 1.30
+	docker run --rm -v "$(CURDIR)/deploy/helm/opshub:/chart" $(HELM_IMAGE) lint /chart --strict \
+		--set backup.enabled=true --set backup.ageRecipients=age1lint
+	docker run --rm -v "$(CURDIR)/deploy/helm/opshub:/chart" $(HELM_IMAGE) template opshub /chart \
+		--set backup.enabled=true --set backup.ageRecipients=age1lint --set networkPolicy.enabled=true \
+		--set metrics.serviceMonitor.enabled=true --set api.podDisruptionBudget.enabled=true \
+		--set web.podDisruptionBudget.enabled=true --set config.OPSHUB_DEFAULT_LOCALE=km \
+		| docker run --rm -i $(KUBECONFORM) -strict -summary -kubernetes-version 1.30.0 -skip ServiceMonitor -
+	docker run --rm -v "$(CURDIR)/deploy/backup:/s" koalaman/shellcheck:stable /s/backup.sh /s/restore.sh /s/schedule.sh /s/drill.sh
+
+.PHONY: load
+load: ## k6 load test against the running stack (after `make seed`); see docs/load-testing.md
+	docker run --rm -i --add-host=host.docker.internal:host-gateway -v "$(CURDIR)/tests/load:/scripts" \
+		-e BASE_URL=$${LOAD_BASE_URL:-http://host.docker.internal:$${OPSHUB_WEB_PORT:-3000}} \
+		-e SEED_PASSWORD=$${OPSHUB_SEED_PASSWORD:-angkor-wat-sunrise-2026} \
+		-e DURATION=$${LOAD_DURATION:-1m} -e BROWSE_RATE=$${LOAD_BROWSE_RATE:-30} -e INGEST_RATE=$${LOAD_INGEST_RATE:-5} \
+		$(K6_IMAGE) run /scripts/opshub.js
 
 .PHONY: help
 help:

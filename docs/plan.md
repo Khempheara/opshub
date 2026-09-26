@@ -125,3 +125,7 @@ recorded; zero HIGH/CRITICAL findings; short changelog.
 | M12-3 | 12 | Time to restore = failed change → its automatic revert or the next successful deployment in that environment (per project); alert resolution time is shown separately, organization-wide |
 | M12-4 | 12 | The dashboard is the organization's Overview page (the getting-started checklist stays until 2FA and a first project are done), filtered by project and range, in the viewer's time zone |
 | M12-5 | 12 | Metrics are computed on request (no `dora_daily` table): always current, exact medians; runs record `committed_at` from the Git host for lead time (fallback: run creation) |
+| M12-6 | 12 | Platform metrics are read from the database at each scrape (identical on every replica: aggregate with max()) plus pool and log-ingest counters; a second Grafana dashboard "OpsHub Platform" |
+| M12-7 | 12 | Backups: nightly pg_dump as the read-only opshub_backup role, always age-encrypted to public keys, 7/4/3 retention with hard links, optional rclone copy to S3-compatible storage; `make backup-drill` restores into a scratch database in CI |
+| M12-8 | 12 | The Helm chart needs an external PostgreSQL (managed or CloudNativePG); migrations run as a pre-install/pre-upgrade hook; the Ingress sends /api and /docs straight to the API; api.replicas > 1 requires a ReadWriteMany volume |
+| M12-9 | 12 | k6 load tests run with `make load` and a manually triggered CI workflow (not per PR), within the per-IP and per-user rate limits |

@@ -81,6 +81,28 @@ services:
     networks:
       default: { ipv4_address: 172.28.0.10 }
 
+  # Nightly encrypted database backups (opt-in): `docker compose --profile backup up -d backup`.
+  # Needs OPSHUB_BACKUP_AGE_RECIPIENTS (an age public key) in .env; see docs/backup.md.
+  backup:
+    profiles: [backup]
+    build:
+      context: .
+      dockerfile: deploy/docker/backup.Dockerfile
+    image: opshub-backup:${OPSHUB_VERSION:-dev}
+    environment:
+      OPSHUB_BACKUP_DATABASE_URL: postgres://opshub_backup:opshub_backup@postgres:5432/opshub?sslmode=disable
+      OPSHUB_BACKUP_AGE_RECIPIENTS: ${OPSHUB_BACKUP_AGE_RECIPIENTS:-}
+      OPSHUB_BACKUP_AT: ${OPSHUB_BACKUP_AT:-02:00}
+      OPSHUB_BACKUP_RCLONE_REMOTE: ${OPSHUB_BACKUP_RCLONE_REMOTE:-}
+    volumes:
+      - backups:/backups
+    depends_on:
+      postgres: { condition: service_healthy }
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+
   runner:
     profiles: [runner]
     build:
@@ -131,3 +153,4 @@ volumes:
   pgdata:
   blobs:
   runner-state:
+  backups:

@@ -162,7 +162,8 @@ func (q *Queries) CreateAlertRule(ctx context.Context, arg CreateAlertRuleParams
 
 const createSilence = `-- name: CreateSilence :one
 INSERT INTO silences (organization_id, rule_id, subject_id, label, severity, comment, starts_at, ends_at, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6,
+        COALESCE($7, now()), $8, $9)
 RETURNING id, organization_id, rule_id, subject_id, label, severity, comment, starts_at, ends_at, created_by, created_at
 `
 
@@ -173,11 +174,13 @@ type CreateSilenceParams struct {
 	Label          *string        `json:"label"`
 	Severity       *AlertSeverity `json:"severity"`
 	Comment        string         `json:"comment"`
-	StartsAt       time.Time      `json:"starts_at"`
+	StartsAt       interface{}    `json:"starts_at"`
 	EndsAt         time.Time      `json:"ends_at"`
 	CreatedBy      *uuid.UUID     `json:"created_by"`
 }
 
+// Without starts_at the silence starts at the database's now(), the clock that decides whether
+// it is active (the API server's clock may differ).
 func (q *Queries) CreateSilence(ctx context.Context, arg CreateSilenceParams) (Silence, error) {
 	row := q.db.QueryRow(ctx, createSilence,
 		arg.OrganizationID,

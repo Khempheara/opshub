@@ -1,0 +1,82 @@
+{{- if .Values.backup.enabled -}}
+{{- $name := printf "%s-backup" (include "opshub.fullname" .) -}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "opshub.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  timeZone: {{ .Values.backup.timeZone | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            {{- include "opshub.selector" (dict "root" . "component" "backup") | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          automountServiceAccountToken: false
+          securityContext:
+            {{- include "opshub.podSecurity" (dict "uid" 70) | nindent 12 }}
+          containers:
+            - name: backup
+              image: {{ include "opshub.image" (dict "root" . "image" .Values.backup.image) }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["/usr/local/bin/opshub-backup"]
+              env:
+                - name: OPSHUB_BACKUP_AGE_RECIPIENTS
+                  value: {{ required "backup.ageRecipients is required (age public keys)" .Values.backup.ageRecipients | quote }}
+                - { name: OPSHUB_BACKUP_DIR, value: /backups }
+                - { name: OPSHUB_BACKUP_KEEP_DAILY, value: {{ .Values.backup.retention.daily | quote }} }
+                - { name: OPSHUB_BACKUP_KEEP_WEEKLY, value: {{ .Values.backup.retention.weekly | quote }} }
+                - { name: OPSHUB_BACKUP_KEEP_MONTHLY, value: {{ .Values.backup.retention.monthly | quote }} }
+                {{- with .Values.backup.rcloneRemote }}
+                - { name: OPSHUB_BACKUP_RCLONE_REMOTE, value: {{ . | quote }} }
+                {{- end }}
+              envFrom:
+                - secretRef:
+                    name: {{ required "backup.existingSecret is required" .Values.backup.existingSecret }}
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+              securityContext:
+                {{- include "opshub.containerSecurity" . | nindent 16 }}
+              volumeMounts:
+                - { name: backups, mountPath: /backups }
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: {{ .Values.backup.persistence.existingClaim | default $name }}
+            - { name: tmp, emptyDir: {} }
+{{- if not .Values.backup.persistence.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "opshub.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.backup.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.persistence.size }}
+{{- end }}
+{{- end }}

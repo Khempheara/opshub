@@ -112,8 +112,11 @@ SELECT DISTINCT channel_id::uuid FROM alert_events
 WHERE alert_id = @alert_id AND kind = 'notified' AND channel_id IS NOT NULL AND detail = 'firing';
 
 -- name: CreateSilence :one
+-- Without starts_at the silence starts at the database's now(), the clock that decides whether
+-- it is active (the API server's clock may differ).
 INSERT INTO silences (organization_id, rule_id, subject_id, label, severity, comment, starts_at, ends_at, created_by)
-VALUES (@organization_id, sqlc.narg(rule_id), sqlc.narg(subject_id), sqlc.narg(label), sqlc.narg(severity), @comment, @starts_at, @ends_at, sqlc.narg(created_by))
+VALUES (@organization_id, sqlc.narg(rule_id), sqlc.narg(subject_id), sqlc.narg(label), sqlc.narg(severity), @comment,
+        COALESCE(sqlc.narg(starts_at), now()), @ends_at, sqlc.narg(created_by))
 RETURNING *;
 
 -- name: GetSilence :one

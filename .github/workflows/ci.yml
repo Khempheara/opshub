@@ -96,6 +96,8 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
           npx playwright test --project=full --workers=1
+      - name: Backup restore drill (encrypted dump → scratch database → same row counts)
+        run: sh deploy/backup/drill.sh
       - name: Stack logs on failure
         if: failure()
         run: docker compose logs --no-color > compose.log
@@ -109,6 +111,14 @@ jobs:
             compose.log
           retention-days: 7
 
+  ops:
+    name: Helm chart and backup scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: helm lint, kubeconform (Kubernetes 1.30), shellcheck
+        run: make helm-lint
+
   images:
     name: Docker images + Trivy
     runs-on: ubuntu-latest
@@ -116,7 +126,7 @@ jobs:
     strategy:
       fail-fast: false # scan both images even if one fails
       matrix:
-        image: [api, web, runner]
+        image: [api, web, runner, backup]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v4
