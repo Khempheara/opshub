@@ -206,7 +206,7 @@ function IdentitiesCard() {
 export function SecurityPage() {
   const { t } = useTranslation('settings');
   return (
-    <div className="space-y-6">
+    <div className="max-w-4xl space-y-6">
       <PageHeader title={t('security.title')} />
       <PasswordCard />
       <TwoFactorCard />
