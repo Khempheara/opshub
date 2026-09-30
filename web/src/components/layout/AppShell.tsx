@@ -95,7 +95,8 @@ export function AppShell() {
             <UserMenu />
           </div>
         </header>
-        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 outline-none sm:py-8">
+        {/* Wide enough for tables and dashboards on large screens; form pages cap their own width. */}
+        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-screen-2xl flex-1 px-4 py-6 outline-none sm:px-6 sm:py-8 lg:px-8">
           <Outlet />
         </main>
       </div>
