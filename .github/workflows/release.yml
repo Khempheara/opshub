@@ -1,8 +1,9 @@
 name: Release
 
 # Push a tag like v1.2.0 to publish:
-#   - images ghcr.io/<owner>/opshub-{api,web,runner,backup}:<tag> (+ latest), amd64 and arm64,
-#     each scanned with Trivy first;
+#   - images ghcr.io/<owner>/opshub (all-in-one: `docker run`) and
+#     ghcr.io/<owner>/opshub-{api,web,runner,backup,caddy} (the ./opshub stack), tagged <tag> and
+#     latest, amd64 and arm64, each scanned with Trivy first;
 #   - a GitHub Release with opshub-install-<tag>.tar.gz: compose file, Caddyfile and the
 #     ./opshub installer, preset to pull this version (docs/install-docker.md).
 on:
@@ -18,7 +19,7 @@ concurrency:
 
 jobs:
   images:
-    name: Image ${{ matrix.image }}
+    name: Image ${{ matrix.name }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,29 +27,35 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        image: [api, web, runner, backup]
+        include:
+          - { name: opshub, file: opshub }
+          - { name: opshub-api, file: api }
+          - { name: opshub-web, file: web }
+          - { name: opshub-runner, file: runner }
+          - { name: opshub-backup, file: backup }
+          - { name: opshub-caddy, file: caddy }
     steps:
       - uses: actions/checkout@v4
       - name: Image name (registry names are lowercase)
         id: name
-        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/opshub-${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.name }}" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
       - name: Build for the scan (amd64)
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: deploy/docker/${{ matrix.image }}.Dockerfile
-          tags: opshub-${{ matrix.image }}:scan
+          file: deploy/docker/${{ matrix.file }}.Dockerfile
+          tags: ${{ matrix.name }}:scan
           load: true
           build-args: VERSION=${{ github.ref_name }}
-          cache-from: type=gha,scope=release-${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=release-${{ matrix.image }}
+          cache-from: type=gha,scope=release-${{ matrix.file }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.file }}
       - name: Trivy vulnerability scan (fail on HIGH/CRITICAL)
         # Pinned to a commit (v0.36.0): action tags are mutable.
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
-          image-ref: opshub-${{ matrix.image }}:scan
+          image-ref: ${{ matrix.name }}:scan
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
@@ -61,7 +68,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: deploy/docker/${{ matrix.image }}.Dockerfile
+          file: deploy/docker/${{ matrix.file }}.Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -73,8 +80,8 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
           build-args: VERSION=${{ github.ref_name }}
           provenance: false
-          cache-from: type=gha,scope=release-${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=release-${{ matrix.image }}
+          cache-from: type=gha,scope=release-${{ matrix.file }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.file }}
 
   bundle:
     name: Install bundle and GitHub Release

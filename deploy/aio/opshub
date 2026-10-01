@@ -1,0 +1,31 @@
+#!/bin/sh
+# Admin commands of the all-in-one image: docker exec opshub opshub <command>
+#
+#   verify-email <email>   let an account sign in without the emailed link
+#   backup                 take a backup now (into /data/backups)
+#   status                 health and the latest backups
+#   health                 exit 0 when the API and the web server answer (Docker health check)
+#   version
+set -eu
+[ -f /tmp/opshub/env ] || { echo "opshub: still starting" >&2; exit 1; }
+set -a
+# shellcheck disable=SC1091
+. /data/secrets.env
+set +a
+# shellcheck disable=SC1091
+. /tmp/opshub/env
+case "$OPSHUB_WEB_LISTEN" in *:*) web="http://$OPSHUB_WEB_LISTEN" ;; *) web="http://127.0.0.1:$OPSHUB_WEB_LISTEN" ;; esac
+case "${1:-help}" in
+verify-email)
+	[ $# -eq 2 ] || { echo "usage: opshub verify-email <email>" >&2; exit 2; }
+	exec opshub-api users verify "$2" ;;
+backup) exec opshub-backup ;;
+health)
+	wget -q -O /dev/null http://127.0.0.1:9000/readyz && wget -q -O /dev/null "$web/healthz" ;;
+status)
+	if wget -q -O /dev/null http://127.0.0.1:9000/readyz; then echo "OpsHub $(opshub-api version): ready at $OPSHUB_PUBLIC_URL"; else echo "OpsHub: not ready"; fi
+	echo "latest backups:"
+	find "$OPSHUB_BACKUP_DIR/daily" -name '*.dump.age' 2> /dev/null | sort -r | head -n 3 | sed 's|.*/|  |' ;;
+version) exec opshub-api version ;;
+*) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' ;;
+esac
