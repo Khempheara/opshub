@@ -17,7 +17,7 @@ jobs:
     name: Go — lint, test, coverage, security
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod }
       - name: golangci-lint (incl. gosec)
@@ -40,7 +40,7 @@ jobs:
     defaults:
       run: { working-directory: web }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [go, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod }
       - uses: actions/setup-node@v7
@@ -115,7 +115,7 @@ jobs:
     name: Helm chart and backup scripts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: helm lint, kubeconform (Kubernetes 1.30), shellcheck
         run: make helm-lint
 
@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [go, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install from this checkout, check HTTPS, first admin, backup, upgrade; remove it
         run: make install-test
 
@@ -133,7 +133,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [go, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Try-out and HTTPS modes, backup, restore, supervision
         run: make aio-test
 
@@ -146,7 +146,7 @@ jobs:
       matrix:
         image: [api, web, runner, backup, caddy, opshub]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - name: Build
         uses: docker/build-push-action@v7

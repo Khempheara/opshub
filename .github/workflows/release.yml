@@ -35,7 +35,7 @@ jobs:
           - { name: opshub-backup, file: backup }
           - { name: opshub-caddy, file: caddy }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Image name (registry names are lowercase)
         id: name
         run: echo "ref=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.name }}" >> "$GITHUB_OUTPUT"
@@ -94,7 +94,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build opshub-install-${{ github.ref_name }}.tar.gz
         run: |
           set -euo pipefail
