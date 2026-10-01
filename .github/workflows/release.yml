@@ -50,6 +50,8 @@ jobs:
           load: true
           build-args: VERSION=${{ github.ref_name }}
           cache-from: type=gha,scope=release-${{ matrix.file }}
+          # The final stage (apk upgrade) is never cached: it must pick up today's security fixes.
+          no-cache-filters: runtime
           cache-to: type=gha,mode=max,scope=release-${{ matrix.file }}
       - name: Trivy vulnerability scan (fail on HIGH/CRITICAL)
         # Pinned to a commit (v0.36.0): action tags are mutable.
@@ -81,6 +83,8 @@ jobs:
           build-args: VERSION=${{ github.ref_name }}
           provenance: false
           cache-from: type=gha,scope=release-${{ matrix.file }}
+          # The final stage (apk upgrade) is never cached: it must pick up today's security fixes.
+          no-cache-filters: runtime
           cache-to: type=gha,mode=max,scope=release-${{ matrix.file }}
 
   bundle:

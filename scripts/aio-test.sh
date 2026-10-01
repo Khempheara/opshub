@@ -16,8 +16,8 @@ PASSWORD=aio-test-mekong-sunrise-42
 cleanup() {
 	status=$?
 	if (( status != 0 )); then docker logs --tail 60 "$C" 2>&1 | grep -v '^{"time"' || true; fi
-	docker rm -f "$C" "$C-new" "$CS" > /dev/null 2>&1 || true
-	docker volume rm -f opshub-aio-test opshub-aio-test-new opshub-aio-test-https > /dev/null 2>&1 || true
+	docker rm -f "$C" "$C-new" "$C-plain" "$CS" > /dev/null 2>&1 || true
+	docker volume rm -f opshub-aio-test opshub-aio-test-new opshub-aio-test-plain opshub-aio-test-https > /dev/null 2>&1 || true
 	exit "$status"
 }
 trap cleanup EXIT
@@ -53,6 +53,12 @@ if [[ "$IMAGE" == opshub:aio-test ]]; then
 	echo "aio-test: building the image"
 	docker build -q -f "$ROOT/deploy/docker/opshub.Dockerfile" --build-arg VERSION=aio-test -t "$IMAGE" "$ROOT" > /dev/null
 fi
+
+echo "aio-test: the README's command, exactly (no settings at all)"
+docker run -d --name "$C-plain" -p 18193:8080 -v opshub-aio-test-plain:/data "$IMAGE" > /dev/null
+expect "starts with no settings and becomes healthy" wait_healthy "$C-plain"
+expect_eq "the UI answers" "$(status_of http://localhost:18193/)" 200
+docker rm -f "$C-plain" > /dev/null
 
 echo "aio-test: try-out mode"
 docker run -d --name "$C" -p 18190:8080 -v opshub-aio-test:/data \
