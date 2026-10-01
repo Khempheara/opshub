@@ -10,7 +10,7 @@ import { Field, TextField } from '@/components/common/Field';
 import { PageHeader } from '@/components/common/PageHeader';
 import { FormError } from '@/components/common/States';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { LOCALES } from '@/i18n';
@@ -64,63 +64,65 @@ export function ProfilePage() {
     <div className="space-y-6">
       <PageHeader title={t('profile.title')} description={t('profile.description')} />
       <Card className="max-w-xl">
-        <form noValidate className="space-y-5" onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}>
-          <TextField
-            label={t('profile.displayName')}
-            autoComplete="name"
-            error={errors.display_name?.message && t(errors.display_name.message as 'errors:rules.required', { param: '100' })}
-            {...form.register('display_name')}
-          />
-          <TextField label={t('profile.email')} value={user.email} readOnly disabled />
-
-          <Field label={t('profile.language')}>
-            {({ id }) => (
-              <select id={id} className={selectClass} {...form.register('locale')}>
-                {LOCALES.map((l) => (
-                  <option key={l} value={l} lang={l}>
-                    {t(`common:language.${l}`)}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Field>
-
-          <Field
-            label={t('profile.timezone')}
-            hint={t('profile.timezoneHint')}
-            error={errors.timezone?.message && t(errors.timezone.message as 'errors:rules.timezone')}
-          >
-            {({ id, describedBy, invalid }) => (
-              <select id={id} className={`${selectClass} font-mono`} aria-describedby={describedBy} aria-invalid={invalid || undefined} {...form.register('timezone')}>
-                {timeZones.map((tz) => (
-                  <option key={tz} value={tz}>
-                    {tz}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Field>
-
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="khmer-numerals"
-              checked={khmerNumerals}
-              onCheckedChange={(v) => {
-                form.setValue('khmer_numerals', v === true, { shouldDirty: true });
-              }}
-              className="mt-1"
+        <CardContent>
+          <form noValidate className="space-y-5" onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}>
+            <TextField
+              label={t('profile.displayName')}
+              autoComplete="name"
+              error={errors.display_name?.message && t(errors.display_name.message as 'errors:rules.required', { param: '100' })}
+              {...form.register('display_name')}
             />
-            <Label htmlFor="khmer-numerals" className="font-normal">
-              {t('profile.khmerNumerals')}
-            </Label>
-          </div>
+            <TextField label={t('profile.email')} value={user.email} readOnly disabled />
 
-          {preview && <p className="text-muted-foreground text-sm">{t('profile.preview', { value: preview })}</p>}
-          <FormError error={error} />
-          <Button type="submit" disabled={isSubmitting || !isDirty}>
-            {isSubmitting ? t('common:actions.saving') : t('common:actions.save')}
-          </Button>
-        </form>
+            <Field label={t('profile.language')}>
+              {({ id }) => (
+                <select id={id} className={selectClass} {...form.register('locale')}>
+                  {LOCALES.map((l) => (
+                    <option key={l} value={l} lang={l}>
+                      {t(`common:language.${l}`)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+
+            <Field
+              label={t('profile.timezone')}
+              hint={t('profile.timezoneHint')}
+              error={errors.timezone?.message && t(errors.timezone.message as 'errors:rules.timezone')}
+            >
+              {({ id, describedBy, invalid }) => (
+                <select id={id} className={`${selectClass} font-mono`} aria-describedby={describedBy} aria-invalid={invalid || undefined} {...form.register('timezone')}>
+                  {timeZones.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="khmer-numerals"
+                checked={khmerNumerals}
+                onCheckedChange={(v) => {
+                  form.setValue('khmer_numerals', v === true, { shouldDirty: true });
+                }}
+                className="mt-1"
+              />
+              <Label htmlFor="khmer-numerals" className="font-normal">
+                {t('profile.khmerNumerals')}
+              </Label>
+            </div>
+
+            {preview && <p className="text-muted-foreground text-sm">{t('profile.preview', { value: preview })}</p>}
+            <FormError error={error} />
+            <Button type="submit" disabled={isSubmitting || !isDirty}>
+              {isSubmitting ? t('common:actions.saving') : t('common:actions.save')}
+            </Button>
+          </form>
+        </CardContent>
       </Card>
     </div>
   );

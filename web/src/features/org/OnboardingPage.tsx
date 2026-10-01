@@ -9,7 +9,7 @@ import { rememberOrg } from '@/app/org';
 import { TextField } from '@/components/common/Field';
 import { FormError } from '@/components/common/States';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { applyFieldErrors, errorMessage, hasCode } from '@/lib/api/errors';
 import { createOrganization, getListOrganizationsQueryKey } from '@/lib/api/generated/organizations/organizations';
 import { SLUG_PATTERN, slugify } from './slug';
@@ -56,34 +56,36 @@ export function OnboardingPage() {
         <p className="text-muted-foreground text-sm">{t('onboarding.subtitle')}</p>
       </div>
       <Card>
-        <form noValidate className="space-y-4" onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}>
-          <TextField
-            label={t('onboarding.name')}
-            error={msg(errors.name?.message, errors.name?.type)}
-            {...form.register('name', {
-              onChange: (e: { target: { value: string } }) => {
-                if (!slugEdited) form.setValue('slug', slugify(e.target.value), { shouldValidate: form.formState.isSubmitted });
-              },
-            })}
-          />
-          <TextField
-            label={t('onboarding.slug')}
-            hint={t('onboarding.slugHint')}
-            className="font-mono"
-            autoCapitalize="none"
-            spellCheck={false}
-            error={msg(errors.slug?.message, errors.slug?.type)}
-            {...form.register('slug', {
-              onChange: () => {
-                setSlugEdited(true);
-              },
-            })}
-          />
-          <FormError error={error} />
-          <Button type="submit" disabled={isSubmitting}>
-            {t('onboarding.submit')}
-          </Button>
-        </form>
+        <CardContent>
+          <form noValidate className="space-y-4" onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}>
+            <TextField
+              label={t('onboarding.name')}
+              error={msg(errors.name?.message, errors.name?.type)}
+              {...form.register('name', {
+                onChange: (e: { target: { value: string } }) => {
+                  if (!slugEdited) form.setValue('slug', slugify(e.target.value), { shouldValidate: form.formState.isSubmitted });
+                },
+              })}
+            />
+            <TextField
+              label={t('onboarding.slug')}
+              hint={t('onboarding.slugHint')}
+              className="font-mono"
+              autoCapitalize="none"
+              spellCheck={false}
+              error={msg(errors.slug?.message, errors.slug?.type)}
+              {...form.register('slug', {
+                onChange: () => {
+                  setSlugEdited(true);
+                },
+              })}
+            />
+            <FormError error={error} />
+            <Button type="submit" disabled={isSubmitting}>
+              {t('onboarding.submit')}
+            </Button>
+          </form>
+        </CardContent>
       </Card>
     </div>
   );
