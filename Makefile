@@ -122,6 +122,8 @@ docker: ## Build the Docker images
 	docker build -f deploy/docker/web.Dockerfile -t opshub-web:$(VERSION) .
 	docker build -f deploy/docker/runner.Dockerfile --build-arg VERSION=$(VERSION) -t opshub-runner:$(VERSION) .
 	docker build -f deploy/docker/backup.Dockerfile -t opshub-backup:$(VERSION) .
+	docker build -f deploy/docker/caddy.Dockerfile -t opshub-caddy:$(VERSION) .
+	docker build -f deploy/docker/opshub.Dockerfile --build-arg VERSION=$(VERSION) -t opshub:$(VERSION) .
 
 .PHONY: runner
 runner: .env ## Start a local runner (Docker socket); first time set OPSHUB_RUNNER_REGISTRATION_TOKEN in .env
@@ -132,6 +134,10 @@ runner: .env ## Start a local runner (Docker socket); first time set OPSHUB_RUNN
 .PHONY: backup-drill
 backup-drill: .env ## Back up the running stack's database, restore it into a scratch database and compare
 	sh deploy/backup/drill.sh
+
+.PHONY: aio-test
+aio-test: ## Build the all-in-one image and check it end to end (docker run), then remove it
+	bash scripts/aio-test.sh
 
 .PHONY: install-test
 install-test: ## Install the Docker production stack from this checkout, check it end to end, remove it
@@ -147,7 +153,8 @@ helm-lint: ## Lint the Helm chart and validate its manifests (every option on) a
 		--set web.podDisruptionBudget.enabled=true --set config.OPSHUB_DEFAULT_LOCALE=km \
 		| docker run --rm -i $(KUBECONFORM) -strict -summary -kubernetes-version 1.30.0 -skip ServiceMonitor -
 	docker run --rm -v "$(CURDIR)/deploy/backup:/s" koalaman/shellcheck:stable /s/backup.sh /s/restore.sh /s/schedule.sh /s/drill.sh
-	docker run --rm -v "$(CURDIR):/s" koalaman/shellcheck:stable /s/deploy/install/opshub /s/deploy/install/postgres/init-roles.sh /s/scripts/install-test.sh
+	docker run --rm -v "$(CURDIR):/s" koalaman/shellcheck:stable /s/deploy/install/opshub /s/deploy/install/postgres/init-roles.sh /s/scripts/install-test.sh \
+		/s/deploy/aio/start.sh /s/deploy/aio/opshub /s/scripts/aio-test.sh
 
 .PHONY: load
 load: ## k6 load test against the running stack (after `make seed`); see docs/load-testing.md

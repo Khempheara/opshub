@@ -265,6 +265,7 @@ export type SummaryKey =
   | 'summary.asset_metric_disk'
   | 'summary.asset_offline'
   | 'summary.certificate_expiring'
+  | 'summary.certificate_expired'
   | 'summary.certificate_failed';
 
 /** The i18n key (monitoring namespace) and values that describe what an alert observed. */
@@ -282,7 +283,10 @@ export function alertSummary(kind: AlertRuleKind, d: AlertDetails, subject: stri
     case 'asset_offline':
       return { key: 'summary.asset_offline', values: { ...values, since: d.since } };
     case 'certificate':
-      return d.error ? { key: 'summary.certificate_failed', values } : { key: 'summary.certificate_expiring', values: { ...values, count: d.days ?? 0 } };
+      if (d.error) return { key: 'summary.certificate_failed', values };
+      // A negative number of days: it has expired already.
+      if ((d.days ?? 0) < 0) return { key: 'summary.certificate_expired', values: { ...values, count: -(d.days ?? 0) } };
+      return { key: 'summary.certificate_expiring', values: { ...values, count: d.days ?? 0 } };
   }
 }
 

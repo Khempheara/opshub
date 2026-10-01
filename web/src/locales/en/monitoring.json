@@ -66,6 +66,8 @@
     "asset_offline": "{{subject}}: the agent stopped reporting.",
     "certificate_expiring_one": "{{subject}}: the certificate expires in {{count}} day.",
     "certificate_expiring_other": "{{subject}}: the certificate expires in {{count}} days.",
+    "certificate_expired_one": "{{subject}}: the certificate expired {{count}} day ago.",
+    "certificate_expired_other": "{{subject}}: the certificate expired {{count}} days ago.",
     "certificate_failed": "{{subject}}: the certificate check failed: {{error}}"
   },
   "events": {

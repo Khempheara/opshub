@@ -119,8 +119,9 @@ services:
   caddy:
     <<: *locked
     profiles: [caddy]
-    image: caddy:2.10-alpine
-    cap_add: [NET_BIND_SERVICE]
+    image: ${OPSHUB_IMAGE_PREFIX:-ghcr.io/khempheara/opshub}-caddy:${OPSHUB_VERSION:?}
+    # Unprivileged Caddy may bind 80 and 443 inside its own network namespace.
+    sysctls: { net.ipv4.ip_unprivileged_port_start: "80" }
     environment:
       OPSHUB_DOMAIN: ${OPSHUB_DOMAIN:?}
       # An email address (Let's Encrypt) or "internal" (Caddy's own certificate authority).

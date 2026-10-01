@@ -1,10 +1,151 @@
 # Install OpsHub with Docker
 
-One server, Docker only: the `./opshub` script sets everything up, gets HTTPS from Let's Encrypt,
-takes encrypted backups every night, and upgrades OpsHub later. For Kubernetes, use the
-[Helm chart](helm.md); for working on the code, `make dev` in the repository.
+Two ways, both with Docker only:
 
-## What you need
+| | One container (`docker run`) | Full stack (`./opshub install`) |
+|---|---|---|
+| Good for | Trying OpsHub, small teams, one server | Bigger teams and production you want to watch closely |
+| What runs | Database, API, web app, HTTPS and backups in one container | Each part in its own container, plus Prometheus and Grafana |
+| Install | One command | A script that asks a few questions |
+| Upgrade | `docker pull`, then run the container again | `./opshub upgrade` (backs up first) |
+
+For Kubernetes, use the [Helm chart](helm.md); for working on the code, `make dev` in the
+repository.
+
+## One container: `docker run`
+
+### Try it
+
+```bash
+docker run -d \
+  --name opshub \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -v opshub-data:/data \
+  ghcr.io/khempheara/opshub:latest
+```
+
+Open http://localhost:8080 and create an account. Without an email server, confirm the address
+on the command line: `docker exec opshub opshub verify-email you@example.com`.
+
+This is **try-out mode** (plain HTTP, OpsHub's development settings). With
+`-e OPSHUB_DEMO=true` it also loads the demo organizations; their password is in
+`docker logs opshub`. For real use, give it a domain:
+
+### On a server, with HTTPS
+
+```bash
+docker run -d \
+  --name opshub \
+  --restart unless-stopped \
+  -p 80:8080 \
+  -p 443:8443 \
+  -e OPSHUB_DOMAIN=ops.example.com \
+  -e OPSHUB_ADMIN_EMAIL=you@example.com \
+  -v opshub-data:/data \
+  ghcr.io/khempheara/opshub:latest
+```
+
+- The domain must point at the server, and ports 80 and 443 must be reachable: Caddy gets a
+  Let's Encrypt certificate for it.
+- `OPSHUB_ADMIN_EMAIL` may always register and becomes platform admin; sign-up is closed to
+  everyone else (they join by invitation).
+- Behind your own HTTPS proxy instead, leave out the domain and the 80/443 ports and set
+  `-e OPSHUB_PUBLIC_URL=https://ops.example.com`; point the proxy at port 8080.
+
+### Settings
+
+Add any of these with `-e NAME=value` (the full list of OpsHub settings is in
+[configuration.md](configuration.md)):
+
+| Setting | Meaning |
+|---|---|
+| `OPSHUB_DOMAIN` | Your server's DNS name: turns on HTTPS and production mode |
+| `OPSHUB_ADMIN_EMAIL` | The first administrator (also the Let's Encrypt contact) |
+| `OPSHUB_PUBLIC_URL` | The address people open, if it differs (a proxy, another port) |
+| `OPSHUB_TLS=internal` | Caddy's own certificate authority instead of Let's Encrypt (LAN, tests) |
+| `OPSHUB_ALLOW_SIGNUP=true` | Let anyone register |
+| `OPSHUB_SMTP_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`, `_FROM`, `_TLS` | Email (verification, invitations, alerts) |
+| `OPSHUB_DEFAULT_LOCALE=km` | Khmer by default for new accounts and emails |
+| `OPSHUB_BACKUP_AGE_RECIPIENTS` | Your own [age](https://age-encryption.org) public key for backups |
+| `OPSHUB_BACKUP_AT` | Backup time, UTC (default `02:00`) |
+| `OPSHUB_SSO_GITHUB_CLIENT_ID`, … | Single sign-on ([configuration.md](configuration.md)) |
+| `OPSHUB_DEMO=true` | Demo data (try-out mode only) |
+
+To change a setting, remove the container and run it again with the new value; the data stays
+in the volume.
+
+### Everyday commands
+
+| Task | Command |
+|---|---|
+| Logs | `docker logs -f opshub` |
+| Health and the latest backups | `docker exec opshub opshub status` |
+| Back up now | `docker exec opshub opshub backup` |
+| Confirm an email address | `docker exec opshub opshub verify-email you@example.com` |
+| Upgrade | `docker pull ghcr.io/khempheara/opshub:latest && docker rm -f opshub`, then the same `docker run` |
+| Stop / start | `docker stop opshub` / `docker start opshub` |
+
+### What's inside, and where the data is
+
+One unprivileged user (uid 70) runs PostgreSQL 17, the API, nginx (the web app), Caddy (only
+with a domain) and the nightly backup; if any of them stops, the container stops and Docker
+restarts it. Everything is in the `/data` volume:
+
+| Path | What |
+|---|---|
+| `/data/postgres` | The database (reachable only inside the container, with passwords) |
+| `/data/secrets.env` | Database passwords and encryption keys, generated on the first start. **Keep a copy offline**: backups can't be decrypted into a working OpsHub without these keys |
+| `/data/backups` | Nightly encrypted backups (7 daily, 4 weekly, 3 monthly) |
+| `/data/backup-private-key.txt` | The backup key, if you didn't give your own: copy it off the server, then delete it |
+| `/data/blobs`, `/data/caddy` | Pipeline artifacts and caches; HTTPS certificates |
+
+Copy backups off the server too, e.g. `docker cp opshub:/data/backups ./opshub-backups`.
+
+### Restore a backup
+
+Put the backup and its private key into `/data/restore`, then restart:
+
+```bash
+docker cp opshub-20261001T020000Z.dump.age opshub:/data/restore/
+docker cp backup-private-key.txt opshub:/data/restore/key.txt
+docker restart opshub
+```
+
+OpsHub restores before it starts, replacing the current data, then deletes the key from
+`/data/restore`.
+
+**On a new server**, the encryption keys must be the old server's. Take `OPSHUB_MASTER_KEYS` and
+`OPSHUB_JWT_KEYS` from the old `/data/secrets.env`, add them to the first `docker run` on the new
+server (`-e OPSHUB_MASTER_KEYS=… -e OPSHUB_JWT_KEYS=…`; after that they're kept in the volume and
+can be left out), then restore as above.
+
+### Add a runner
+
+Pipelines run on runners. In OpsHub, open **Runners → Register runner** and copy the token. On
+the machine that should run the jobs (ideally not the OpsHub server: jobs control its Docker):
+
+```bash
+docker run -d \
+  --name opshub-runner \
+  --restart unless-stopped \
+  --group-add "$(stat -c %g /var/run/docker.sock)" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v opshub-runner:/var/lib/opshub-runner \
+  -e OPSHUB_URL=https://ops.example.com \
+  -e OPSHUB_REGISTRATION_TOKEN=<token> \
+  -e OPSHUB_RUNNER_NAME=build-1 \
+  ghcr.io/khempheara/opshub-runner:latest
+```
+
+More in the [runner guide](runners.md).
+
+## Install the full stack
+
+The `./opshub` script runs each part in its own container (PostgreSQL, API, web, Caddy, backups,
+Prometheus and Grafana, an optional runner), and manages upgrades, backups and restores for you.
+
+### What you need
 
 - A Linux server with **2 CPUs, 4 GB RAM and 40 GB disk** to start (more disk if you keep many
   logs, artifacts or backups). x86-64 or ARM64.
@@ -16,9 +157,9 @@ takes encrypted backups every night, and upgrades OpsHub later. For Kubernetes, 
 - An **email server** (SMTP) for verification links, invitations, password resets and alerts.
   You can add it later; see [First sign-in](#first-sign-in).
 
-## Install
+### Install
 
-### From a release (no source code on the server)
+#### From a release (no source code on the server)
 
 Each release has an install bundle that pulls ready-made images from `ghcr.io`:
 
@@ -32,7 +173,7 @@ While the repository is private, the server must sign in to the registry first, 
 token that has `read:packages`: `docker login ghcr.io -u <github user>`. (Alternatively,
 make the packages public on GitHub.)
 
-### From the source
+#### From the source
 
 ```bash
 git clone https://github.com/khempheara/opshub.git && cd opshub/deploy/install
@@ -41,7 +182,7 @@ git clone https://github.com/khempheara/opshub.git && cd opshub/deploy/install
 
 This builds the images on the server (a few minutes the first time) instead of pulling them.
 
-### The questions
+#### The questions
 
 `./opshub install` asks for what it needs; every answer can also be given as an option, so an
 install can run unattended (`./opshub install --help`):
@@ -74,7 +215,7 @@ Running `install` again never overwrites an existing `.env`.
 > **Keep a copy of `.env` somewhere safe.** `OPSHUB_MASTER_KEYS` in it decrypts the secrets,
 > deploy credentials and 2FA seeds stored in the database: a backup is useless without it.
 
-## What runs
+### What runs
 
 | Service | Reachable at | Notes |
 |---|---|---|
@@ -91,7 +232,7 @@ read-only file system and no Linux capabilities (Caddy keeps one: binding ports 
 that can only read and write rows (see [database roles](database.md)). Logs are rotated (5 ×
 20 MB per container).
 
-## First sign-in
+### First sign-in
 
 1. Open `https://<your domain>/register` and create the account with the administrator email.
 2. Confirm the address with the link in the email. **No email set up yet?** Confirm it on the
@@ -108,7 +249,7 @@ To set up or change email later, edit the `OPSHUB_SMTP_*` lines in `.env` and ru
 `./opshub restart`. Any other setting works the same way (see `.env.example` in the
 repository for all of them, e.g. single sign-on).
 
-## A runner on the same server
+### A runner on the same server
 
 Pipelines need a runner. In OpsHub open **Runners → Register runner**, copy the token, then:
 
@@ -120,7 +261,7 @@ The runner starts each job as a container on this server's Docker. Access to the
 is equivalent to root on the server, so only run pipelines you trust here; for anything else,
 put runners on separate machines ([runner guide](runners.md)).
 
-## Monitoring
+### Monitoring
 
 Prometheus and Grafana listen only on the server itself. From your computer:
 
@@ -131,7 +272,7 @@ ssh -L 3001:127.0.0.1:3001 you@ops.example.com
 
 The dashboards and suggested alerts are described in [observability.md](observability.md).
 
-## Backups
+### Backups
 
 The `backup` service dumps the database every night at 02:00 UTC (`OPSHUB_BACKUP_AT`), encrypts
 it for the backup key, and keeps 7 daily, 4 weekly and 3 monthly copies in the `backups` volume
@@ -144,7 +285,7 @@ it for the backup key, and keeps 7 daily, 4 weekly and 3 monthly copies in the `
 - Copy backups off the server too: set `OPSHUB_BACKUP_RCLONE_REMOTE` and the rclone settings
   for S3-compatible storage ([backup.md](backup.md#set-up)).
 
-### Restore
+#### Restore
 
 ```bash
 docker compose cp backup:/backups/daily/opshub-20261001T020000Z.dump.age .   # or a copy from elsewhere
@@ -161,7 +302,7 @@ empty tables by then).
 
 Practise a restore every quarter ([restore drill](backup.md#restore-drill-every-quarter)).
 
-## Upgrade
+### Upgrade
 
 ```bash
 ./opshub upgrade v1.1.0        # release installs: the version to move to
@@ -173,7 +314,7 @@ migrations run automatically. If the new version doesn't become healthy, the mes
 to go back (`./opshub upgrade <previous version>`; restore the backup if a migration changed
 data).
 
-## Everyday commands
+### Everyday commands
 
 | Command | Does |
 |---|---|
@@ -184,7 +325,7 @@ data).
 | `./opshub uninstall` | Stops OpsHub; data stays |
 | `./opshub uninstall --delete-data` | Removes OpsHub **and all its data** (asks first) |
 
-## Your own proxy (`--tls off`)
+### Your own proxy (`--tls off`)
 
 The web container listens on `127.0.0.1:8080` (`--http-bind`, `--http-port`). Point your proxy
 at it with TLS in front, and pass `--public-url https://…`. OpsHub believes the proxy's
@@ -192,7 +333,7 @@ at it with TLS in front, and pass `--public-url https://…`. OpsHub believes th
 installer sets the Docker network's gateway, right for a proxy on the same server; for a proxy
 elsewhere, set its address and run `./opshub restart`. Keep `/metrics` off the public side.
 
-## Troubleshooting
+### Troubleshooting
 
 - **Let's Encrypt fails:** check that the DNS name resolves to this server and that ports 80
   and 443 are open (`./opshub logs caddy`).

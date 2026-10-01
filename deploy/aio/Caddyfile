@@ -1,0 +1,22 @@
+# HTTPS for the all-in-one image when OPSHUB_DOMAIN is set (deploy/aio/start.sh). Caddy runs
+# unprivileged on 8080/8443; publish them as 80/443 (docker run -p 80:8080 -p 443:8443).
+{
+	admin off
+	http_port 8080
+	https_port 8443
+	skip_install_trust
+}
+
+{$OPSHUB_DOMAIN} {
+	tls {$OPSHUB_CADDY_TLS}
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	@metrics path /metrics /metrics/*
+	respond @metrics 404
+	reverse_proxy 127.0.0.1:8081 {
+		flush_interval -1
+	}
+}

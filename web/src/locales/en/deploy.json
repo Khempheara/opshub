@@ -160,6 +160,7 @@
     "rollback": "Rollback",
     "live": "Live",
     "byRun": "Run #{{number}} · {{job}}",
+    "byRunOnly": "Run #{{number}}",
     "system": "OpsHub"
   },
   "detail": {

@@ -66,6 +66,8 @@
     "asset_offline": "{{subject}}៖ ភ្នាក់ងារឈប់រាយការណ៍។",
     "certificate_expiring_one": "{{subject}}៖ វិញ្ញាបនបត្រផុតកំណត់ក្នុងរយៈពេល {{count}} ថ្ងៃ។",
     "certificate_expiring_other": "{{subject}}៖ វិញ្ញាបនបត្រផុតកំណត់ក្នុងរយៈពេល {{count}} ថ្ងៃ។",
+    "certificate_expired_one": "{{subject}}៖ វិញ្ញាបនបត្របានផុតកំណត់ {{count}} ថ្ងៃមុន។",
+    "certificate_expired_other": "{{subject}}៖ វិញ្ញាបនបត្របានផុតកំណត់ {{count}} ថ្ងៃមុន។",
     "certificate_failed": "{{subject}}៖ ការពិនិត្យវិញ្ញាបនបត្របរាជ័យ៖ {{error}}"
   },
   "events": {

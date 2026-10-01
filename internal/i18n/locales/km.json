@@ -46,6 +46,7 @@
   "notify.alert.summary.asset_metric": "{{.Subject}}៖ {{.Metric}} នៅ {{.Value}}% (ដែនកំណត់ {{.Threshold}}%)។",
   "notify.alert.summary.asset_offline": "{{.Subject}}៖ ភ្នាក់ងារឈប់រាយការណ៍តាំងពី {{.Since}}។",
   "notify.alert.summary.certificate_expiring": "{{.Subject}}៖ វិញ្ញាបនបត្រ TLS ផុតកំណត់ក្នុងរយៈពេល {{.Days}} ថ្ងៃ ({{.Date}})។",
+  "notify.alert.summary.certificate_expired": "{{.Subject}}៖ វិញ្ញាបនបត្រ TLS បានផុតកំណត់នៅ {{.Date}}។",
   "notify.alert.summary.certificate_failed": "{{.Subject}}៖ ការពិនិត្យវិញ្ញាបនបត្រ TLS បរាជ័យ៖ {{.Error}}",
   "notify.alert.metric.cpu": "CPU",
   "notify.alert.metric.mem": "អង្គចងចាំ",

@@ -334,7 +334,9 @@ export function DeploymentsPage() {
                       {d.target_name} · {t(`strategies.${d.strategy}`)}
                     </TableCell>
                     <TableCell className="text-sm">
-                      {d.run_number ? t('history.byRun', { number: fmt.number(d.run_number), job: d.job_name }) : d.created_by_name || t('history.system')}
+                      {d.run_number
+                        ? t(d.job_name ? 'history.byRun' : 'history.byRunOnly', { number: fmt.number(d.run_number), job: d.job_name })
+                        : d.created_by_name || t('history.system')}
                       <span className="text-muted-foreground block text-xs">{fmt.relative(d.created_at)}</span>
                     </TableCell>
                   </TableRow>

@@ -46,6 +46,7 @@
   "notify.alert.summary.asset_metric": "{{.Subject}}: {{.Metric}} at {{.Value}}% (limit {{.Threshold}}%).",
   "notify.alert.summary.asset_offline": "{{.Subject}}: the agent stopped reporting at {{.Since}}.",
   "notify.alert.summary.certificate_expiring": "{{.Subject}}: the TLS certificate expires in {{.Days}} days ({{.Date}}).",
+  "notify.alert.summary.certificate_expired": "{{.Subject}}: the TLS certificate expired on {{.Date}}.",
   "notify.alert.summary.certificate_failed": "{{.Subject}}: the TLS certificate check failed: {{.Error}}",
   "notify.alert.metric.cpu": "CPU",
   "notify.alert.metric.mem": "memory",
