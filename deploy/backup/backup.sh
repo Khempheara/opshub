@@ -45,7 +45,9 @@ trap 'rm -f "$tmp"' EXIT
 log "dumping to daily/$name"
 # pipefail isn't POSIX: check pg_dump's status through a marker file instead.
 status_file="$(mktemp)"
-{ pg_dump --format=custom --compress=6 --no-owner --no-privileges --dbname="$OPSHUB_BACKUP_DATABASE_URL" \
+# Privileges are kept (restore.sh reproduces them, e.g. the insert-only audit log); ownership
+# isn't (the restoring role owns everything).
+{ pg_dump --format=custom --compress=6 --no-owner --dbname="$OPSHUB_BACKUP_DATABASE_URL" \
 	|| echo "$?" >"$status_file"; } | age "$@" -o "$tmp"
 if [ -s "$status_file" ]; then
 	log "pg_dump failed (exit $(cat "$status_file"))"

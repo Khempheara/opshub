@@ -16,7 +16,8 @@ The backup image (`deploy/docker/backup.Dockerfile`, PostgreSQL 17 client tools)
 `opshub-backup` (`deploy/backup/backup.sh`):
 
 1. `pg_dump --format=custom` connects as **`opshub_backup`**. It is a read-only role
-   (`pg_read_all_data`), so a backup can never change data.
+   (`pg_read_all_data`), so a backup can never change data. The dump keeps the tables'
+   privileges (not their owners), so a restore gives every role exactly the rights it had.
 2. The dump is streamed through **[age](https://age-encryption.org)** to one or more **public**
    keys. The private key never has to be on the server, and a stolen backup is useless without
    it.
@@ -91,8 +92,14 @@ docker run --rm -v /path/to/backups:/backups:ro -v "$PWD/opshub-backup.key:/key:
 opshub-api migrate status
 ```
 
-- **Refused:** a non-empty target unless `OPSHUB_RESTORE_FORCE=1` (existing tables are dropped
-  first).
+- **Refused:** a non-empty target unless `OPSHUB_RESTORE_FORCE=1`. Then the existing tables,
+  sequences, functions and types are dropped first; the schema stays, with the default
+  privileges that give the application role its rights.
+- **Privileges:** restored exactly as they were (the application role can't change the audit
+  log; only it runs the partition functions). Backups made before privileges were kept get the
+  default rights, and the restore applies those two restrictions again.
+- **Docker install:** `./opshub restore <file> <key> [--force]` does all of this
+  ([install-docker.md](install-docker.md#restore)).
 - **Point-in-time recovery:** for a recovery point under 24 hours, add WAL archiving (for
   example pgBackRest or a managed PostgreSQL). These dumps are the portable, provider-neutral
   layer.
