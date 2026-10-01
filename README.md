@@ -1,18 +1,19 @@
 # OpsHub
 
 **All-in-One DevOps Platform**: projects, CI/CD pipelines, deployments, infrastructure,
-monitoring, logs, secrets and audit behind one login, in **English and ខ្មែរ**.
+monitoring, logs, secrets, audit and a DORA dashboard behind one login, in **English and ខ្មែរ**.
 
 Go · PostgreSQL 17 · React 19 + TypeScript · self-hosted
 
-> **Status:** Module 1 (Auth & users) is complete. See [CHANGELOG.md](CHANGELOG.md) and the
-> [delivery plan](docs/plan.md). Modules ship one at a time.
+> **Status:** all 12 planned modules are complete (see [Modules](#modules) below). What changed
+> in each one is in [CHANGELOG.md](CHANGELOG.md); the decisions made along the way are in the
+> [delivery plan](docs/plan.md).
 
 ## សេចក្តីសង្ខេប (ខ្មែរ)
 
 OpsHub គឺជាវេទិកា DevOps គ្រប់មុខងារក្នុងមួយ ដែលអ្នកអាចដំឡើងនៅលើម៉ាស៊ីនមេផ្ទាល់ខ្លួន។
 វាប្រមូលផ្តុំគម្រោង CI/CD Pipeline ការ Deploy ហេដ្ឋារចនាសម្ព័ន្ធ ការត្រួតពិនិត្យ កំណត់ហេតុ Secret
-និងកំណត់ហេតុសវនកម្ម នៅក្រោមការចូលគណនីតែមួយ។ ចំណុចប្រទាក់ទាំងមូលមានជាភាសាអង់គ្លេស និងខ្មែរ។
+កំណត់ត្រាសវនកម្ម និងផ្ទាំងរង្វាស់ DORA នៅក្រោមការចូលគណនីតែមួយ។ ចំណុចប្រទាក់ទាំងមូលមានជាភាសាអង់គ្លេស និងខ្មែរ។
 
 - **ចាប់ផ្តើម៖** `make dev` បន្ទាប់មក `make seed` រួចបើក http://localhost:3000
 - **ភាសា៖** ប្តូររវាង EN | ខ្មែរ នៅរបារខាងលើ។ ភាសាដែលអ្នកជ្រើសរើសត្រូវបានរក្សាទុកក្នុងប្រវត្តិរូបរបស់អ្នក។
@@ -70,6 +71,9 @@ callbacks point at the Vite server.
 | Regenerate sqlc + TypeScript client | `make gen` |
 | Migrations | `make migrate-up`, `make migrate-down` (dev only) |
 | Build binary / images | `make build`, `make docker` |
+| Backup restore drill (needs `make dev`) | `make backup-drill` |
+| Helm chart lint + Kubernetes schema check, shellcheck | `make helm-lint` |
+| k6 load test (needs `make dev`, `make seed`) | `make load` |
 
 **Adding an endpoint:** describe it in `api/openapi.yaml` → SQL in `db/queries` → `make gen` →
 service (authorization + audit) → handler → tests → new error codes in `internal/apperr` **and**
@@ -104,11 +108,13 @@ old one after it (`id2:…,id1:…`), run `opshub-api keys rotate`, then remove 
 - **Layers:** handler → service (business rules, authorization, audit) → repository (sqlc).
 - **Errors are codes, not sentences:** `{"error":{"code","message","details"}}`; the UI translates
   the code into English or Khmer.
-- **PostgreSQL is the only stateful dependency** (data, job queue, SSE fan-out). The API connects
-  as a DML-only role; the audit log is insert-only.
+- **PostgreSQL is the only stateful service** (data, job queue, SSE fan-out); pipeline artifacts
+  and caches live on a volume (`OPSHUB_BLOB_DIR`). The API connects as a DML-only role; the
+  audit log is insert-only.
 
 Details: [architecture](docs/architecture.md) · [API endpoints](docs/api.md) ·
-[database](docs/database.md) · [RBAC](docs/rbac.md) · [i18n & glossary](docs/i18n.md)
+[database](docs/database.md) · [RBAC](docs/rbac.md) · [i18n & glossary](docs/i18n.md) ·
+[observability](docs/observability.md)
 
 ## Security model
 
@@ -188,8 +194,7 @@ logs; pull-request runs never receive them ([secrets guide](docs/secrets.md)).
 ## Monitoring & alerts
 
 **Organization → Monitoring** checks HTTP endpoints, TCP ports and TLS certificates, and alerts
-on them and on the infrastructure of Module 7 (server usage, offline agents, expiring
-certificates). Alerts escalate through Telegram, Slack, email or webhooks until someone
+on them and on your infrastructure (server usage, offline agents, expiring certificates). Alerts escalate through Telegram, Slack, email or webhooks until someone
 acknowledges them; silences mute them during maintenance ([monitoring guide](docs/monitoring.md)).
 The demo data includes an unreachable database monitor, so an alert fires a minute after
 `make seed` (the email arrives in Mailpit).
@@ -216,8 +221,21 @@ recovery, pipeline success rate and run durations, and a per-project table, for 
 range up to a year ([dashboard guide](docs/dashboard.md)). The demo data includes 60 days of
 history in the `checkout-web` project.
 
-## Roadmap
+## Modules
 
-1. ✅ Auth & users · 2. ✅ RBAC · 3. ✅ Projects & repositories · 4. ✅ CI/CD pipelines · 5. ✅ Runner agent ·
-6. ✅ Deployments · 7. ✅ Infrastructure · 8. ✅ Secrets · 9. ✅ Monitoring & alerts · 10. ✅ Logs ·
-11. ✅ Audit log · 12. ✅ Dashboard, DORA metrics & operations
+All twelve modules of the plan are complete.
+
+| # | Module | Guide |
+|---|---|---|
+| 1 | ✅ Auth & users | [Security model](#security-model) |
+| 2 | ✅ RBAC | [rbac.md](docs/rbac.md) |
+| 3 | ✅ Projects & repositories | [api.md §3](docs/api.md#3-projects-repositories-environments) |
+| 4 | ✅ CI/CD pipelines | [pipelines.md](docs/pipelines.md) |
+| 5 | ✅ Runner agent | [runners.md](docs/runners.md) |
+| 6 | ✅ Deployments | [deployments.md](docs/deployments.md) |
+| 7 | ✅ Infrastructure | [infrastructure.md](docs/infrastructure.md) |
+| 8 | ✅ Secrets | [secrets.md](docs/secrets.md) |
+| 9 | ✅ Monitoring & alerts | [monitoring.md](docs/monitoring.md) |
+| 10 | ✅ Logs | [logs.md](docs/logs.md) |
+| 11 | ✅ Audit log | [audit.md](docs/audit.md) |
+| 12 | ✅ Dashboard, DORA metrics & operations | [dashboard.md](docs/dashboard.md) · [observability.md](docs/observability.md) · [backup.md](docs/backup.md) · [helm.md](docs/helm.md) · [load-testing.md](docs/load-testing.md) |
