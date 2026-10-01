@@ -98,7 +98,7 @@ export function AlertsPage() {
             <TableBody>
               {alerts.data.items.map((a) => (
                 <TableRow key={a.id} data-testid="alert-row">
-                  <TableCell className="max-w-96 whitespace-normal">
+                  <TableCell className="max-w-96 min-w-56 whitespace-normal">
                     <Link to={`/o/${org.slug}/monitoring/alerts/${a.id}`} className="font-medium break-words hover:underline">
                       {a.rule_name}
                     </Link>

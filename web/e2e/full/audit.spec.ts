@@ -53,8 +53,11 @@ test('owners read the audit log as sentences, filter it and export it as CSV', a
   await page.getByLabel('Area').selectOption('');
   await expect(summaries.first()).toHaveText('Org Owner exported the audit log');
 
-  // Your own account activity lives in Settings → Security.
+  // Your own account activity lives in Settings → Security. On account pages the sidebar still
+  // shows the role-dependent links of the last organization.
   await page.goto('/settings/security');
+  await expect(page.locator(`a[href="/o/${slug}/audit-log"]`)).toBeVisible();
+  await expect(page.locator(`a[href="/o/${slug}/runners"]`)).toBeVisible();
   const activity = page.getByTestId('account-activity');
   await expect(activity.getByTestId('audit-summary').first()).toHaveText('Org Owner signed in');
   await expect(activity).toContainText('Org Owner confirmed their email address');
@@ -88,7 +91,9 @@ test("developers don't see the audit log", async ({ page }) => {
   await page.goto('/o/angkor-tech/audit-log');
   await expect(page.getByTestId('audit-entries')).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('កំណត់ត្រាសវនកម្ម');
-  // Their own account activity is still theirs to see.
+  // Their own account activity is still theirs to see; the sidebar keeps their links there.
   await page.goto('/settings/security');
+  await expect(page.locator('a[href="/o/angkor-tech/runners"]')).toBeVisible();
+  await expect(page.locator('a[href="/o/angkor-tech/audit-log"]')).toHaveCount(0);
   await expect(page.getByTestId('account-activity').getByTestId('audit-summary').first()).toContainText('បានចូលគណនី');
 });

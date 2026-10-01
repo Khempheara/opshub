@@ -1,8 +1,8 @@
 import { Activity, Boxes, Building2, FolderGit2, History, KeyRound, LayoutDashboard, Rocket, ScrollText, Server, Settings, ShieldCheck, UserRound, Users, UsersRound, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router';
-import { hasRole, lastOrg } from '@/app/org';
-import { useRouteOrg } from '@/app/useRouteOrg';
+import { hasRole } from '@/app/org';
+import { useNavOrg } from '@/app/useRouteOrg';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -16,9 +16,7 @@ interface Item {
 /** Navigation groups; feature modules add their entries here as they ship. */
 function useNavGroups(): { label?: string; items: Item[] }[] {
   const { t } = useTranslation(['common', 'org', 'project']);
-  const routeOrg = useRouteOrg();
-  const remembered = lastOrg();
-  const org = routeOrg ?? (remembered ? { slug: remembered } : null);
+  const org = useNavOrg();
   const groups: { label?: string; items: Item[] }[] = [];
   if (org) {
     const base = `/o/${org.slug}`;
@@ -34,13 +32,13 @@ function useNavGroups(): { label?: string; items: Item[] }[] {
         { to: `${base}/members`, label: t('org:nav.members'), icon: Users },
         { to: `${base}/teams`, label: t('org:nav.teams'), icon: UsersRound },
         // runner.view is Developer and up (the page itself also guards).
-        ...(routeOrg && hasRole(routeOrg.role, 'developer') ? [{ to: `${base}/runners`, label: t('org:nav.runners'), icon: Server }] : []),
+        ...(org.role && hasRole(org.role, 'developer') ? [{ to: `${base}/runners`, label: t('org:nav.runners'), icon: Server }] : []),
         { to: `${base}/deploy-targets`, label: t('org:nav.deployTargets'), icon: Rocket },
         { to: `${base}/infrastructure`, label: t('org:nav.infrastructure'), icon: Boxes },
         { to: `${base}/monitoring`, label: t('org:nav.monitoring'), icon: Activity },
         { to: `${base}/logs`, label: t('org:nav.logs'), icon: ScrollText },
         // audit.view is Owner/Admin (the page itself also guards).
-        ...(routeOrg && hasRole(routeOrg.role, 'admin') ? [{ to: `${base}/audit-log`, label: t('org:nav.audit'), icon: History }] : []),
+        ...(org.role && hasRole(org.role, 'admin') ? [{ to: `${base}/audit-log`, label: t('org:nav.audit'), icon: History }] : []),
         { to: `${base}/settings`, label: t('org:nav.settings'), icon: Settings },
       ],
     });

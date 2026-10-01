@@ -107,8 +107,8 @@ export function MonitorsPage() {
             <TableBody>
               {monitors.data.items.map((m) => (
                 <TableRow key={m.id} data-testid="monitor-row">
-                  <TableCell className="max-w-80 whitespace-normal">
-                    <Link to={`/o/${org.slug}/monitoring/monitors/${m.id}`} className="font-medium break-all hover:underline">
+                  <TableCell className="max-w-80 min-w-48 whitespace-normal">
+                    <Link to={`/o/${org.slug}/monitoring/monitors/${m.id}`} className="font-medium break-words hover:underline">
                       {m.name}
                     </Link>
                     <span className="text-muted-foreground block truncate font-mono text-xs" dir="ltr" title={m.target}>
@@ -124,7 +124,7 @@ export function MonitorsPage() {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="whitespace-normal">
+                  <TableCell className="min-w-28 whitespace-normal">
                     <MonitorStatusLabel status={m.status} />
                     {m.status === 'down' && m.last_error && <p className="text-destructive mt-1 max-w-56 text-xs break-words">{m.last_error}</p>}
                   </TableCell>

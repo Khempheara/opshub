@@ -154,6 +154,7 @@
       "avg": "avg",
       "max": "max",
       "noData": "No checks in this time range.",
+      "noResponses": "No check succeeded in this time range, so there is no response time to show.",
       "summary": "Average {{avg}} ms · peak {{max}} ms",
       "uptimeValue": "{{value}}% up",
       "range": "Time range",

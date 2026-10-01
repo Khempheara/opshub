@@ -108,7 +108,7 @@ export function RulesPage() {
             <TableBody>
               {rules.data.items.map((r) => (
                 <TableRow key={r.id} data-testid="rule-row">
-                  <TableCell className="max-w-64 whitespace-normal">
+                  <TableCell className="max-w-64 min-w-36 whitespace-normal">
                     <span className="font-medium break-words">{r.name}</span>
                     {!r.enabled && (
                       <Badge variant="secondary" className="ms-2">
@@ -116,7 +116,7 @@ export function RulesPage() {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="max-w-72 text-sm whitespace-normal">
+                  <TableCell className="max-w-72 min-w-40 text-sm whitespace-normal">
                     <Watches rule={r} names={names} />
                   </TableCell>
                   <TableCell>

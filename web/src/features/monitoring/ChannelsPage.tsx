@@ -123,7 +123,7 @@ function Channels() {
                     <span className="font-medium break-words">{c.name}</span>
                     <span className="text-muted-foreground block text-xs">{t(`channelKinds.${c.kind}`)}</span>
                   </TableCell>
-                  <TableCell className="text-muted-foreground max-w-64 font-mono text-xs break-all whitespace-normal" dir="ltr">
+                  <TableCell className="text-muted-foreground max-w-64 min-w-48 font-mono text-xs break-all whitespace-normal" dir="ltr">
                     <Destination c={c} />
                   </TableCell>
                   <TableCell className="text-sm">{c.locale ? LANGUAGE_NAMES[c.locale] : t('channels.recipientLanguage')}</TableCell>
