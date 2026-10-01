@@ -8,7 +8,7 @@ COPY api/openapi.yaml /src/api/openapi.yaml
 RUN npm run build
 
 # Unprivileged nginx (runs as uid 101, listens on 8080).
-FROM nginxinc/nginx-unprivileged:1.29-alpine
+FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
 # Pick up Alpine security fixes newer than the base image; curl is not needed at runtime.
 USER root
 RUN apk upgrade --no-cache && (apk del --no-cache curl || true)

@@ -7,6 +7,9 @@
 - **`docker run` without any settings** (the README's first command) stopped at once with
   "OPSHUB_PUBLIC_URL: parameter not set" and restarted forever. The tests always passed a
   public URL, so they missed it; `make aio-test` now also runs the README's command exactly.
+- **Security updates in the images:** CI and release builds reused a cached `apk upgrade`, so a
+  fix published since (pcre2, CVE-2026-103111, HIGH) never reached the images and the Trivy
+  scan failed. The final image stage is now always built fresh.
 
 ## Install with Docker
 
