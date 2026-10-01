@@ -2,9 +2,27 @@
 
 ## Install with Docker
 
-OpsHub installs on one Docker host with a single script ([install-docker.md](docs/install-docker.md)).
+OpsHub installs with one `docker run` command, or as a full stack with a single script
+([install-docker.md](docs/install-docker.md)).
 
 ### Built
+
+- **All-in-one image `ghcr.io/khempheara/opshub`:** PostgreSQL 17, the API, the web app, Caddy
+  and nightly encrypted backups in one container, all as an unprivileged user, data in `/data`.
+  - `docker run -p 8080:8080 -v opshub-data:/data …` tries it (HTTP, development settings;
+    `OPSHUB_DEMO=true` loads the demo data); `-e OPSHUB_DOMAIN=…` gives production mode with a
+    Let's Encrypt certificate.
+  - Passwords and keys are generated on the first start (or the old server's keys are taken
+    from `-e`); admin commands with `docker exec opshub opshub …`; a backup and its key dropped
+    into `/data/restore` is restored on the next start.
+  - `make aio-test` (and a CI job): 31 checks, including restoring onto a new server, a crashed
+    process stopping the container, a clean shutdown and HTTPS.
+- **Caddy built from source** (v2.11.6, current Go and libraries) for both installs: the
+  official image had 59 HIGH/CRITICAL findings, ours none. The full stack's Caddy now runs
+  without root.
+- **README** rewritten around the two `docker run` commands, with screenshots; the old
+  configuration and security sections moved to [configuration.md](docs/configuration.md) and
+  [security.md](docs/security.md).
 
 - **`deploy/install/`: production stack and `./opshub` script.**
   - `install` asks a few questions (or takes options), then writes `.env` (mode 600) with
@@ -25,6 +43,12 @@ OpsHub installs on one Docker host with a single script ([install-docker.md](doc
   first admin, backup decryption, restore, privileges, upgrade), then removal.
 
 ### Fixed
+
+- **Expired certificates** read "expires in -3 days" in alerts and alert emails; they now say
+  when the certificate expired.
+- **Deployments started by a run without a job** showed "Run #55 ·" with nothing after it.
+- **Uploads through the all-in-one web server** would have been capped at nginx's 1 MB default;
+  it allows 600 MB (artifacts and caches go through it).
 
 - **Client addresses behind a proxy:** nginx now trusts `X-Forwarded-For` from one configured
   proxy (`OPSHUB_REAL_IP_FROM`), so the audit log and rate limits see the visitor, not Caddy.
