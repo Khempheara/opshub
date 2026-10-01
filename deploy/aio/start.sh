@@ -54,7 +54,7 @@ if [ -n "${OPSHUB_DOMAIN:-}" ]; then
 	OPSHUB_CADDY_TLS="${OPSHUB_TLS:-${OPSHUB_ACME_EMAIL:-${OPSHUB_ADMIN_EMAIL:-}}}"
 	[ -n "$OPSHUB_CADDY_TLS" ] || die "with OPSHUB_DOMAIN, set OPSHUB_ADMIN_EMAIL (also used for Let's Encrypt)"
 	WEB_LISTEN=127.0.0.1:8081
-elif [ "${OPSHUB_PUBLIC_URL#https://}" != "${OPSHUB_PUBLIC_URL:-}" ]; then
+elif case "${OPSHUB_PUBLIC_URL:-}" in https://*) true ;; *) false ;; esac; then
 	MODE=proxy
 	WEB_LISTEN=8080
 else

@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.1
+
+### Fixed
+
+- **`docker run` without any settings** (the README's first command) stopped at once with
+  "OPSHUB_PUBLIC_URL: parameter not set" and restarted forever. The tests always passed a
+  public URL, so they missed it; `make aio-test` now also runs the README's command exactly.
+
 ## Install with Docker
 
 OpsHub installs with one `docker run` command, or as a full stack with a single script
