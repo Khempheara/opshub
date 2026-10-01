@@ -27,7 +27,7 @@ Requirements: Docker, Go 1.26+, Node 22+.
 
 ```bash
 make dev    # creates .env with fresh keys, builds and starts the whole stack
-make seed   # demo organization "Angkor Tech · អង្គរ តិច" with one user per role
+make seed   # demo organizations "Angkor Tech · អង្គរ តិច" and "Mekong Cloud · មេគង្គ ក្លោដ"
 ```
 
 | URL | What |
@@ -40,7 +40,17 @@ make seed   # demo organization "Angkor Tech · អង្គរ តិច" with 
 
 Demo accounts (all share the password `make seed` prints; set `OPSHUB_SEED_PASSWORD` to choose it):
 `owner@demo.opshub.local` (Owner, Khmer UI), `admin@…` (Admin), `dev@…` (Developer, Khmer UI),
-`viewer@…` (Viewer).
+`viewer@…` (Viewer), and `secure@…` (Admin of Mekong Cloud, with two-factor sign-in: `make seed`
+prints its authenticator key and recovery codes once).
+
+Signing in opens **Angkor Tech**, the small demo the E2E tests use. Switch to **Mekong Cloud** in
+the organization menu to see every page filled: runs in every status and trigger, SSH, Docker and
+Kubernetes targets, firing, acknowledged and resolved alerts with timelines, silences, all channel
+kinds, expiring and failed certificates, pending invitations, API tokens and 45 days of audit log.
+Some states move on by themselves, as they would for real: the seeded agents and runners go
+offline within minutes (the running run's job then fails as "runner lost"), and the Staging API
+alert starts firing a day after seeding. To start over, reset the database
+(`docker compose down -v`, then `make dev` and `make seed`).
 
 Ports already in use? Set `OPSHUB_WEB_PORT`, `OPSHUB_API_PORT`, `OPSHUB_PG_PORT`, … in `.env`
 (and `OPSHUB_COMPOSE_PUBLIC_URL` to match the web port so email links work).
