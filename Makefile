@@ -133,8 +133,12 @@ runner: .env ## Start a local runner (Docker socket); first time set OPSHUB_RUNN
 backup-drill: .env ## Back up the running stack's database, restore it into a scratch database and compare
 	sh deploy/backup/drill.sh
 
+.PHONY: install-test
+install-test: ## Install the Docker production stack from this checkout, check it end to end, remove it
+	bash scripts/install-test.sh
+
 .PHONY: helm-lint
-helm-lint: ## Lint the Helm chart and validate its manifests (every option on) against Kubernetes 1.30
+helm-lint: ## Lint the Helm chart and validate its manifests (every option on) against Kubernetes 1.30; shellcheck the scripts
 	docker run --rm -v "$(CURDIR)/deploy/helm/opshub:/chart" $(HELM_IMAGE) lint /chart --strict \
 		--set backup.enabled=true --set backup.ageRecipients=age1lint
 	docker run --rm -v "$(CURDIR)/deploy/helm/opshub:/chart" $(HELM_IMAGE) template opshub /chart \
@@ -143,6 +147,7 @@ helm-lint: ## Lint the Helm chart and validate its manifests (every option on) a
 		--set web.podDisruptionBudget.enabled=true --set config.OPSHUB_DEFAULT_LOCALE=km \
 		| docker run --rm -i $(KUBECONFORM) -strict -summary -kubernetes-version 1.30.0 -skip ServiceMonitor -
 	docker run --rm -v "$(CURDIR)/deploy/backup:/s" koalaman/shellcheck:stable /s/backup.sh /s/restore.sh /s/schedule.sh /s/drill.sh
+	docker run --rm -v "$(CURDIR):/s" koalaman/shellcheck:stable /s/deploy/install/opshub /s/deploy/install/postgres/init-roles.sh /s/scripts/install-test.sh
 
 .PHONY: load
 load: ## k6 load test against the running stack (after `make seed`); see docs/load-testing.md

@@ -84,6 +84,7 @@
   "audit.auth.password_reset": "{{.Actor}} reset their password",
   "audit.user.register": "{{.Actor}} created an account",
   "audit.user.email_verified": "{{.Actor}} confirmed their email address",
+  "audit.user.verify_operator": "{{.Actor}} confirmed the email address of {{.Target}} (server command)",
   "audit.user.update_profile": "{{.Actor}} updated their profile",
   "audit.identity.link": "{{.Actor}} linked {{.Provider}} sign-in",
   "audit.identity.unlink": "{{.Actor}} removed {{.Provider}} sign-in",

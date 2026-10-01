@@ -1,0 +1,4 @@
+# Written by ./opshub install: secrets, never commit.
+.env
+.env.*
+backup-private-key.txt

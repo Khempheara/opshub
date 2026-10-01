@@ -1,0 +1,17 @@
+# Builds the OpsHub images from this source checkout instead of pulling them. ./opshub install
+# adds this file (COMPOSE_FILE in .env) when it runs inside the repository without --version.
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/api.Dockerfile
+      args: { VERSION: "${OPSHUB_VERSION}" }
+  web:
+    build: { context: ../.., dockerfile: deploy/docker/web.Dockerfile }
+  backup:
+    build: { context: ../.., dockerfile: deploy/docker/backup.Dockerfile }
+  runner:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/runner.Dockerfile
+      args: { VERSION: "${OPSHUB_VERSION}" }

@@ -84,6 +84,7 @@
   "audit.auth.password_reset": "{{.Actor}} បានកំណត់ពាក្យសម្ងាត់ឡើងវិញ",
   "audit.user.register": "{{.Actor}} បានបង្កើតគណនី",
   "audit.user.email_verified": "{{.Actor}} បានបញ្ជាក់អាសយដ្ឋានអ៊ីមែល",
+  "audit.user.verify_operator": "{{.Actor}} បានបញ្ជាក់អាសយដ្ឋានអ៊ីមែលរបស់ {{.Target}} (ពាក្យបញ្ជាលើម៉ាស៊ីនមេ)",
   "audit.user.update_profile": "{{.Actor}} បានកែប្រែប្រវត្តិរូប",
   "audit.identity.link": "{{.Actor}} បានភ្ជាប់ការចូលគណនីតាម {{.Provider}}",
   "audit.identity.unlink": "{{.Actor}} បានដកការចូលគណនីតាម {{.Provider}}",
