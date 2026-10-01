@@ -1,5 +1,40 @@
 # Changelog
 
+## Install with Docker
+
+OpsHub installs on one Docker host with a single script ([install-docker.md](docs/install-docker.md)).
+
+### Built
+
+- **`deploy/install/`: production stack and `./opshub` script.**
+  - `install` asks a few questions (or takes options), then writes `.env` (mode 600) with
+    random database and Grafana passwords and new keys, builds or pulls the images, starts
+    everything and waits until it's healthy.
+  - `upgrade` (backs up first), `runner <token>`, `verify-email`, `backup`,
+    `restore <file> <key>`, `status`, `logs`, `restart`, `uninstall [--delete-data]`.
+  - Services: Caddy (automatic Let's Encrypt, or its own CA, or off), web, API, PostgreSQL with
+    three roles and generated passwords, nightly encrypted backups, Prometheus and Grafana on
+    127.0.0.1, and an optional runner.
+  - Hardening: read-only file systems, no capabilities, `no-new-privileges`, log rotation;
+    only Caddy is published.
+- **`opshub-api users verify <email>`** confirms an address without the emailed link, so the
+  first admin can sign in before email works; audited as done by OpsHub.
+- **Release workflow:** a `v*` tag publishes amd64 and arm64 images to ghcr.io (Trivy-scanned)
+  and a GitHub Release with the install bundle.
+- **`make install-test`** (and a CI job): a real install with HTTPS, then 17 checks (headers,
+  first admin, backup decryption, restore, privileges, upgrade), then removal.
+
+### Fixed
+
+- **Client addresses behind a proxy:** nginx now trusts `X-Forwarded-For` from one configured
+  proxy (`OPSHUB_REAL_IP_FROM`), so the audit log and rate limits see the visitor, not Caddy.
+- **Restoring over existing data** (`OPSHUB_RESTORE_FORCE=1`) failed on partitioned tables; it
+  now empties the schema first.
+- **Privileges after a restore:** backups had no privileges, so a restore gave the application
+  role back `UPDATE`/`DELETE` on the audit log and let any role run the partition functions.
+  Backups now keep privileges and restores reproduce them; older backups get the restrictions
+  applied again.
+
 ## Module 12b — Operations
 
 The second part of Module 12 (decision M12-1): monitoring OpsHub itself, backups, Kubernetes

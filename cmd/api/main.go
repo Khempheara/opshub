@@ -4,6 +4,7 @@
 //	opshub-api migrate up|down|status
 //	opshub-api seed                 create demo data (not in production)
 //	opshub-api keys generate        print new OPSHUB_MASTER_KEYS / OPSHUB_JWT_KEYS values
+//	opshub-api users verify <email> confirm an account's email address without the emailed link
 //	opshub-api healthcheck          exit 0 if the local server is live (for distroless images)
 //	opshub-api version
 package main
@@ -80,12 +81,14 @@ func main() {
 		err = seedCmd()
 	case "keys":
 		err = keysCmd(args)
+	case "users":
+		err = usersCmd(args)
 	case "healthcheck":
 		err = healthcheck()
 	case "version":
 		fmt.Println(version)
 	default:
-		err = fmt.Errorf("unknown command %q (serve, migrate, seed, keys, healthcheck, version)", cmd)
+		err = fmt.Errorf("unknown command %q (serve, migrate, seed, keys, users, healthcheck, version)", cmd)
 	}
 	if err != nil {
 		slog.Error("fatal", "command", cmd, "error", err)
@@ -448,6 +451,34 @@ func healthcheck() error {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("healthz returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// usersCmd: `users verify <email>` confirms an address without the emailed link, so the first
+// admin can sign in before email delivery works (the installer points to it).
+func usersCmd(args []string) error {
+	if len(args) != 2 || args[0] != "verify" {
+		return errors.New("usage: opshub-api users verify <email>")
+	}
+	cfg, _, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	pool, err := database.Connect(ctx, cfg.DatabaseURL, 2)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	already, err := auth.VerifyEmailByOperator(ctx, pool, args[1])
+	if err != nil {
+		return err
+	}
+	if already {
+		fmt.Printf("%s was already confirmed\n", args[1])
+	} else {
+		fmt.Printf("Confirmed %s: it can sign in now\n", args[1])
 	}
 	return nil
 }

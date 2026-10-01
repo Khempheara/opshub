@@ -580,3 +580,28 @@ func TestAuditTrail(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"user.register", "user.email_verified", "auth.login", "auth.login_failed"}, actions)
 }
+
+func TestVerifyEmailByOperator(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	pool := pgtest.Pool(t)
+	email := uniqueEmail("first-admin")
+	require.NoError(t, e.svc.Register(ctx, RegisterInput{Email: email, Password: goodPassword, DisplayName: "Sokha", Locale: "en"}))
+	_, err := e.svc.Login(ctx, email, goodPassword)
+	assert.Equal(t, apperr.CodeEmailNotVerified, codeOf(t, err))
+
+	already, err := VerifyEmailByOperator(ctx, pool, "  "+strings.ToUpper(email))
+	require.NoError(t, err)
+	assert.False(t, already)
+	e.login(t, email)
+	var actorType, action string
+	require.NoError(t, pool.QueryRow(ctx, `SELECT actor_type, action FROM audit_log WHERE resource_id = (SELECT id::text FROM users WHERE email = $1)
+		AND action = 'user.verify_operator'`, email).Scan(&actorType, &action))
+	assert.Equal(t, "system", actorType)
+
+	already, err = VerifyEmailByOperator(ctx, pool, email)
+	require.NoError(t, err)
+	assert.True(t, already, "a second time changes nothing")
+	_, err = VerifyEmailByOperator(ctx, pool, uniqueEmail("nobody"))
+	assert.ErrorIs(t, err, ErrNoSuchAccount)
+}

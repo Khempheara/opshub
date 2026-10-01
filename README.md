@@ -16,10 +16,26 @@ OpsHub គឺជាវេទិកា DevOps គ្រប់មុខងារ�
 កំណត់ត្រាសវនកម្ម និងផ្ទាំងរង្វាស់ DORA នៅក្រោមការចូលគណនីតែមួយ។ ចំណុចប្រទាក់ទាំងមូលមានជាភាសាអង់គ្លេស និងខ្មែរ។
 
 - **ចាប់ផ្តើម៖** `make dev` បន្ទាប់មក `make seed` រួចបើក http://localhost:3000
+- **ដំឡើងលើម៉ាស៊ីនមេ (Docker)៖** `cd deploy/install && ./opshub install` — HTTPS ស្វ័យប្រវត្តិ
+  ការបម្រុងទុកដែលបានអ៊ិនគ្រីបរៀងរាល់យប់ និងការធ្វើបច្ចុប្បន្នភាព (មើល `docs/install-docker.md`)។
 - **ភាសា៖** ប្តូររវាង EN | ខ្មែរ នៅរបារខាងលើ។ ភាសាដែលអ្នកជ្រើសរើសត្រូវបានរក្សាទុកក្នុងប្រវត្តិរូបរបស់អ្នក។
 - **សុវត្ថិភាព៖** ពាក្យសម្ងាត់ argon2id, ការផ្ទៀងផ្ទាត់ពីរជំហាន (TOTP), Token ចូលប្រើរយៈពេល ១៥ នាទី,
   ការចាក់សោគណនីក្រោយការព្យាយាមខុសច្រើនដង និងកំណត់ហេតុសវនកម្មដែលមិនអាចកែប្រែបាន។
 - **ឯកសារ៖** សូមមើលថត `docs/` (ជាភាសាអង់គ្លេស) និងសទ្ទានុក្រមពាក្យបច្ចេកទេសនៅ `docs/i18n.md`។
+
+## Install on a server
+
+On one Linux server with Docker, the installer sets up HTTPS (Let's Encrypt), nightly encrypted
+backups and monitoring, and later upgrades OpsHub:
+
+```bash
+git clone https://github.com/khempheara/opshub.git && cd opshub/deploy/install
+./opshub install
+```
+
+Or, without the source, download `opshub-install-<version>.tar.gz` from a release (its images
+come from ghcr.io). Everything else (first sign-in, runner, backups and restore, upgrades) is in
+the [Docker install guide](docs/install-docker.md); for Kubernetes, see [helm.md](docs/helm.md).
 
 ## Quick start
 
@@ -154,7 +170,9 @@ Details: [architecture](docs/architecture.md) · [API endpoints](docs/api.md) ·
 - Serve over https and set `OPSHUB_PUBLIC_URL` accordingly (cookies become `Secure`).
 - Run `opshub-api migrate up` as a deploy step with the migrator credentials and set
   `OPSHUB_MIGRATE_ON_START=false` for the API.
-- Create the roles as in `deploy/compose/postgres/init-roles.sql` (with real passwords).
+- Create the roles as in `deploy/compose/postgres/init-roles.sql` (with real passwords); the
+  [Docker install](docs/install-docker.md) does this for you, with HTTPS, SMTP settings and
+  backups.
 - Set `OPSHUB_TRUSTED_PROXIES` to your ingress range, and configure real SMTP with TLS.
 - Keep `/metrics` on an internal network (the bundled nginx doesn't expose it); metrics,
   dashboards and suggested alerts are in [observability.md](docs/observability.md).

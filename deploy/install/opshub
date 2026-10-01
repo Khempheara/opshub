@@ -1,0 +1,433 @@
+#!/usr/bin/env bash
+# Installs and manages OpsHub on one Docker host. See docs/install-docker.md.
+#
+#   ./opshub install [options]      configure (.env), get the images, start, wait until healthy
+#   ./opshub upgrade [version]      back up, then rebuild or pull a new version and restart
+#   ./opshub runner <token>         run pipeline jobs on this host (token from Runners → Register)
+#   ./opshub verify-email <email>   let an account sign in without the emailed link
+#   ./opshub backup                 take a backup now
+#   ./opshub restore <file> <key>   replace the database with a backup (.dump.age + age key)
+#   ./opshub status | logs [service] | restart | uninstall [--delete-data]
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$DIR"
+ENV_FILE="$DIR/.env"
+
+die() { printf 'opshub: %s\n' "$*" >&2; exit 1; }
+say() { printf '%s\n' "$*"; }
+bold() { printf '\033[1m%s\033[0m\n' "$*"; }
+
+# compose runs docker compose with .env as the only source of settings: Compose would let any
+# OPSHUB_*/COMPOSE_* variable in the caller's environment override .env.
+compose() {
+	(
+		while IFS= read -r v; do
+			case "$v" in OPSHUB_RESTORE_DATABASE_URL) ;; OPSHUB_*|COMPOSE_*) unset "$v" ;; esac
+		done < <(compgen -e)
+		docker compose --project-directory "$DIR" "$@"
+	)
+}
+
+need_docker() {
+	command -v docker >/dev/null 2>&1 || die "Docker is not installed (https://docs.docker.com/engine/install/)"
+	docker info >/dev/null 2>&1 || die "can't talk to Docker (is it running, and may this user use it?)"
+	local v
+	v="$(docker compose version --short 2>/dev/null || true)"
+	[[ -n "$v" ]] || die "the Docker Compose plugin (docker compose) is not installed"
+	local major minor
+	major="${v%%.*}"; minor="${v#*.}"; minor="${minor%%.*}"
+	if (( major < 2 || (major == 2 && minor < 24) )); then
+		die "Docker Compose $v is too old; 2.24 or newer is needed"
+	fi
+}
+
+need_installed() { [[ -f "$ENV_FILE" ]] || die "not installed here yet: run ./opshub install"; }
+
+# env_get KEY: the value of KEY in .env (single-quoted values as written by env_set).
+env_get() {
+	[[ -f "$ENV_FILE" ]] || return 0
+	sed -n "s/^$1='\(.*\)'\$/\1/p; s/^$1=\([^']*\)\$/\1/p" "$ENV_FILE" | tail -n1
+}
+
+# env_set KEY VALUE: writes KEY='VALUE' into .env, replacing an existing line.
+env_set() {
+	local key="$1" value="$2"
+	[[ "$value" != *"'"* ]] || die "$key can't contain a single quote (')"
+	[[ "$value" != *$'\n'* ]] || die "$key can't contain a line break"
+	local tmp
+	tmp="$(mktemp "$DIR/.env.XXXXXX")"
+	if [[ -f "$ENV_FILE" ]]; then
+		grep -v "^$key=" "$ENV_FILE" > "$tmp" || true
+	fi
+	printf "%s='%s'\n" "$key" "$value" >> "$tmp"
+	chmod 600 "$tmp"
+	mv "$tmp" "$ENV_FILE"
+}
+
+random_password() { LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32 || true; }
+
+# ask VAR "question" [default]: prompts on a terminal unless the value is set already.
+INTERACTIVE=1
+ask() {
+	local var="$1" question="$2" default="${3:-}" answer
+	if [[ -n "${!var:-}" ]]; then return; fi
+	if (( ! INTERACTIVE )); then printf -v "$var" '%s' "$default"; return; fi
+	if [[ -n "$default" ]]; then
+		read -r -p "$question [$default]: " answer
+	else
+		read -r -p "$question: " answer
+	fi
+	printf -v "$var" '%s' "${answer:-$default}"
+}
+
+ask_secret() {
+	local var="$1" question="$2" answer
+	if [[ -n "${!var:-}" ]] || (( ! INTERACTIVE )); then return; fi
+	read -r -s -p "$question: " answer
+	printf '\n'
+	printf -v "$var" '%s' "$answer"
+}
+
+usage_install() {
+	cat <<'EOF'
+Usage: ./opshub install [options]   (anything not given is asked for; --yes asks nothing)
+
+  --domain NAME           DNS name of this server, e.g. ops.example.com
+  --tls MODE              letsencrypt (default) | internal (Caddy's own CA) | off (your own proxy)
+  --acme-email EMAIL      Let's Encrypt account email (default: the admin email)
+  --public-url URL        with --tls off: the https:// address your proxy serves
+  --admin-email EMAIL     this address may always register and becomes platform admin
+  --signup yes|no         let anyone register (default: no; others join by invitation)
+  --locale en|km          default language (default: en)
+  --smtp-host HOST        email server (leave empty to set up later)
+  --smtp-port PORT        (default 587)
+  --smtp-user USER        (password: OPSHUB_SMTP_PASSWORD in the environment, or asked)
+  --smtp-from ADDRESS     e.g. "OpsHub <ops@example.com>"
+  --smtp-tls MODE         starttls (default) | tls | none
+  --backup-key KEY        age public key (age1…) that encrypts backups, or "generate"
+  --no-monitoring         don't start Prometheus and Grafana
+  --version vX.Y.Z        pull this release from ghcr.io instead of building from source
+  --image-prefix PREFIX   image name prefix (default ghcr.io/khempheara/opshub)
+  --http-port PORT        local port of the web container (default 8080)
+  --http-bind ADDRESS     where that port listens (default 127.0.0.1)
+  --https-port PORT       public HTTPS port of Caddy (default 443)
+  --http-public-port PORT public HTTP port of Caddy (default 80)
+  --network-prefix A.B.C  the stack's private /24 network (default 172.30.0)
+  --prometheus-port PORT  Prometheus on 127.0.0.1 (default 9090)
+  --grafana-port PORT     Grafana on 127.0.0.1 (default 3001)
+  --yes                   don't ask; use the options and defaults
+EOF
+}
+
+cmd_install() {
+	local DOMAIN="" TLS="" ACME_EMAIL="" PUBLIC_URL="" ADMIN_EMAIL="" SIGNUP="" LOCALE="" SMTP_HOST="" SMTP_PORT=""
+	local SMTP_USER="" SMTP_FROM="" SMTP_TLS="" BACKUP_KEY="" MONITORING=1 VERSION="" PREFIX="" HTTP_PORT="" HTTP_BIND=""
+	local HTTPS_PORT="" HTTP_PUBLIC_PORT="" NET="172.30.0" PROMETHEUS_PORT="" GRAFANA_PORT=""
+	local SMTP_PASSWORD="${OPSHUB_SMTP_PASSWORD:-}"
+	[[ -t 0 ]] || INTERACTIVE=0
+	while (( $# )); do
+		case "$1" in
+		--domain) DOMAIN="$2"; shift ;;
+		--tls) TLS="$2"; shift ;;
+		--acme-email) ACME_EMAIL="$2"; shift ;;
+		--public-url) PUBLIC_URL="$2"; shift ;;
+		--admin-email) ADMIN_EMAIL="$2"; shift ;;
+		--signup) SIGNUP="$2"; shift ;;
+		--locale) LOCALE="$2"; shift ;;
+		--smtp-host) SMTP_HOST="$2"; shift ;;
+		--smtp-port) SMTP_PORT="$2"; shift ;;
+		--smtp-user) SMTP_USER="$2"; shift ;;
+		--smtp-from) SMTP_FROM="$2"; shift ;;
+		--smtp-tls) SMTP_TLS="$2"; shift ;;
+		--backup-key) BACKUP_KEY="$2"; shift ;;
+		--no-monitoring) MONITORING=0 ;;
+		--version) VERSION="$2"; shift ;;
+		--image-prefix) PREFIX="$2"; shift ;;
+		--http-port) HTTP_PORT="$2"; shift ;;
+		--http-bind) HTTP_BIND="$2"; shift ;;
+		--https-port) HTTPS_PORT="$2"; shift ;;
+		--http-public-port) HTTP_PUBLIC_PORT="$2"; shift ;;
+		--network-prefix) NET="$2"; shift ;;
+		--prometheus-port) PROMETHEUS_PORT="$2"; shift ;;
+		--grafana-port) GRAFANA_PORT="$2"; shift ;;
+		--yes|-y) INTERACTIVE=0 ;;
+		-h|--help) usage_install; return ;;
+		*) usage_install >&2; die "unknown option $1" ;;
+		esac
+		shift
+	done
+	need_docker
+	[[ ! -f "$ENV_FILE" ]] || die "already installed here (.env exists). Use ./opshub upgrade, or edit .env and run ./opshub restart"
+
+	# Where the images come from: a release (pull) or this source checkout (build).
+	local BUILD=0
+	if [[ -z "$VERSION" && -f "$DIR/VERSION" ]]; then VERSION="$(cat "$DIR/VERSION")"; fi
+	if [[ -z "$VERSION" ]]; then
+		[[ -f "$DIR/../../go.mod" ]] || die "no source here to build from: pass --version vX.Y.Z to pull a release"
+		BUILD=1
+		VERSION="$(git -C "$DIR/../.." describe --tags --always --dirty 2>/dev/null || echo dev)"
+		PREFIX="${PREFIX:-opshub-local/opshub}"
+	fi
+	PREFIX="${PREFIX:-ghcr.io/khempheara/opshub}"
+
+	bold "OpsHub $VERSION — installation"
+	ask TLS "HTTPS: letsencrypt, internal (self-signed, for a LAN or a test) or off (your own proxy)" letsencrypt
+	case "$TLS" in letsencrypt|internal|off) ;; *) die "--tls must be letsencrypt, internal or off" ;; esac
+	if [[ "$TLS" == off ]]; then
+		ask PUBLIC_URL "The https:// address your proxy serves OpsHub at"
+		[[ "$PUBLIC_URL" == https://* ]] || die "the public URL must start with https://"
+	else
+		ask DOMAIN "Domain name of this server (DNS must point here for letsencrypt)"
+		[[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || die "a domain name like ops.example.com is needed"
+		PUBLIC_URL="https://$DOMAIN"
+		if [[ -n "$HTTPS_PORT" && "$HTTPS_PORT" != 443 ]]; then PUBLIC_URL="$PUBLIC_URL:$HTTPS_PORT"; fi
+	fi
+	ask ADMIN_EMAIL "Email of the first administrator"
+	[[ "$ADMIN_EMAIL" == *@*.* ]] || die "an administrator email address is needed"
+	if [[ "$TLS" == letsencrypt ]]; then ask ACME_EMAIL "Email for Let's Encrypt notices" "$ADMIN_EMAIL"; fi
+	ask SIGNUP "Let anyone register? (no: people join by invitation)" no
+	case "$SIGNUP" in yes|y) SIGNUP=true ;; no|n) SIGNUP=false ;; *) die "--signup must be yes or no" ;; esac
+	ask LOCALE "Default language (en or km)" en
+	case "$LOCALE" in en|km) ;; *) die "--locale must be en or km" ;; esac
+	ask SMTP_HOST "Email server host (empty: set up later)"
+	if [[ -n "$SMTP_HOST" ]]; then
+		ask SMTP_PORT "Email server port" 587
+		ask SMTP_TLS "Email TLS: starttls, tls or none" starttls
+		ask SMTP_USER "Email user name (empty: none)"
+		if [[ -n "$SMTP_USER" ]]; then ask_secret SMTP_PASSWORD "Email password"; fi
+		ask SMTP_FROM "Sender address" "OpsHub <noreply@${DOMAIN:-localhost}>"
+	fi
+	case "${SMTP_TLS:-starttls}" in starttls|tls|none) ;; *) die "--smtp-tls must be starttls, tls or none" ;; esac
+	ask BACKUP_KEY "age public key for encrypting backups (age1…), or 'generate'" generate
+	[[ "$BACKUP_KEY" == generate || "$BACKUP_KEY" == age1* ]] || die "--backup-key must be an age public key (age1…) or generate"
+
+	# .env first (secrets are generated here and never printed), images next, then the keys
+	# that need an image.
+	umask 077
+	env_set OPSHUB_VERSION "$VERSION"
+	env_set OPSHUB_IMAGE_PREFIX "$PREFIX"
+	local files="compose.yaml" profiles=""
+	if (( BUILD )); then files="compose.yaml:compose.build.yaml"; fi
+	env_set COMPOSE_FILE "$files"
+	if [[ "$TLS" != off ]]; then profiles="caddy"; fi
+	if (( MONITORING )); then profiles="${profiles:+$profiles,}monitoring"; fi
+	env_set COMPOSE_PROFILES "$profiles"
+	env_set OPSHUB_PUBLIC_URL "$PUBLIC_URL"
+	env_set OPSHUB_DOMAIN "$DOMAIN"
+	if [[ "$TLS" == letsencrypt ]]; then env_set OPSHUB_CADDY_TLS "$ACME_EMAIL"; else env_set OPSHUB_CADDY_TLS internal; fi
+	env_set OPSHUB_HTTP_PORT "${HTTP_PORT:-8080}"
+	env_set OPSHUB_HTTP_BIND "${HTTP_BIND:-127.0.0.1}"
+	env_set OPSHUB_HTTPS_PUBLIC_PORT "${HTTPS_PORT:-443}"
+	env_set OPSHUB_HTTP_PUBLIC_PORT "${HTTP_PUBLIC_PORT:-80}"
+	env_set OPSHUB_PROMETHEUS_PORT "${PROMETHEUS_PORT:-9090}"
+	env_set OPSHUB_GRAFANA_PORT "${GRAFANA_PORT:-3001}"
+	[[ "$NET" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || die "--network-prefix must look like 172.30.0"
+	env_set OPSHUB_NETWORK_PREFIX "$NET"
+	# Behind Caddy, believe its X-Forwarded-For. With your own proxy on this host, connections
+	# arrive from the network's gateway (.1); a proxy elsewhere: set its address here.
+	if [[ "$TLS" == off ]]; then env_set OPSHUB_REAL_IP_FROM "$NET.1/32"; else env_set OPSHUB_REAL_IP_FROM "$NET.11/32"; fi
+	env_set OPSHUB_BOOTSTRAP_ADMIN_EMAIL "$ADMIN_EMAIL"
+	env_set OPSHUB_ALLOW_SIGNUP "$SIGNUP"
+	env_set OPSHUB_DEFAULT_LOCALE "$LOCALE"
+	env_set OPSHUB_SMTP_HOST "$SMTP_HOST"
+	env_set OPSHUB_SMTP_PORT "${SMTP_PORT:-587}"
+	env_set OPSHUB_SMTP_TLS "${SMTP_TLS:-starttls}"
+	env_set OPSHUB_SMTP_USERNAME "$SMTP_USER"
+	env_set OPSHUB_SMTP_PASSWORD "$SMTP_PASSWORD"
+	env_set OPSHUB_SMTP_FROM "${SMTP_FROM:-OpsHub <noreply@${DOMAIN:-localhost}>}"
+	env_set OPSHUB_DB_ADMIN_PASSWORD "$(random_password)"
+	env_set OPSHUB_DB_MIGRATOR_PASSWORD "$(random_password)"
+	env_set OPSHUB_DB_APP_PASSWORD "$(random_password)"
+	env_set OPSHUB_DB_BACKUP_PASSWORD "$(random_password)"
+	env_set OPSHUB_GRAFANA_PASSWORD "$(random_password)"
+	# Placeholders until the images can generate the real values (compose requires them).
+	env_set OPSHUB_MASTER_KEYS pending
+	env_set OPSHUB_JWT_KEYS pending
+	env_set OPSHUB_BACKUP_AGE_RECIPIENTS pending
+
+	if (( BUILD )); then
+		bold "Building the images from source (a few minutes the first time)…"
+		compose --profile runner build
+	else
+		bold "Downloading OpsHub $VERSION…"
+		compose --profile runner pull --quiet || die "can't pull $PREFIX-*:$VERSION (while the repository is private, run: docker login ghcr.io)"
+	fi
+
+	local keys
+	keys="$(docker run --rm "$PREFIX-api:$VERSION" keys generate)"
+	env_set OPSHUB_MASTER_KEYS "$(printf '%s\n' "$keys" | sed -n 's/^OPSHUB_MASTER_KEYS=//p')"
+	env_set OPSHUB_JWT_KEYS "$(printf '%s\n' "$keys" | sed -n 's/^OPSHUB_JWT_KEYS=//p')"
+	if [[ "$BACKUP_KEY" == generate ]]; then
+		local pair
+		pair="$(docker run --rm --entrypoint age-keygen "$PREFIX-backup:$VERSION" 2>/dev/null)"
+		BACKUP_KEY="$(printf '%s\n' "$pair" | sed -n 's/^# public key: //p')"
+		printf '%s\n' "$pair" > "$DIR/backup-private-key.txt"
+		chmod 600 "$DIR/backup-private-key.txt"
+	fi
+	env_set OPSHUB_BACKUP_AGE_RECIPIENTS "$BACKUP_KEY"
+
+	bold "Starting OpsHub…"
+	compose up -d --wait --wait-timeout 300 || {
+		compose ps
+		die "OpsHub didn't become healthy; see ./opshub logs"
+	}
+	print_next_steps "$TLS"
+}
+
+print_next_steps() {
+	local url admin
+	url="$(env_get OPSHUB_PUBLIC_URL)"
+	admin="$(env_get OPSHUB_BOOTSTRAP_ADMIN_EMAIL)"
+	say ""
+	bold "OpsHub is running: $url"
+	say ""
+	say "Next steps"
+	say "  1. Open $url/register and create the account $admin (it becomes platform admin)."
+	if [[ -z "$(env_get OPSHUB_SMTP_HOST)" ]]; then
+		say "     Email isn't set up, so confirm the address here instead of by link:"
+		say "       ./opshub verify-email $admin"
+	fi
+	say "  2. Create your organization, then Runners → Register runner, and on this host:"
+	say "       ./opshub runner <registration token>"
+	if [[ -f "$DIR/backup-private-key.txt" ]]; then
+		say "  3. Backups run nightly, encrypted for a key generated just now. Copy"
+		say "       $DIR/backup-private-key.txt"
+		say "     somewhere safe OFF this server (a password manager), then delete it here:"
+		say "     without it, the backups can't be restored."
+	fi
+	if [[ "$(env_get COMPOSE_PROFILES)" == *monitoring* ]]; then
+		say "  Grafana: ssh -L 3001:127.0.0.1:3001 this-server, then http://localhost:3001"
+		say "           (user admin, password OPSHUB_GRAFANA_PASSWORD in $ENV_FILE)"
+	fi
+	if [[ "$1" == off ]]; then
+		say "  Point your HTTPS proxy at http://$(env_get OPSHUB_HTTP_BIND):$(env_get OPSHUB_HTTP_PORT)."
+	fi
+	say "  Settings: $ENV_FILE (keep it private and back it up: it holds the encryption keys)."
+}
+
+cmd_upgrade() {
+	need_docker
+	need_installed
+	local version="${1:-}"
+	if [[ "$(env_get COMPOSE_FILE)" == *compose.build.yaml* ]]; then
+		[[ -z "$version" ]] || die "this install builds from source: update the checkout (git pull), then run ./opshub upgrade"
+		version="$(git -C "$DIR/../.." describe --tags --always --dirty 2>/dev/null || echo dev)"
+	else
+		[[ -n "$version" ]] || die "which version? ./opshub upgrade vX.Y.Z"
+	fi
+	bold "Backing up before the upgrade…"
+	compose exec -T backup /usr/local/bin/opshub-backup || die "the backup failed; nothing was changed"
+	local previous
+	previous="$(env_get OPSHUB_VERSION)"
+	env_set OPSHUB_VERSION "$version"
+	if [[ "$(env_get COMPOSE_FILE)" == *compose.build.yaml* ]]; then
+		compose build
+	else
+		compose pull --quiet || { env_set OPSHUB_VERSION "$previous"; die "can't pull version $version"; }
+	fi
+	bold "Restarting with $version (database migrations run on start)…"
+	compose up -d --wait --wait-timeout 300 || die "the new version didn't become healthy; see ./opshub logs (back: ./opshub upgrade $previous)"
+	bold "Upgraded from $previous to $version."
+}
+
+cmd_runner() {
+	need_docker
+	need_installed
+	local token="${1:-}"
+	[[ -n "$token" ]] || die "usage: ./opshub runner <registration token> (Runners → Register runner in OpsHub)"
+	env_set OPSHUB_RUNNER_REGISTRATION_TOKEN "$token"
+	# The socket's group as containers see it (on Docker Desktop it differs from the host's).
+	local gid
+	gid="$(docker run --rm --entrypoint stat -v /var/run/docker.sock:/var/run/docker.sock:ro \
+		"$(env_get OPSHUB_IMAGE_PREFIX)-backup:$(env_get OPSHUB_VERSION)" -c %g /var/run/docker.sock)" ||
+		die "can't find the Docker socket at /var/run/docker.sock"
+	env_set OPSHUB_DOCKER_GID "$gid"
+	local profiles
+	profiles="$(env_get COMPOSE_PROFILES)"
+	[[ ",$profiles," == *,runner,* ]] || env_set COMPOSE_PROFILES "${profiles:+$profiles,}runner"
+	compose up -d runner
+	say "The runner is starting; it appears under Runners once it has registered."
+	say "Its jobs use this host's Docker, which is root-equivalent here: run only pipelines you trust."
+}
+
+cmd_backup() {
+	need_installed
+	compose exec -T backup /usr/local/bin/opshub-backup
+	compose exec -T backup ls -lh /backups
+}
+
+cmd_restore() {
+	need_docker
+	need_installed
+	local file="" key="" force=0
+	while (( $# )); do
+		case "$1" in
+		--force) force=1 ;;
+		*) if [[ -z "$file" ]]; then file="$1"; elif [[ -z "$key" ]]; then key="$1"; else die "usage: ./opshub restore <backup.dump.age> <age key file> [--force]"; fi ;;
+		esac
+		shift
+	done
+	[[ -f "$file" && -f "$key" ]] || die "usage: ./opshub restore <backup.dump.age> <age key file> [--force] (files on this host)"
+	file="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
+	key="$(cd "$(dirname "$key")" && pwd)/$(basename "$key")"
+	bold "Stopping OpsHub; the database keeps running…"
+	compose stop api web caddy runner >/dev/null 2>&1 || true
+	compose up -d --wait postgres
+	# As the caller's user, so the container can read the key file (mode 600) and the backup.
+	(
+		OPSHUB_RESTORE_DATABASE_URL="postgres://opshub_migrator:$(env_get OPSHUB_DB_MIGRATOR_PASSWORD)@postgres:5432/opshub?sslmode=disable"
+		export OPSHUB_RESTORE_DATABASE_URL
+		compose run --rm --no-deps --user "$(id -u):$(id -g)" \
+			-v "$(dirname "$file"):/restore:ro" -v "$key:/key:ro" \
+			-e OPSHUB_RESTORE_DATABASE_URL -e OPSHUB_BACKUP_AGE_IDENTITY=/key -e OPSHUB_RESTORE_FORCE="$force" \
+			backup opshub-restore "/restore/$(basename "$file")"
+	) || die "the restore failed (an existing database needs --force; it then replaces everything)"
+	bold "Starting OpsHub with the restored data…"
+	compose up -d --wait --wait-timeout 300
+	say "Restored. It needs the same OPSHUB_MASTER_KEYS as the server the backup came from."
+}
+
+cmd_uninstall() {
+	need_installed
+	if [[ "${1:-}" == --delete-data ]]; then
+		if [[ -t 0 ]]; then
+			local answer
+			read -r -p "Delete the database, backups and all other OpsHub data on this host? Type delete: " answer
+			[[ "$answer" == delete ]] || die "nothing was deleted"
+		fi
+		compose --profile '*' down --volumes --remove-orphans
+		rm -f "$ENV_FILE"
+		say "OpsHub and its data are removed."
+	else
+		compose --profile '*' down --remove-orphans
+		say "OpsHub is stopped; its data stays (start again: ./opshub restart)."
+	fi
+}
+
+# usage prints the comment block at the top of this file.
+usage() { sed -n '2,/^set -euo/p' "$DIR/$(basename "${BASH_SOURCE[0]}")" | sed -n 's/^# \{0,1\}//p'; }
+
+main() {
+	local cmd="${1:-help}"
+	[[ $# -eq 0 ]] || shift
+	case "$cmd" in
+	install) cmd_install "$@" ;;
+	upgrade) cmd_upgrade "$@" ;;
+	runner) cmd_runner "$@" ;;
+	verify-email)
+		need_installed
+		[[ $# -eq 1 ]] || die "usage: ./opshub verify-email <email>"
+		compose exec -T api /opshub-api users verify "$1" ;;
+	backup) cmd_backup ;;
+	restore) cmd_restore "$@" ;;
+	status) need_installed; compose ps ;;
+	logs) need_installed; compose logs -f --tail 200 "$@" ;;
+	restart) need_installed; compose up -d --wait --wait-timeout 300 ;;
+	uninstall) cmd_uninstall "$@" ;;
+	help|-h|--help) usage ;;
+	*) usage >&2; die "unknown command $cmd" ;;
+	esac
+}
+
+main "$@"

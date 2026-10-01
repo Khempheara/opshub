@@ -1,0 +1,24 @@
+# HTTPS in front of OpsHub. OPSHUB_CADDY_TLS is an email address (a free Let's Encrypt
+# certificate: OPSHUB_DOMAIN must point at this server and ports 80 and 443 must be reachable)
+# or "internal" (Caddy's own certificate authority, for a LAN or a test install).
+{
+	admin off
+	# With "internal", don't try to add Caddy's CA to the container's own trust store.
+	skip_install_trust
+}
+
+{$OPSHUB_DOMAIN} {
+	tls {$OPSHUB_CADDY_TLS}
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	# Only the UI and API; Prometheus metrics stay on the internal network.
+	@metrics path /metrics /metrics/*
+	respond @metrics 404
+	reverse_proxy web:8080 {
+		# Live pipeline logs and dashboards use Server-Sent Events.
+		flush_interval -1
+	}
+}

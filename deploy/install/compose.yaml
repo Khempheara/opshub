@@ -1,0 +1,216 @@
+# OpsHub production stack for one Docker host. Install and manage it with ./opshub (see
+# docs/install-docker.md); the settings live in .env next to this file (created by
+# `./opshub install`, mode 600). Development uses the repository's docker-compose.yml instead.
+#
+#   caddy       :80 and :443 — HTTPS for OPSHUB_DOMAIN (profile "caddy"; off with --tls off)
+#   web         UI + /api proxy, on ${OPSHUB_HTTP_BIND}:${OPSHUB_HTTP_PORT} (127.0.0.1:8080)
+#   api         API and background workers (not published)
+#   postgres    database (not published)
+#   backup      nightly encrypted pg_dump into the "backups" volume
+#   prometheus  127.0.0.1:9090 (profile "monitoring")
+#   grafana     127.0.0.1:3001 (profile "monitoring")
+#   runner      pipeline jobs on this host's Docker (profile "runner": ./opshub runner <token>)
+#
+# The project is "opshub-server", so its containers and volumes never mix with the development
+# stack's ("opshub") on the same machine.
+name: opshub-server
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+x-locked: &locked
+  <<: *hardening
+  read_only: true
+  cap_drop: [ALL]
+
+services:
+  postgres:
+    <<: *hardening
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: opshub
+      POSTGRES_USER: opshub
+      POSTGRES_PASSWORD: ${OPSHUB_DB_ADMIN_PASSWORD:?run ./opshub install}
+      # Read by init-roles.sh when the volume is first created.
+      OPSHUB_DB_MIGRATOR_PASSWORD: ${OPSHUB_DB_MIGRATOR_PASSWORD:?}
+      OPSHUB_DB_APP_PASSWORD: ${OPSHUB_DB_APP_PASSWORD:?}
+      OPSHUB_DB_BACKUP_PASSWORD: ${OPSHUB_DB_BACKUP_PASSWORD:?}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opshub -d opshub"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  api:
+    <<: *locked
+    image: ${OPSHUB_IMAGE_PREFIX:-ghcr.io/khempheara/opshub}-api:${OPSHUB_VERSION:?}
+    environment:
+      OPSHUB_ENV: production
+      OPSHUB_LOG_FORMAT: json
+      OPSHUB_PUBLIC_URL: ${OPSHUB_PUBLIC_URL:?}
+      # The API connects as the DML-only role; migrations (on start) use the schema owner.
+      OPSHUB_DATABASE_URL: postgres://opshub_app:${OPSHUB_DB_APP_PASSWORD}@postgres:5432/opshub?sslmode=disable
+      OPSHUB_MIGRATE_DATABASE_URL: postgres://opshub_migrator:${OPSHUB_DB_MIGRATOR_PASSWORD}@postgres:5432/opshub?sslmode=disable
+      OPSHUB_MASTER_KEYS: ${OPSHUB_MASTER_KEYS:?}
+      OPSHUB_JWT_KEYS: ${OPSHUB_JWT_KEYS:?}
+      OPSHUB_BOOTSTRAP_ADMIN_EMAIL: ${OPSHUB_BOOTSTRAP_ADMIN_EMAIL:-}
+      OPSHUB_ALLOW_SIGNUP: ${OPSHUB_ALLOW_SIGNUP:-false}
+      OPSHUB_DEFAULT_LOCALE: ${OPSHUB_DEFAULT_LOCALE:-en}
+      OPSHUB_DEFAULT_TIMEZONE: ${OPSHUB_DEFAULT_TIMEZONE:-Asia/Phnom_Penh}
+      OPSHUB_SMTP_HOST: ${OPSHUB_SMTP_HOST:-}
+      OPSHUB_SMTP_PORT: ${OPSHUB_SMTP_PORT:-587}
+      OPSHUB_SMTP_USERNAME: ${OPSHUB_SMTP_USERNAME:-}
+      OPSHUB_SMTP_PASSWORD: ${OPSHUB_SMTP_PASSWORD:-}
+      OPSHUB_SMTP_FROM: ${OPSHUB_SMTP_FROM:-OpsHub <noreply@localhost>}
+      OPSHUB_SMTP_TLS: ${OPSHUB_SMTP_TLS:-starttls}
+      OPSHUB_OUTBOUND_ALLOWED_CIDRS: ${OPSHUB_OUTBOUND_ALLOWED_CIDRS:-}
+      OPSHUB_LOG_RETENTION_DAYS: ${OPSHUB_LOG_RETENTION_DAYS:-30}
+      # Trust X-Forwarded-For only from the web container (pinned address below).
+      OPSHUB_TRUSTED_PROXIES: ${OPSHUB_NETWORK_PREFIX:-172.30.0}.10/32
+      OPSHUB_BLOB_DIR: /data/blobs
+      OPSHUB_SSO_GITHUB_CLIENT_ID: ${OPSHUB_SSO_GITHUB_CLIENT_ID:-}
+      OPSHUB_SSO_GITHUB_CLIENT_SECRET: ${OPSHUB_SSO_GITHUB_CLIENT_SECRET:-}
+      OPSHUB_SSO_GOOGLE_CLIENT_ID: ${OPSHUB_SSO_GOOGLE_CLIENT_ID:-}
+      OPSHUB_SSO_GOOGLE_CLIENT_SECRET: ${OPSHUB_SSO_GOOGLE_CLIENT_SECRET:-}
+      OPSHUB_SSO_KEYCLOAK_ISSUER: ${OPSHUB_SSO_KEYCLOAK_ISSUER:-}
+      OPSHUB_SSO_KEYCLOAK_CLIENT_ID: ${OPSHUB_SSO_KEYCLOAK_CLIENT_ID:-}
+      OPSHUB_SSO_KEYCLOAK_CLIENT_SECRET: ${OPSHUB_SSO_KEYCLOAK_CLIENT_SECRET:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+    volumes:
+      - blobs:/data
+    tmpfs: [/tmp]
+    healthcheck:
+      test: ["CMD", "/opshub-api", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  web:
+    <<: *locked
+    image: ${OPSHUB_IMAGE_PREFIX:-ghcr.io/khempheara/opshub}-web:${OPSHUB_VERSION:?}
+    environment:
+      # Believe X-Forwarded-For only from Caddy (or set your own proxy's address).
+      OPSHUB_REAL_IP_FROM: ${OPSHUB_REAL_IP_FROM:?}
+    depends_on:
+      api: { condition: service_healthy }
+    ports: ["${OPSHUB_HTTP_BIND:-127.0.0.1}:${OPSHUB_HTTP_PORT:-8080}:8080"]
+    # nginx renders its config and keeps its pid and temp files here (uid 101).
+    tmpfs:
+      - /tmp:uid=101,gid=101
+      - /etc/nginx/conf.d:uid=101,gid=101
+    networks:
+      default: { ipv4_address: "${OPSHUB_NETWORK_PREFIX:-172.30.0}.10" }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+
+  caddy:
+    <<: *locked
+    profiles: [caddy]
+    image: caddy:2.10-alpine
+    cap_add: [NET_BIND_SERVICE]
+    environment:
+      OPSHUB_DOMAIN: ${OPSHUB_DOMAIN:?}
+      # An email address (Let's Encrypt) or "internal" (Caddy's own certificate authority).
+      OPSHUB_CADDY_TLS: ${OPSHUB_CADDY_TLS:?}
+    ports:
+      - "${OPSHUB_HTTP_PUBLIC_PORT:-80}:80"
+      - "${OPSHUB_HTTPS_PUBLIC_PORT:-443}:443"
+      - "${OPSHUB_HTTPS_PUBLIC_PORT:-443}:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    tmpfs: [/tmp]
+    depends_on:
+      web: { condition: service_healthy }
+    networks:
+      default: { ipv4_address: "${OPSHUB_NETWORK_PREFIX:-172.30.0}.11" }
+
+  backup:
+    <<: *locked
+    image: ${OPSHUB_IMAGE_PREFIX:-ghcr.io/khempheara/opshub}-backup:${OPSHUB_VERSION:?}
+    environment:
+      OPSHUB_BACKUP_DATABASE_URL: postgres://opshub_backup:${OPSHUB_DB_BACKUP_PASSWORD}@postgres:5432/opshub?sslmode=disable
+      OPSHUB_BACKUP_AGE_RECIPIENTS: ${OPSHUB_BACKUP_AGE_RECIPIENTS:?run ./opshub install}
+      OPSHUB_BACKUP_AT: ${OPSHUB_BACKUP_AT:-02:00}
+      OPSHUB_BACKUP_RCLONE_REMOTE: ${OPSHUB_BACKUP_RCLONE_REMOTE:-}
+    volumes:
+      - backups:/backups
+    tmpfs: [/tmp]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  prometheus:
+    <<: *locked
+    profiles: [monitoring]
+    image: prom/prometheus:v3.14.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=30d"]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports: ["127.0.0.1:${OPSHUB_PROMETHEUS_PORT:-9090}:9090"]
+    depends_on: [api]
+
+  grafana:
+    <<: *locked
+    profiles: [monitoring]
+    image: grafana/grafana-oss:13.0.2
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${OPSHUB_GRAFANA_PASSWORD:?run ./opshub install}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/opshub-platform.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    tmpfs: [/tmp]
+    ports: ["127.0.0.1:${OPSHUB_GRAFANA_PORT:-3001}:3000"]
+    depends_on: [prometheus]
+
+  runner:
+    <<: *hardening
+    profiles: [runner]
+    image: ${OPSHUB_IMAGE_PREFIX:-ghcr.io/khempheara/opshub}-runner:${OPSHUB_VERSION:?}
+    environment:
+      OPSHUB_URL: http://api:8080
+      # Used on first start only; afterwards the runner's token lives in the runner-state volume.
+      OPSHUB_REGISTRATION_TOKEN: ${OPSHUB_RUNNER_REGISTRATION_TOKEN:-}
+      OPSHUB_RUNNER_NAME: ${OPSHUB_RUNNER_NAME:-docker-host}
+      OPSHUB_RUNNER_LABELS: ${OPSHUB_RUNNER_LABELS:-linux,docker}
+    # The Docker socket is root-equivalent on this host: jobs run as sibling containers.
+    group_add: ["${OPSHUB_DOCKER_GID:-0}"]
+    cap_drop: [ALL]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner-state:/var/lib/opshub-runner
+    depends_on:
+      api: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  blobs:
+  backups:
+  caddy-data:
+  caddy-config:
+  prometheus-data:
+  grafana-data:
+  runner-state:
+
+networks:
+  default:
+    ipam:
+      config: [{ subnet: "${OPSHUB_NETWORK_PREFIX:-172.30.0}.0/24" }]
