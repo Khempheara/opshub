@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
  && go mod tidy \
  && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/caddy .
 
-FROM postgres:17-alpine
+FROM postgres:18-alpine
 # nginx serves the UI, age encrypts backups, tini is PID 1. gosu (the postgres image's root
 # entrypoint helper) isn't used: this image never runs as root.
 RUN apk upgrade --no-cache && apk add --no-cache nginx age tini \
