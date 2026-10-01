@@ -135,7 +135,11 @@ func (s *Service) render(locale string, a store.Alert, orgSlug, event string, st
 			if d.NotAfter != nil {
 				data["Date"] = d.NotAfter.UTC().Format("2006-01-02")
 			}
-			m.Summary = t("notify.alert.summary.certificate_expiring", data)
+			if d.Days != nil && *d.Days < 0 {
+				m.Summary = t("notify.alert.summary.certificate_expired", data)
+			} else {
+				m.Summary = t("notify.alert.summary.certificate_expiring", data)
+			}
 		}
 	}
 	switch {

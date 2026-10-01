@@ -97,6 +97,7 @@ describe('alertSummary', () => {
     expect(alertSummary('asset_metric', { metric: 'mem', value: 93 }, 'web-1').key).toBe('summary.asset_metric_mem');
     expect(alertSummary('certificate', { days: 5 }, 'shop').values.count).toBe(5);
     expect(alertSummary('certificate', { error: 'x' }, 'shop').key).toBe('summary.certificate_failed');
+    expect(alertSummary('certificate', { days: -3 }, 'shop')).toMatchObject({ key: 'summary.certificate_expired', values: { count: 3 } });
   });
   it('splits lists', () => {
     expect(parseList(' a, b  c,,')).toEqual(['a', 'b', 'c']);

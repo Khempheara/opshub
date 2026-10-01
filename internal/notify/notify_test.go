@@ -407,6 +407,10 @@ func TestRenderEveryKind(t *testing.T) {
 	raw, _ := json.Marshal(Details{Error: "certificate is not valid for this name"})
 	m := e.svc.render("en", store.Alert{RuleKind: store.AlertRuleKindCertificate, SubjectName: "shop", Details: raw}, "o", EventFiring, 0)
 	assert.Equal(t, "shop: the TLS certificate check failed: certificate is not valid for this name", m.Summary)
+	expired, before := -3, time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)
+	raw, _ = json.Marshal(Details{Days: &expired, NotAfter: &before})
+	m = e.svc.render("en", store.Alert{RuleKind: store.AlertRuleKindCertificate, SubjectName: "shop", Details: raw}, "o", EventFiring, 0)
+	assert.Equal(t, "shop: the TLS certificate expired on 2026-09-28.", m.Summary)
 	assert.Equal(t, "45s", formatDuration(45*time.Second))
 	assert.Equal(t, "3d 2h", formatDuration(74*time.Hour))
 }

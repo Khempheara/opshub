@@ -160,6 +160,7 @@
     "rollback": "ការត្រឡប់ក្រោយ",
     "live": "កំពុងដំណើរការ",
     "byRun": "Run #{{number}} · {{job}}",
+    "byRunOnly": "Run #{{number}}",
     "system": "OpsHub"
   },
   "detail": {

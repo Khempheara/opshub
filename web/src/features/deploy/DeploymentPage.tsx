@@ -78,7 +78,7 @@ export function DeploymentPage() {
       t('detail.startedBy'),
       runLink ? (
         <Link to={runLink} className="hover:underline">
-          {t('history.byRun', { number: fmt.number(d.run_number ?? 0), job: d.job_name })}
+          {t(d.job_name ? 'history.byRun' : 'history.byRunOnly', { number: fmt.number(d.run_number ?? 0), job: d.job_name })}
         </Link>
       ) : (
         d.created_by_name || t('history.system')
