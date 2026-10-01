@@ -5,6 +5,7 @@ package pgtest
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -36,6 +37,21 @@ func Pool(t testing.TB) *pgxpool.Pool {
 		t.Fatalf("pgtest: %v", initErr)
 	}
 	return pool
+}
+
+// LastMonthPartition creates last month's partition of a monthly-partitioned table
+// (asset_metrics, monitor_results). Migrations only create the current month onwards, so a
+// test writing the last 24 hours of history needs it when it runs on the 1st of a month.
+func LastMonthPartition(t testing.TB, table string) {
+	t.Helper()
+	now := time.Now()
+	m := time.Date(now.Year(), now.Month()-1, 1, 0, 0, 0, 0, time.UTC)
+	_, err := Pool(t).Exec(context.Background(), fmt.Sprintf(
+		`CREATE TABLE IF NOT EXISTS %[1]s_%[2]s PARTITION OF %[1]s FOR VALUES FROM ('%[3]s') TO ('%[4]s')`,
+		table, m.Format("200601"), m.Format(time.DateOnly), m.AddDate(0, 1, 0).Format(time.DateOnly)))
+	if err != nil {
+		t.Fatalf("pgtest: last month's partition of %s: %v", table, err)
+	}
 }
 
 // DSN returns the connection string of the shared test database.

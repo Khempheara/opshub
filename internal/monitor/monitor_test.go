@@ -222,11 +222,9 @@ func TestDueChecksAndResults(t *testing.T) {
 
 	// A day of history: 1 in 4 checks failed.
 	start := time.Now().UTC().Truncate(time.Minute).Add(-24 * time.Hour)
+	pgtest.LastMonthPartition(t, "monitor_results")
 	for i := range 24 * 60 {
 		ts := start.Add(time.Duration(i) * time.Minute)
-		if ts.Before(time.Date(ts.Year(), ts.Month(), 1, 0, 0, 0, 0, time.UTC)) && time.Now().UTC().Day() == 1 {
-			continue // no partition for last month on a fresh database
-		}
 		_, err := pgtest.Pool(t).Exec(ctx, `INSERT INTO monitor_results (monitor_id, ts, up, latency_ms) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
 			m.ID, ts, i%4 != 0, 100+i%50)
 		require.NoError(t, err)

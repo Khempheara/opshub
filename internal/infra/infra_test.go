@@ -12,6 +12,7 @@ import (
 
 	"github.com/opshub/opshub/internal/apperr"
 	"github.com/opshub/opshub/internal/store"
+	"github.com/opshub/opshub/internal/testutil/pgtest"
 )
 
 func TestAssets(t *testing.T) {
@@ -147,6 +148,7 @@ func TestAgentAndMetrics(t *testing.T) {
 
 	// A day of samples (one per minute, CPU rising with the hour) and a sample without CPU.
 	now := time.Now().UTC().Truncate(time.Minute)
+	pgtest.LastMonthPartition(t, "asset_metrics")
 	for i := 0; i < 24*60; i += 1 {
 		ts := now.Add(-time.Duration(i) * time.Minute)
 		_, err := e.svc.pool.Exec(ctx, `INSERT INTO asset_metrics (asset_id, ts, cpu_pct, mem_pct, disk_pct) VALUES ($1, $2, $3, 50, 70)
