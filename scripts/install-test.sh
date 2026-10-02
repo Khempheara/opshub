@@ -11,6 +11,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALL="$ROOT/deploy/install"
 cd "$INSTALL"
 [[ ! -f .env ]] || { echo "install-test: $INSTALL/.env exists (a real install?); not touching it" >&2; exit 1; }
+# The test installs as the "opshub-server" project and ends with uninstall --delete-data, so it
+# must not run where a real install of that project exists (installed from another folder).
+if [[ -n "$(docker ps -aq --filter label=com.docker.compose.project=opshub-server)" ||
+	-n "$(docker volume ls -q --filter label=com.docker.compose.project=opshub-server)" ]]; then
+	echo "install-test: this machine has an OpsHub install (Docker project opshub-server); not touching it" >&2
+	exit 1
+fi
 
 DOMAIN=opshub.localhost
 URL="https://$DOMAIN:8443"
