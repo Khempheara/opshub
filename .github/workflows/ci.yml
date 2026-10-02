@@ -147,6 +147,11 @@ jobs:
         image: [api, web, runner, backup, caddy, opshub]
     steps:
       - uses: actions/checkout@v7
+      - name: Free disk space (the all-in-one image is large, two architectures)
+        # GitHub's runners ship ~14 GB of SDKs OpsHub doesn't use.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h / | tail -1
       - uses: docker/setup-buildx-action@v4
       - name: Build
         uses: docker/build-push-action@v7
