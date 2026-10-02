@@ -84,6 +84,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.licenses=MIT
             org.opencontainers.image.revision=${{ github.sha }}
           build-args: VERSION=${{ github.ref_name }}
           provenance: false

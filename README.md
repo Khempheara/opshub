@@ -12,6 +12,7 @@ Pipelines · Deployments · Infrastructure · Monitoring · Logs · Secrets · A
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker%20run-ready-2496ED?logo=docker&logoColor=white)
 ![Languages](https://img.shields.io/badge/UI-English%20%C2%B7%20Khmer-6E56CF)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 [Install](#install) · [Features](#features) · [Screenshots](#screenshots) · [Documentation](#documentation) · [ភាសាខ្មែរ](#ភាសាខ្មែរ)
 
@@ -148,6 +149,11 @@ Details: [security model](docs/security.md) · [roles](docs/rbac.md) · [secrets
 | [API](docs/api.md) · [Architecture](docs/architecture.md) · [Database](docs/database.md) | How it's built |
 
 What changed in each version: [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+OpsHub is open source under the [MIT License](LICENSE): use, change and share it freely,
+including in commercial products; keep the copyright notice.
 
 ## For developers
 
